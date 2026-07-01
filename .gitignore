@@ -34,10 +34,6 @@ yarn-error.log*
 .env*
 !.env.example
 
-# OAuth client secrets exported from provider dashboards
-client_secret_*.json
-oauth_client_*.json
-
 # vercel
 .vercel
 
@@ -45,3 +41,9 @@ oauth_client_*.json
 *.tsbuildinfo
 next-env.d.ts
 
+# OAuth client secrets exported from provider dashboards
+client_secret_*.json
+oauth_client_*.json
+
+# Google OAuth local download
+client_secret_google.json
