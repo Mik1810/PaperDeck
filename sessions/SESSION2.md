@@ -214,7 +214,11 @@ Embedding/ranked retrieval workflow is now specified:
 - added `requirements-embeddings.txt`;
 - added `scripts/embed_papers.py` with Supabase REST candidate selection and `--dry-run`;
 - added `.github/workflows/embed-papers.yml` with pip/HuggingFace caching;
+- added and applied `match_papers_by_embedding` pgvector RPC;
+- added `src/lib/repositories/semantic-retrieval.ts`;
+- integrated `/feed` so stored user profile embeddings can provide semantic candidates, with fallback to topic/feedback ranking when no user vector exists;
 - verified dry-run candidate selection against remote Supabase: 3 candidates found in the inspected slice;
+- verified `match_papers_by_embedding` executes against remote Supabase with a zero vector and returns 0 rows while no paper embeddings exist;
 - verified remote schema: 19 public tables and 19 policies after the embedding migration;
 - Vercel will perform pgvector top-K retrieval and TypeScript reranking, but will not import model dependencies.
 
@@ -250,7 +254,8 @@ Configure the GitHub Actions ingestion secrets, then continue the ingestion work
 - broaden arXiv CS imports beyond the verified `cs.CC` smoke test;
 - add historical arXiv backfill mode for older result pages;
 - enrich imported papers with Semantic Scholar/OpenAlex metadata;
-- implement the schema and worker described in `docs/embeddings.md`;
-- replace the current topic/feedback ranking with embedding-aware ranking.
+- run the first real embedding batch;
+- implement user profile embedding generation from topic and paper vectors;
+- use embedding-aware ranking once real user profile vectors exist.
 
 The codebase is now at version `0.1.0`, representing the first production-authenticated, Supabase-backed MVP foundation. It is not a `1.0.0` release: embeddings, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and semantic ranking are still open.

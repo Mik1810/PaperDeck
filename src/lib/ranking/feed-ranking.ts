@@ -22,6 +22,7 @@ export type RankedPaper = Paper & {
 type RankingContext = {
   topicAffinity: Map<string, number>;
   feedbackTopicWeights: Map<string, number>;
+  semanticScores?: Map<string, number>;
 };
 
 const positiveInteractionWeights: Partial<Record<InteractionType, number>> = {
@@ -129,6 +130,7 @@ function buildFeedbackTopicWeights(
 }
 
 function scorePaper(paper: Paper, context: RankingContext) {
+  const semanticScore = (context.semanticScores?.get(paper.id) ?? 0) * 120;
   const topicScore = paper.topics.reduce(
     (score, topic) => score + (context.topicAffinity.get(topic.id) ?? 0) * 90,
     0,
@@ -142,10 +144,18 @@ function scorePaper(paper: Paper, context: RankingContext) {
   const recencyScore = Math.max(0, paper.year - 2020) * 0.4;
   const classicScore = paper.isClassic ? 8 : 0;
 
-  return topicScore + feedbackScore + citationScore + recencyScore + classicScore;
+  return (
+    semanticScore +
+    topicScore +
+    feedbackScore +
+    citationScore +
+    recencyScore +
+    classicScore
+  );
 }
 
 function buildPersonalizedReason(paper: Paper, context: RankingContext) {
+  const semanticScore = context.semanticScores?.get(paper.id) ?? 0;
   const affinityTopics = paper.topics.filter((topic) =>
     context.topicAffinity.has(topic.id),
   );
@@ -165,6 +175,10 @@ function buildPersonalizedReason(paper: Paper, context: RankingContext) {
     return `Ranked higher because of your recent ${labels.join(" and ")} feedback.`;
   }
 
+  if (semanticScore > 0) {
+    return "Semantically close to your current reading profile.";
+  }
+
   if (paper.isClassic) {
     return "Classic paper kept as a small part of the discovery mix.";
   }
@@ -177,10 +191,12 @@ export function rankFeedPapers(
   topics: RankingTopic[],
   selectedTopicIds: Set<string>,
   state: UserPaperRankingState,
+  semanticScores?: Map<string, number>,
 ) {
   const context: RankingContext = {
     topicAffinity: buildTopicAffinity(selectedTopicIds, topics),
     feedbackTopicWeights: buildFeedbackTopicWeights(papers, state.interactions),
+    semanticScores,
   };
 
   return papers

@@ -64,9 +64,11 @@ Implemented files:
 
 ```text
 supabase/migrations/20260701203000_add_embedding_workflow_tables.sql
+supabase/migrations/20260701211500_add_embedding_match_function.sql
 requirements-embeddings.txt
 scripts/embed_papers.py
 .github/workflows/embed-papers.yml
+src/lib/repositories/semantic-retrieval.ts
 ```
 
 Current status:
@@ -76,6 +78,9 @@ Current status:
 - `topic_embeddings` and `user_profile_embeddings` exist with RLS enabled;
 - `scripts/embed_papers.py` supports real Supabase candidate selection over REST;
 - `--dry-run` lists stale/missing paper embeddings without loading the model;
+- `match_papers_by_embedding` is installed in Supabase for pgvector top-K retrieval;
+- `src/lib/repositories/semantic-retrieval.ts` loads the current user profile vector and calls the pgvector RPC;
+- `/feed` uses semantic candidates when a user profile embedding exists and falls back to the current topic/feedback ranking otherwise;
 - GitHub Actions workflow is ready but has not been run from GitHub yet.
 
 ## Paper Embedding Input
@@ -263,6 +268,28 @@ order by papers.embedding <=> :user_embedding
 limit 100;
 ```
 
+Implemented RPC:
+
+```sql
+match_papers_by_embedding(
+  query_embedding vector(384),
+  match_count integer default 100,
+  embedding_model_filter text default 'BAAI/bge-small-en-v1.5'
+)
+```
+
+Current TypeScript integration:
+
+```text
+src/lib/repositories/semantic-retrieval.ts
+  -> loads latest user_profile_embeddings row
+  -> calls match_papers_by_embedding
+  -> loads matched Paper rows
+  -> returns semantic scores to the existing reranker
+```
+
+If no user profile embedding exists, or if the semantic candidate set is empty after filtering seen papers, PaperDeck falls back to the topic/feedback ranking over the shared catalog.
+
 The final displayed score should be a hybrid score:
 
 ```text
@@ -336,10 +363,12 @@ For public repositories, standard GitHub-hosted runners are free. Do not use lar
 4. Done: add local dry-run mode.
 5. Done: add GitHub Actions workflow with HuggingFace and pip caching.
 6. Done: verify dry-run candidate selection against Supabase.
-7. Next: run a tiny real embedding batch after installing model dependencies on GitHub Actions or a Python environment with `sentence-transformers`.
-8. Add TypeScript retrieval repository using pgvector top-K.
-9. Blend semantic retrieval with the existing `src/lib/ranking/feed-ranking.ts` reranker.
-10. Update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
+7. Done: add pgvector top-K RPC.
+8. Done: add TypeScript retrieval repository using pgvector top-K.
+9. Done: blend semantic candidates with the existing `src/lib/ranking/feed-ranking.ts` reranker.
+10. Next: run a tiny real embedding batch after installing model dependencies on GitHub Actions or a Python environment with `sentence-transformers`.
+11. Next: build user profile embedding generation from topic and interaction vectors.
+12. Update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
 
 ## Non-Goals For MVP
 

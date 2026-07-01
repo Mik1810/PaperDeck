@@ -123,6 +123,8 @@ The schema now includes `papers.embedding_content_hash`, `topic_embeddings`, and
 
 `topic_embeddings` stores offline topic vectors. `user_profile_embeddings` stores aggregate user vectors built from selected topics and interaction feedback.
 
+`match_papers_by_embedding(query_embedding, match_count, embedding_model_filter)` performs pgvector top-K retrieval over `papers.embedding` and returns `paper_id` plus `semantic_score`. The feed repository uses it only when a stored user profile embedding exists.
+
 ## MVP Feed Ranking
 
 The current live feed ranking is computed in `src/lib/ranking/feed-ranking.ts`, not persisted in `recommendations` yet.
@@ -146,6 +148,8 @@ Current behavior:
 `Already read` and `Not interested` are recorded from the paper detail page. Removing a paper from `Read later` deletes the playlist item but does not add negative feedback.
 
 Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
+
+Current integration already supports this path: if `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic candidates with pgvector, then applies the existing TypeScript reranker. Without a stored user vector, it falls back to the topic/feedback ranking.
 
 ## RLS Notes
 

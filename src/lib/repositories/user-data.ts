@@ -6,6 +6,7 @@ import {
   type RankingInteraction,
 } from "@/lib/ranking/feed-ranking";
 import { getAllPapers, getPapersByIds, getTopics } from "@/lib/repositories/catalog";
+import { getSemanticPaperCandidates } from "@/lib/repositories/semantic-retrieval";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
 import type { InteractionType, Playlist } from "@/types/paper";
@@ -173,14 +174,32 @@ async function getUserPaperState(ownerId: string): Promise<UserPaperState> {
 }
 
 export async function getFeedPageData(ownerId: string) {
-  const [papers, topics, selectedTopicIds, state] = await Promise.all([
-    getAllPapers(),
+  const [topics, selectedTopicIds, state, semanticCandidates] = await Promise.all([
     getTopics(),
     getSelectedTopicIds(ownerId),
     getUserPaperState(ownerId),
+    getSemanticPaperCandidates(ownerId),
   ]);
+  const papers = semanticCandidates?.papers.length
+    ? semanticCandidates.papers
+    : await getAllPapers();
 
-  const rankedPapers = rankFeedPapers(papers, topics, selectedTopicIds, state);
+  let rankedPapers = rankFeedPapers(
+    papers,
+    topics,
+    selectedTopicIds,
+    state,
+    semanticCandidates?.semanticScores,
+  );
+
+  if (!rankedPapers.length && semanticCandidates) {
+    rankedPapers = rankFeedPapers(
+      await getAllPapers(),
+      topics,
+      selectedTopicIds,
+      state,
+    );
+  }
 
   return {
     activePaper: rankedPapers[0] ?? null,
