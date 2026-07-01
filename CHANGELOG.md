@@ -22,6 +22,10 @@ This project follows Semantic Versioning.
 - Custom domain deployment at `paperdeck.michaelpiccirilli.it` verified with Clerk production keys.
 - Clerk production DNS records and SSL certificates verified for the custom domain.
 - Google OAuth production sign-in verified through Clerk.
+- Supabase service-role server client and repository layer for MVP persistence.
+- Seed catalog persistence for initial topics and mock papers.
+- Persistent onboarding interests, favorites, default `Read later`, playlist items, and paper interactions.
+- Feed, library, settings, and paper detail pages wired to server-side Supabase data.
 - Initial product roadmap for PaperDeck.
 - Public README with project description, MVP scope, planned data sources, ranking approach, and architecture.
 - SVG logo under `logo/paperdeck-logo.svg`.

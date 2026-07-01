@@ -43,6 +43,24 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Tassonomia interessi: derivata dalle fonti disponibili, poi curata e normalizzata dentro l'app.
 - Vincolo economico: approccio free-first, evitando servizi a pagamento finche' possibile.
 
+## Stato implementazione
+
+Aggiornato al 2026-07-01:
+
+- Repository, scaffold Next.js, UI skeleton e Clerk auth: completati.
+- Supabase schema iniziale con pgvector, RLS preparata e tabelle MVP: applicato.
+- Deploy production su `https://paperdeck.michaelpiccirilli.it/`: completato.
+- Clerk production, DNS, SSL e Google OAuth: completati e verificati.
+- Primo layer di persistenza server-side: implementato.
+  - Il catalogo seed di topic/paper viene salvato in Supabase.
+  - Il profilo utente viene creato/aggiornato a partire da Clerk.
+  - La playlist privata default `Read later` viene creata automaticamente.
+  - L'onboarding salva gli interessi in `user_interests`.
+  - Feed, library, settings e paper detail leggono dati da Supabase.
+  - Le azioni dismiss, open detail, favorite e save to playlist scrivono interazioni utente.
+- Ingestion arXiv/Semantic Scholar/OpenAlex e worker embeddings: non ancora implementati.
+- Clerk JWT per applicare RLS direttamente dal browser: non ancora configurato; l'MVP usa server actions con service role solo lato server.
+
 ## Principio sui contenuti
 
 La app deve distinguere chiaramente tre livelli:
@@ -416,6 +434,14 @@ MVP:
 - Aggiunta/rimozione paper.
 - Ordinamento manuale o per data di salvataggio.
 - Playlist default `Read later` creata automaticamente.
+
+Stato attuale:
+
+- Preferiti persistiti in `favorites`.
+- Playlist default `Read later` persistita in `playlists`.
+- Salvataggio paper in `playlist_items`.
+- Library collegata ai dati persistenti.
+- Rimozione paper da playlist e ordinamento manuale: da implementare.
 
 Futuro:
 

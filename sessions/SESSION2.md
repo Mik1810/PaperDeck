@@ -149,18 +149,40 @@ Production authentication is working end to end:
 - Google OAuth production login: done;
 - redirect after first sign-up to `/onboarding`: verified.
 
+MVP persistence now has a first server-side implementation:
+
+- installed `@supabase/supabase-js`;
+- added a server-only Supabase service-role client;
+- added Clerk session helper that maps authenticated users to `owner_id`;
+- added catalog repository that seeds the initial topic/paper mock data into Supabase;
+- added user-data repository for profiles, onboarding interests, favorites, `Read later`, playlist items, and user-paper interactions;
+- added server actions for onboarding, dismiss, open detail, favorite, and save to `Read later`;
+- connected `/feed`, `/onboarding`, `/library`, `/settings`, and `/papers/[paperId]` to Supabase-backed data instead of static mock state;
+- made the onboarding topic picker interactive and persisted via server action;
+- kept `SUPABASE_SERVICE_ROLE_KEY` server-only.
+- verified the catalog repository against the remote Supabase project and seeded 10 topics plus 4 starter papers.
+
+Validation after the persistence work:
+
+```text
+npm run lint  -> passed
+npm run build -> passed
+Remote Supabase seed count -> 10 taxonomy topics, 4 papers
+```
+
 ## Open Questions
 
 - Configure Clerk JWT so Supabase can enforce the prepared RLS policies directly.
 - Decide whether local development should switch back to Clerk development keys while keeping live keys only on Vercel Production.
+- Implement arXiv ingestion and replace the seed catalog with real imported papers.
+- Add removal from `Read later` and manual playlist ordering.
 - Post-feed benchmark for `BAAI/bge-small-en-v1.5` vs `intfloat/e5-small-v2` vs `sentence-transformers/all-MiniLM-L6-v2`.
 
 ## Next Suggested Step
 
-Add Supabase server clients and wire persistent user data:
+Validate the Supabase-backed flow in the deployed app, then implement the ingestion worker path:
 
-- create or upsert an app user after Clerk login;
-- persist onboarding topic selections;
-- persist favorites;
-- persist dismiss/open/save paper interactions;
-- persist private playlists.
+- import arXiv CS seed papers;
+- persist external IDs and authors;
+- generate BGE-small embeddings offline;
+- rank feed results from real catalog data.

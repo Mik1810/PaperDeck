@@ -26,6 +26,16 @@ Initial implementation:
 4. Client components do not receive Supabase service keys.
 5. User-specific reads/writes go through server-controlled code.
 
+Current implementation:
+
+- `src/lib/supabase/server.ts` creates a service-role Supabase client for server-only code.
+- `src/lib/auth/session.ts` converts the Clerk session into the PaperDeck `owner_id`.
+- `src/lib/repositories/catalog.ts` seeds the initial mock catalog into Supabase and reads shared paper/topic data.
+- `src/lib/repositories/user-data.ts` persists profiles, interests, favorites, default `Read later`, playlist items, and user-paper interactions.
+- `src/app/actions.ts` exposes server actions for onboarding and paper interactions.
+
+The service-role key remains server-only and must never be imported into client components.
+
 Future hardening:
 
 1. Configure Clerk JWT templates for Supabase.

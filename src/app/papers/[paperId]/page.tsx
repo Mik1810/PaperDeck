@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Bookmark, ExternalLink, Heart } from "lucide-react";
+import { saveToReadLaterAction, toggleFavoriteAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
-import { mockPapers } from "@/lib/mock-data";
+import { requireUserContext } from "@/lib/auth/session";
+import {
+  ensureUserProfile,
+  getPaperDetailData,
+} from "@/lib/repositories/user-data";
 
 type PaperDetailPageProps = {
   params: Promise<{
@@ -10,15 +15,16 @@ type PaperDetailPageProps = {
   }>;
 };
 
-export function generateStaticParams() {
-  return mockPapers.map((paper) => ({
-    paperId: paper.id,
-  }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function PaperDetailPage({ params }: PaperDetailPageProps) {
   const { paperId } = await params;
-  const paper = mockPapers.find((item) => item.id === paperId);
+  const user = await requireUserContext();
+  await ensureUserProfile(user);
+  const { paper, isFavorite, isSaved, readLaterCount } = await getPaperDetailData(
+    user.ownerId,
+    paperId,
+  );
 
   if (!paper) {
     notFound();
@@ -28,6 +34,7 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
     <AppShell
       title="Paper detail"
       subtitle={paper.recommendationReason}
+      readLaterCount={readLaterCount}
       action={
         <Link
           href="/feed"
@@ -64,14 +71,42 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
         ) : null}
 
         <div className="mt-7 flex flex-wrap gap-2">
-          <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-pink-200 bg-white px-4 text-sm font-black text-pink-700">
-            <Heart aria-hidden="true" size={18} strokeWidth={2.5} />
-            Favorite
-          </button>
-          <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 text-sm font-black text-emerald-700">
-            <Bookmark aria-hidden="true" size={18} strokeWidth={2.5} />
-            Read later
-          </button>
+          <form action={toggleFavoriteAction}>
+            <input name="paperId" type="hidden" value={paper.id} />
+            <button
+              className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
+                isFavorite
+                  ? "border-pink-300 bg-pink-50 text-pink-700"
+                  : "border-pink-200 bg-white text-pink-700"
+              }`}
+            >
+              <Heart
+                aria-hidden="true"
+                fill={isFavorite ? "currentColor" : "none"}
+                size={18}
+                strokeWidth={2.5}
+              />
+              {isFavorite ? "Favorited" : "Favorite"}
+            </button>
+          </form>
+          <form action={saveToReadLaterAction}>
+            <input name="paperId" type="hidden" value={paper.id} />
+            <button
+              className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
+                isSaved
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  : "border-emerald-200 bg-white text-emerald-700"
+              }`}
+            >
+              <Bookmark
+                aria-hidden="true"
+                fill={isSaved ? "currentColor" : "none"}
+                size={18}
+                strokeWidth={2.5}
+              />
+              {isSaved ? "Saved" : "Read later"}
+            </button>
+          </form>
           <Link
             href={paper.url}
             target="_blank"

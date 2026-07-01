@@ -1,11 +1,22 @@
 import { AppShell } from "@/components/app-shell";
-import { userInterests } from "@/lib/mock-data";
+import { requireUserContext } from "@/lib/auth/session";
+import {
+  ensureUserProfile,
+  getSettingsPageData,
+} from "@/lib/repositories/user-data";
 
-export default function SettingsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage() {
+  const user = await requireUserContext();
+  await ensureUserProfile(user);
+  const { interests, readLaterCount } = await getSettingsPageData(user.ownerId);
+
   return (
     <AppShell
       title="Settings"
       subtitle="Account, ranking preferences, digest cadence, and source controls."
+      readLaterCount={readLaterCount}
     >
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -39,7 +50,7 @@ export default function SettingsPage() {
             Interests
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
-            {userInterests.map((interest) => (
+            {interests.map((interest) => (
               <span
                 key={interest.id}
                 className={`rounded-lg px-3 py-2 text-sm font-bold ${

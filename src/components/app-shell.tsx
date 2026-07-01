@@ -9,6 +9,7 @@ type AppShellProps = {
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  readLaterCount?: number;
 };
 
 const desktopNav = [
@@ -18,7 +19,13 @@ const desktopNav = [
   { href: "/settings", label: "Settings" },
 ];
 
-export function AppShell({ children, title, subtitle, action }: AppShellProps) {
+export function AppShell({
+  children,
+  title,
+  subtitle,
+  action,
+  readLaterCount,
+}: AppShellProps) {
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-slate-950">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/92 backdrop-blur">
@@ -86,12 +93,14 @@ export function AppShell({ children, title, subtitle, action }: AppShellProps) {
         {children}
       </main>
 
-      <aside className="fixed bottom-20 right-4 hidden rounded-lg border border-slate-200 bg-white p-3 shadow-lg lg:block">
-        <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-          <BookOpenCheck aria-hidden="true" size={18} strokeWidth={2.4} />
-          Read later: 2
-        </div>
-      </aside>
+      {typeof readLaterCount === "number" ? (
+        <aside className="fixed bottom-20 right-4 hidden rounded-lg border border-slate-200 bg-white p-3 shadow-lg lg:block">
+          <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <BookOpenCheck aria-hidden="true" size={18} strokeWidth={2.4} />
+            Read later: {readLaterCount}
+          </div>
+        </aside>
+      ) : null}
 
       <BottomNav />
     </div>

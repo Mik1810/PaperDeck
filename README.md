@@ -10,7 +10,7 @@ PaperDeck is a planned web app for discovering computer science papers through a
 
 ## Project Status
 
-PaperDeck is currently in early scaffold. The repository contains the initial Next.js app skeleton, mock paper data, route structure, and planning documents. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently in early MVP implementation. The repository contains the Next.js app skeleton, Clerk production auth, Supabase schema, a server-side persistence layer, seeded topic/paper catalog data, route structure, and planning documents. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
 
 ## MVP Scope
 
@@ -84,6 +84,8 @@ SUPABASE_SERVICE_ROLE_KEY=replace_me_server_only
 The initial database plan lives in [docs/database.md](./docs/database.md). The SQL schema draft is in [supabase/schema.sql](./supabase/schema.sql).
 
 The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data through trusted server code. RLS policies are included for the future Clerk JWT integration path.
+
+Current server-side persistence covers profiles, onboarding interests, favorites, the default `Read later` playlist, playlist items, paper interactions, and a seeded starter catalog.
 
 ## Deployment
 

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import {
   Bookmark,
@@ -11,13 +10,25 @@ import {
   MoveRight,
   X,
 } from "lucide-react";
+import {
+  dismissPaperAction,
+  openPaperAction,
+  saveToReadLaterAction,
+  toggleFavoriteAction,
+} from "@/app/actions";
 import type { Paper } from "@/types/paper";
 
 type PaperCardProps = {
   paper: Paper;
+  isFavorite?: boolean;
+  isSaved?: boolean;
 };
 
-export function PaperCard({ paper }: PaperCardProps) {
+export function PaperCard({
+  paper,
+  isFavorite = false,
+  isSaved = false,
+}: PaperCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
@@ -83,26 +94,55 @@ export function PaperCard({ paper }: PaperCardProps) {
       </div>
 
       <div className="grid grid-cols-5 gap-2 border-t border-slate-100 bg-slate-50 p-3">
-        <button className="grid h-12 place-items-center rounded-lg border border-rose-200 bg-white text-rose-700">
-          <X aria-label="Dismiss paper" size={19} strokeWidth={2.5} />
-        </button>
-        <Link
-          href={`/papers/${paper.id}`}
-          className="col-span-2 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white"
-        >
-          <MoveRight aria-hidden="true" size={18} strokeWidth={2.5} />
-          Open
-        </Link>
-        <button className="grid h-12 place-items-center rounded-lg border border-pink-200 bg-white text-pink-700">
-          <Heart aria-label="Favorite paper" size={19} strokeWidth={2.5} />
-        </button>
-        <button className="grid h-12 place-items-center rounded-lg border border-emerald-200 bg-white text-emerald-700">
-          <Bookmark
-            aria-label="Save to Read later"
-            size={19}
-            strokeWidth={2.5}
-          />
-        </button>
+        <form action={dismissPaperAction}>
+          <input name="paperId" type="hidden" value={paper.id} />
+          <button className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700">
+            <X aria-label="Dismiss paper" size={19} strokeWidth={2.5} />
+          </button>
+        </form>
+        <form action={openPaperAction} className="col-span-2">
+          <input name="paperId" type="hidden" value={paper.id} />
+          <button className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white">
+            <MoveRight aria-hidden="true" size={18} strokeWidth={2.5} />
+            Open
+          </button>
+        </form>
+        <form action={toggleFavoriteAction}>
+          <input name="paperId" type="hidden" value={paper.id} />
+          <button
+            className={`grid h-12 w-full place-items-center rounded-lg border ${
+              isFavorite
+                ? "border-pink-300 bg-pink-50 text-pink-700"
+                : "border-pink-200 bg-white text-pink-700"
+            }`}
+          >
+            <Heart
+              aria-label={isFavorite ? "Remove favorite" : "Favorite paper"}
+              fill={isFavorite ? "currentColor" : "none"}
+              size={19}
+              strokeWidth={2.5}
+            />
+          </button>
+        </form>
+        <form action={saveToReadLaterAction}>
+          <input name="paperId" type="hidden" value={paper.id} />
+          <button
+            className={`grid h-12 w-full place-items-center rounded-lg border ${
+              isSaved
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "border-emerald-200 bg-white text-emerald-700"
+            }`}
+          >
+            <Bookmark
+              aria-label={
+                isSaved ? "Saved to Read later" : "Save to Read later"
+              }
+              fill={isSaved ? "currentColor" : "none"}
+              size={19}
+              strokeWidth={2.5}
+            />
+          </button>
+        </form>
       </div>
 
       <a

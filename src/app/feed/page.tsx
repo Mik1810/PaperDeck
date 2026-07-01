@@ -1,19 +1,46 @@
 import { AppShell } from "@/components/app-shell";
 import { PaperCard } from "@/components/paper-card";
-import { mockPapers } from "@/lib/mock-data";
+import { requireUserContext } from "@/lib/auth/session";
+import { ensureUserProfile, getFeedPageData } from "@/lib/repositories/user-data";
 
-export default function FeedPage() {
-  const activePaper = mockPapers[0];
-  const nextPapers = mockPapers.slice(1, 4);
+export const dynamic = "force-dynamic";
+
+export default async function FeedPage() {
+  const user = await requireUserContext();
+  await ensureUserProfile(user);
+  const {
+    activePaper,
+    nextPapers,
+    favoriteIds,
+    readLaterIds,
+    readLaterCount,
+  } = await getFeedPageData(user.ownerId);
 
   return (
     <AppShell
       title="Today"
       subtitle="A relevance-first deck tuned for algorithms, complexity, and programming languages."
+      readLaterCount={readLaterCount}
     >
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="flex justify-center">
-          <PaperCard paper={activePaper} />
+          {activePaper ? (
+            <PaperCard
+              isFavorite={favoriteIds.has(activePaper.id)}
+              isSaved={readLaterIds.has(activePaper.id)}
+              paper={activePaper}
+            />
+          ) : (
+            <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
+              <h2 className="text-lg font-black text-slate-950">
+                No papers left in this seed deck
+              </h2>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                Adjust your interests or wait for the ingestion worker to add
+                more papers.
+              </p>
+            </div>
+          )}
         </section>
 
         <aside className="space-y-5">
