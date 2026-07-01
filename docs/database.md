@@ -92,6 +92,8 @@ These are shared paper and topic catalog data. Authenticated users can read them
 
 This tracks batch imports from arXiv, Semantic Scholar, OpenAlex, and later sources.
 
+Current arXiv ingestion writes one `ingestion_runs` row per non-dry-run execution and stores `status`, `finished_at`, `imported_count`, and `error_message`.
+
 ## Embeddings
 
 The initial embedding model is `BAAI/bge-small-en-v1.5`, which produces 384-dimensional vectors.

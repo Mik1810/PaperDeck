@@ -1,0 +1,42 @@
+name: Ingest arXiv papers
+
+on:
+  workflow_dispatch:
+    inputs:
+      categories:
+        description: "Comma-separated arXiv categories"
+        required: false
+        default: "cs.AI,cs.CL,cs.CR,cs.CC,cs.DS,cs.LG,cs.LO,cs.PL,cs.SE,cs.SY"
+      max_results:
+        description: "Maximum papers to fetch in this run"
+        required: false
+        default: "25"
+  schedule:
+    - cron: "17 4 * * *"
+
+jobs:
+  ingest-arxiv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ARXIV_CATEGORIES: ${{ github.event.inputs.categories || vars.ARXIV_CATEGORIES || 'cs.AI,cs.CL,cs.CR,cs.CC,cs.DS,cs.LG,cs.LO,cs.PL,cs.SE,cs.SY' }}
+      ARXIV_MAX_RESULTS: ${{ github.event.inputs.max_results || vars.ARXIV_MAX_RESULTS || '25' }}
+      ARXIV_USER_AGENT: ${{ vars.ARXIV_USER_AGENT || 'PaperDeck/0.0.0 (https://paperdeck.michaelpiccirilli.it)' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ingest arXiv papers
+        run: npm run ingest:arxiv

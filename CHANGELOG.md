@@ -26,6 +26,8 @@ This project follows Semantic Versioning.
 - Seed catalog persistence for initial topics and mock papers.
 - Persistent onboarding interests, favorites, default `Read later`, playlist items, and paper interactions.
 - Feed, library, settings, and paper detail pages wired to server-side Supabase data.
+- arXiv ingestion script and GitHub Actions workflow for daily/manual metadata import.
+- Ingestion documentation with required secrets, local dry-run command, and arXiv API constraints.
 - Initial product roadmap for PaperDeck.
 - Public README with project description, MVP scope, planned data sources, ranking approach, and architecture.
 - SVG logo under `logo/paperdeck-logo.svg`.

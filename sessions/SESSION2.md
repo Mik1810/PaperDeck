@@ -170,19 +170,44 @@ npm run build -> passed
 Remote Supabase seed count -> 10 taxonomy topics, 4 papers
 ```
 
+arXiv ingestion now has a first working implementation:
+
+- installed `fast-xml-parser` and `tsx`;
+- added `scripts/ingest-arxiv.ts`;
+- added `npm run ingest:arxiv`;
+- added `.github/workflows/ingest-arxiv.yml` for daily/manual GitHub Actions import;
+- added `docs/ingestion.md`;
+- added arXiv worker variables to `.env.example`;
+- implemented arXiv Atom parsing, normalized `arxiv_id`, author import, paper-topic linking, external IDs, and `ingestion_runs` tracking;
+- kept the worker focused on metadata/abstract/link import and did not store PDF/full text.
+
+Validation after arXiv ingestion work:
+
+```text
+npm run lint -> passed
+npm run build -> passed
+npm run ingest:arxiv -- --dry-run --categories=cs.CC --max-results=1 -> fetched 1
+npm run ingest:arxiv -- --categories=cs.CC --max-results=2 -> imported 2
+Remote Supabase count -> 6 total papers, 4 arXiv papers
+Latest arXiv ingestion run -> completed, imported_count=2
+```
+
 ## Open Questions
 
 - Configure Clerk JWT so Supabase can enforce the prepared RLS policies directly.
 - Decide whether local development should switch back to Clerk development keys while keeping live keys only on Vercel Production.
-- Implement arXiv ingestion and replace the seed catalog with real imported papers.
+- Configure GitHub repository secrets for the arXiv ingestion workflow:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
 - Add removal from `Read later` and manual playlist ordering.
 - Post-feed benchmark for `BAAI/bge-small-en-v1.5` vs `intfloat/e5-small-v2` vs `sentence-transformers/all-MiniLM-L6-v2`.
 
 ## Next Suggested Step
 
-Validate the Supabase-backed flow in the deployed app, then implement the ingestion worker path:
+Configure the GitHub Actions ingestion secrets, then continue the ingestion worker path:
 
-- import arXiv CS seed papers;
-- persist external IDs and authors;
+- broaden arXiv CS imports beyond the verified `cs.CC` smoke test;
+- add resumable cursors/checkpoints per category;
+- enrich imported papers with Semantic Scholar/OpenAlex metadata;
 - generate BGE-small embeddings offline;
 - rank feed results from real catalog data.

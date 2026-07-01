@@ -87,6 +87,16 @@ The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data
 
 Current server-side persistence covers profiles, onboarding interests, favorites, the default `Read later` playlist, playlist items, paper interactions, and a seeded starter catalog.
 
+## Ingestion
+
+The current arXiv ingestion worker lives in [scripts/ingest-arxiv.ts](./scripts/ingest-arxiv.ts) and is documented in [docs/ingestion.md](./docs/ingestion.md).
+
+Run a local dry-run:
+
+```bash
+npm run ingest:arxiv -- --dry-run --categories=cs.CC --max-results=1
+```
+
 ## Deployment
 
 Deployment notes live in [docs/deployment.md](./docs/deployment.md). The current public URL is <https://paperdeck.michaelpiccirilli.it/>.
@@ -102,10 +112,13 @@ Protected routes require Clerk production keys on public deployments. Developmen
 |-- CHANGELOG.md
 |-- docs/
 |   |-- database.md
+|   |-- ingestion.md
 |   `-- deployment.md
 |-- README.md
 |-- ROADMAP.md
 |-- package.json
+|-- scripts/
+|   `-- ingest-arxiv.ts
 |-- src/
 |   |-- app/
 |   |-- components/
@@ -113,7 +126,8 @@ Protected routes require Clerk production keys on public deployments. Developmen
 |   |-- proxy.ts
 |   `-- types/
 |-- sessions/
-|   `-- SESSION1.md
+|   |-- SESSION1.md
+|   `-- SESSION2.md
 |-- supabase/
 |   `-- schema.sql
 `-- logo/

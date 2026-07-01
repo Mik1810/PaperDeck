@@ -58,7 +58,12 @@ Aggiornato al 2026-07-01:
   - L'onboarding salva gli interessi in `user_interests`.
   - Feed, library, settings e paper detail leggono dati da Supabase.
   - Le azioni dismiss, open detail, favorite e save to playlist scrivono interazioni utente.
-- Ingestion arXiv/Semantic Scholar/OpenAlex e worker embeddings: non ancora implementati.
+- Ingestion arXiv MVP: implementata.
+  - Script `scripts/ingest-arxiv.ts`.
+  - Workflow GitHub Actions giornaliero/manuale.
+  - Import di metadati, abstract, autori, categorie, link arXiv/PDF e DOI quando presente.
+  - Rispetto del rate limit arXiv: una richiesta ogni tre secondi, una connessione.
+- Semantic Scholar/OpenAlex enrichment e worker embeddings: non ancora implementati.
 - Clerk JWT per applicare RLS direttamente dal browser: non ancora configurato; l'MVP usa server actions con service role solo lato server.
 
 ## Principio sui contenuti
@@ -667,6 +672,14 @@ Pipeline iniziale:
 4. Embedding con modello locale open-source.
 5. Upsert in Postgres/pgvector.
 6. Aggiornamento topic/tassonomia.
+
+Stato attuale:
+
+- Workflow `.github/workflows/ingest-arxiv.yml` creato.
+- Script `npm run ingest:arxiv` creato.
+- Esecuzione locale supporta `--dry-run`, `--categories` e `--max-results`.
+- Richiede `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
+- Verifica locale completata con import reale di 2 paper `cs.CC` nel Supabase remoto.
 
 ### Componenti principali
 
