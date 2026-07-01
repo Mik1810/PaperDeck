@@ -197,6 +197,18 @@ create table ingestion_runs (
   error_message text
 );
 
+create table ingestion_cursors (
+  source paper_source not null,
+  cursor_key text not null,
+  cursor_value text,
+  last_seen_published_at timestamptz,
+  last_seen_external_id text,
+  last_successful_run_id uuid references ingestion_runs(id) on delete set null,
+  imported_count integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (source, cursor_key)
+);
+
 create index taxonomy_topics_parent_idx on taxonomy_topics(parent_id);
 create index papers_published_at_idx on papers(published_at desc);
 create index papers_year_idx on papers(year desc);
@@ -211,6 +223,7 @@ create index playlist_items_paper_idx on playlist_items(paper_id);
 create index user_paper_interactions_owner_created_idx on user_paper_interactions(owner_id, created_at desc);
 create index recommendations_owner_score_idx on recommendations(owner_id, score desc);
 create index digests_owner_generated_idx on digests(owner_id, generated_at desc);
+create index ingestion_cursors_updated_idx on ingestion_cursors(updated_at desc);
 
 -- Use cosine distance for BAAI/bge-small-en-v1.5 embeddings.
 create index papers_embedding_cosine_idx on papers using ivfflat (embedding vector_cosine_ops)
@@ -233,6 +246,7 @@ alter table paper_authors enable row level security;
 alter table paper_topics enable row level security;
 alter table paper_external_ids enable row level security;
 alter table ingestion_runs enable row level security;
+alter table ingestion_cursors enable row level security;
 
 -- Future Clerk JWT integration policy helper:
 -- Configure Clerk/Supabase so auth.jwt() ->> 'sub' equals Clerk user ID.

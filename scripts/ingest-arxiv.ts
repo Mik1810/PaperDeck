@@ -24,6 +24,11 @@ type TopicRow = {
   arxiv_category: string | null;
 };
 
+type IngestionCursor = {
+  cursor_value: string | null;
+  last_seen_published_at: string | null;
+};
+
 type IngestionConfig = {
   categories: string[];
   maxResults: number;
@@ -235,12 +240,12 @@ function parseEntry(entry: Record<string, unknown>): ArxivPaper {
   };
 }
 
-async function fetchArxivPapers(config: IngestionConfig) {
-  const searchQuery = config.categories
-    .map((category) => `cat:${category}`)
-    .join(" OR ");
+async function fetchArxivPapersForCategory(
+  config: IngestionConfig,
+  category: string,
+) {
   const params = new URLSearchParams({
-    search_query: searchQuery,
+    search_query: `cat:${category}`,
     start: String(config.start),
     max_results: String(config.maxResults),
     sortBy: "submittedDate",
@@ -268,6 +273,74 @@ async function fetchArxivPapers(config: IngestionConfig) {
   };
 
   return asArray(parsed.feed?.entry).map(parseEntry);
+}
+
+function cursorKey(category: string) {
+  return `arxiv:${category}`;
+}
+
+async function getCategoryCursor(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  category: string,
+) {
+  const { data, error } = await supabase
+    .from("ingestion_cursors")
+    .select("cursor_value, last_seen_published_at")
+    .eq("source", "arxiv")
+    .eq("cursor_key", cursorKey(category))
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as IngestionCursor | null;
+}
+
+function isAfterCursor(paper: ArxivPaper, cursor: IngestionCursor | null) {
+  if (!cursor?.last_seen_published_at) {
+    return true;
+  }
+
+  return new Date(paper.publishedAt).getTime() >
+    new Date(cursor.last_seen_published_at).getTime();
+}
+
+async function updateCategoryCursor(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  category: string,
+  papers: ArxivPaper[],
+  importedCount: number,
+  runId: string | null,
+) {
+  const newestPaper = papers
+    .filter((paper) => paper.publishedAt)
+    .sort(
+      (a, b) =>
+        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    )[0];
+
+  if (!newestPaper) {
+    return;
+  }
+
+  const { error } = await supabase.from("ingestion_cursors").upsert(
+    {
+      source: "arxiv",
+      cursor_key: cursorKey(category),
+      cursor_value: newestPaper.publishedAt,
+      last_seen_published_at: newestPaper.publishedAt,
+      last_seen_external_id: newestPaper.arxivId,
+      last_successful_run_id: runId,
+      imported_count: importedCount,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "source,cursor_key" },
+  );
+
+  if (error) {
+    throw error;
+  }
 }
 
 async function ensureCategoryTopics(
@@ -350,6 +423,7 @@ async function finishIngestionRun(
   runId: string | null,
   status: "completed" | "failed",
   importedCount: number,
+  cursorValue?: string,
   errorMessage?: string,
 ) {
   if (!runId) {
@@ -361,6 +435,7 @@ async function finishIngestionRun(
     .update({
       status,
       finished_at: new Date().toISOString(),
+      cursor_value: cursorValue ?? null,
       imported_count: importedCount,
       error_message: errorMessage ?? null,
     })
@@ -488,6 +563,10 @@ async function upsertPaper(
   }
 }
 
+function uniquePapersByArxivId(papers: ArxivPaper[]) {
+  return [...new Map(papers.map((paper) => [paper.arxivId, paper])).values()];
+}
+
 async function main() {
   loadLocalEnv();
   const config = parseArgs();
@@ -500,21 +579,48 @@ async function main() {
   const runId = await createIngestionRun(supabase, config.dryRun);
 
   try {
-    const papers = await fetchArxivPapers(config);
+    const fetchedByCategory = [];
+
+    for (const [index, category] of config.categories.entries()) {
+      if (index > 0) {
+        await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
+      }
+
+      const cursor = await getCategoryCursor(supabase, category);
+      const fetchedPapers = await fetchArxivPapersForCategory(config, category);
+      const importablePapers = fetchedPapers.filter((paper) =>
+        isAfterCursor(paper, cursor),
+      );
+
+      fetchedByCategory.push({
+        category,
+        cursor,
+        fetchedPapers,
+        importablePapers,
+      });
+    }
+
+    const papers = uniquePapersByArxivId(
+      fetchedByCategory.flatMap((item) => item.importablePapers),
+    );
 
     if (config.dryRun) {
       console.log(
         JSON.stringify({
           mode: "dry-run",
           categories: config.categories,
-          fetched: papers.length,
-          firstPaper: papers[0]?.arxivId ?? null,
+          fetched: fetchedByCategory.reduce(
+            (total, item) => total + item.fetchedPapers.length,
+            0,
+          ),
+          importable: papers.length,
+          firstPaper:
+            fetchedByCategory.flatMap((item) => item.fetchedPapers)[0]
+              ?.arxivId ?? null,
         }),
       );
       return;
     }
-
-    await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
 
     const allCategories = [...new Set(papers.flatMap((paper) => paper.categories))];
     const topicIdsByCategory = await ensureCategoryTopics(supabase, allCategories);
@@ -523,12 +629,41 @@ async function main() {
       await upsertPaper(supabase, paper, topicIdsByCategory);
     }
 
-    await finishIngestionRun(supabase, runId, "completed", papers.length);
+    for (const item of fetchedByCategory) {
+      await updateCategoryCursor(
+        supabase,
+        item.category,
+        item.fetchedPapers,
+        item.importablePapers.length,
+        runId,
+      );
+    }
+
+    const cursorSummary = JSON.stringify(
+      Object.fromEntries(
+        fetchedByCategory.map((item) => [
+          item.category,
+          item.fetchedPapers[0]?.publishedAt ?? null,
+        ]),
+      ),
+    );
+
+    await finishIngestionRun(
+      supabase,
+      runId,
+      "completed",
+      papers.length,
+      cursorSummary,
+    );
     console.log(
       JSON.stringify({
         mode: "write",
         categories: config.categories,
         imported: papers.length,
+        fetched: fetchedByCategory.reduce(
+          (total, item) => total + item.fetchedPapers.length,
+          0,
+        ),
       }),
     );
   } catch (error) {
@@ -537,6 +672,7 @@ async function main() {
       runId,
       "failed",
       0,
+      undefined,
       error instanceof Error ? error.message : String(error),
     );
     throw error;

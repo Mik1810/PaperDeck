@@ -17,7 +17,9 @@ It:
 - imports descriptive metadata only: title, abstract, authors, identifiers, categories, timestamps, and external links;
 - links to arXiv abstract/PDF URLs instead of copying or serving PDFs;
 - upserts papers by normalized `arxiv_id`;
+- deduplicates papers by normalized `arxiv_id` when the same paper appears in multiple selected categories;
 - refreshes authors and topic links for each imported paper;
+- tracks one incremental cursor per arXiv category;
 - records runs in `ingestion_runs`.
 
 The implementation lives in [`scripts/ingest-arxiv.ts`](../scripts/ingest-arxiv.ts).
@@ -39,6 +41,8 @@ For a non-writing smoke test:
 ```bash
 npm run ingest:arxiv -- --dry-run --categories=cs.CC --max-results=1
 ```
+
+Dry-runs read the stored category cursors and report both `fetched` and `importable` counts without writing.
 
 For a small import:
 
@@ -83,6 +87,24 @@ The worker follows the official arXiv guidance:
 - use a single connection;
 - link users to arXiv for e-print content instead of serving PDFs from PaperDeck.
 
+## Cursor Model
+
+The worker stores category cursors in `ingestion_cursors`.
+
+For arXiv, each cursor key is:
+
+```text
+arxiv:<category>
+```
+
+Example:
+
+```text
+arxiv:cs.CC
+```
+
+Each successful run updates the cursor to the newest `publishedAt` timestamp seen for that category. Subsequent runs import only papers newer than that cursor. This keeps the daily job idempotent for the newest slice. `ARXIV_MAX_RESULTS` is applied per category. Historical backfill still needs a separate strategy using `--start` or a future backfill mode.
+
 References:
 
 - <https://info.arxiv.org/help/api/user-manual.html>
@@ -93,4 +115,4 @@ References:
 - Add Semantic Scholar enrichment for citations and external URLs.
 - Add OpenAlex enrichment for DOI, venue, open-access status, and topics.
 - Add BGE-small embedding generation outside Vercel.
-- Add resumable cursors per category instead of always importing the newest slice.
+- Add historical backfill mode for older arXiv pages.

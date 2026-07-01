@@ -179,6 +179,8 @@ arXiv ingestion now has a first working implementation:
 - added `docs/ingestion.md`;
 - added arXiv worker variables to `.env.example`;
 - implemented arXiv Atom parsing, normalized `arxiv_id`, author import, paper-topic linking, external IDs, and `ingestion_runs` tracking;
+- added `ingestion_cursors` migration/table and incremental cursor updates per category;
+- deduplicated arXiv imports by normalized `arxiv_id` across categories;
 - kept the worker focused on metadata/abstract/link import and did not store PDF/full text.
 
 Validation after arXiv ingestion work:
@@ -190,6 +192,10 @@ npm run ingest:arxiv -- --dry-run --categories=cs.CC --max-results=1 -> fetched 
 npm run ingest:arxiv -- --categories=cs.CC --max-results=2 -> imported 2
 Remote Supabase count -> 6 total papers, 4 arXiv papers
 Latest arXiv ingestion run -> completed, imported_count=2
+Applied migration -> ingestion_cursors exists with RLS enabled
+Cursor verification -> first cs.CC run imported 1, second cs.CC run imported 0
+Cursor dry-run after verification -> fetched 1, importable 0
+Cursor DB state after idempotent run -> imported_count=0
 ```
 
 ## Open Questions
@@ -207,7 +213,7 @@ Latest arXiv ingestion run -> completed, imported_count=2
 Configure the GitHub Actions ingestion secrets, then continue the ingestion worker path:
 
 - broaden arXiv CS imports beyond the verified `cs.CC` smoke test;
-- add resumable cursors/checkpoints per category;
+- add historical arXiv backfill mode for older result pages;
 - enrich imported papers with Semantic Scholar/OpenAlex metadata;
 - generate BGE-small embeddings offline;
 - rank feed results from real catalog data.

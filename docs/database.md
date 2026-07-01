@@ -94,6 +94,8 @@ This tracks batch imports from arXiv, Semantic Scholar, OpenAlex, and later sour
 
 Current arXiv ingestion writes one `ingestion_runs` row per non-dry-run execution and stores `status`, `finished_at`, `imported_count`, and `error_message`.
 
+`ingestion_cursors` stores source/category cursor state. Current arXiv cursor keys use the format `arxiv:<category>`, for example `arxiv:cs.CC`, and keep the newest `publishedAt` timestamp seen by a successful run.
+
 ## Embeddings
 
 The initial embedding model is `BAAI/bge-small-en-v1.5`, which produces 384-dimensional vectors.

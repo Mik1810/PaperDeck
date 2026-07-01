@@ -63,6 +63,7 @@ Aggiornato al 2026-07-01:
   - Workflow GitHub Actions giornaliero/manuale.
   - Import di metadati, abstract, autori, categorie, link arXiv/PDF e DOI quando presente.
   - Rispetto del rate limit arXiv: una richiesta ogni tre secondi, una connessione.
+  - Cursori incrementali per categoria in `ingestion_cursors` e deduplica per `arxiv_id`.
 - Semantic Scholar/OpenAlex enrichment e worker embeddings: non ancora implementati.
 - Clerk JWT per applicare RLS direttamente dal browser: non ancora configurato; l'MVP usa server actions con service role solo lato server.
 
@@ -680,6 +681,7 @@ Stato attuale:
 - Esecuzione locale supporta `--dry-run`, `--categories` e `--max-results`.
 - Richiede `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
 - Verifica locale completata con import reale di 2 paper `cs.CC` nel Supabase remoto.
+- Cursore `arxiv:cs.CC` verificato: una seconda run sulla stessa slice importa 0 paper e aggiorna il cursore con `imported_count = 0`.
 
 ### Componenti principali
 
