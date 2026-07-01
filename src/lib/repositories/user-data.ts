@@ -1,16 +1,22 @@
 import "server-only";
 
+import {
+  isFeedHiddenAction,
+  rankFeedPapers,
+  type RankingInteraction,
+} from "@/lib/ranking/feed-ranking";
 import { getAllPapers, getPapersByIds, getTopics } from "@/lib/repositories/catalog";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
-import type { Paper, Playlist } from "@/types/paper";
+import type { InteractionType, Playlist } from "@/types/paper";
 
 type TopicRow = Awaited<ReturnType<typeof getTopics>>[number];
 
 type UserPaperState = {
   favoriteIds: Set<string>;
   readLaterIds: Set<string>;
-  dismissedIds: Set<string>;
+  seenIds: Set<string>;
+  interactions: RankingInteraction[];
 };
 
 function assertNoError(error: { message: string } | null, context: string) {
@@ -144,7 +150,8 @@ async function getUserPaperState(ownerId: string): Promise<UserPaperState> {
       .from("user_paper_interactions")
       .select("paper_id, action")
       .eq("owner_id", ownerId)
-      .in("action", ["dismiss", "not_interested", "already_read"]),
+      .order("created_at", { ascending: false })
+      .limit(500),
   ]);
 
   assertNoError(favoritesError, "Load favorites");
@@ -156,33 +163,24 @@ async function getUserPaperState(ownerId: string): Promise<UserPaperState> {
     readLaterIds: new Set(
       (playlistItems ?? []).map((item) => item.paper_id as string),
     ),
-    dismissedIds: new Set(
-      (interactions ?? []).map((item) => item.paper_id as string),
+    seenIds: new Set(
+      ((interactions ?? []) as RankingInteraction[])
+        .filter((item) => isFeedHiddenAction(item.action))
+        .map((item) => item.paper_id),
     ),
+    interactions: (interactions ?? []) as RankingInteraction[],
   };
 }
 
-function scorePaper(paper: Paper, selectedTopicIds: Set<string>) {
-  const topicMatchCount = paper.topics.filter((topic) =>
-    selectedTopicIds.has(topic.id),
-  ).length;
-  const relevanceScore = topicMatchCount * 100;
-  const classicScore = paper.isClassic ? 8 : 0;
-  const citationScore = Math.min(paper.citationCount ?? 0, 250) / 50;
-
-  return relevanceScore + classicScore + citationScore + paper.year / 10000;
-}
-
 export async function getFeedPageData(ownerId: string) {
-  const [papers, selectedTopicIds, state] = await Promise.all([
+  const [papers, topics, selectedTopicIds, state] = await Promise.all([
     getAllPapers(),
+    getTopics(),
     getSelectedTopicIds(ownerId),
     getUserPaperState(ownerId),
   ]);
 
-  const rankedPapers = papers
-    .filter((paper) => !state.dismissedIds.has(paper.id))
-    .sort((a, b) => scorePaper(b, selectedTopicIds) - scorePaper(a, selectedTopicIds));
+  const rankedPapers = rankFeedPapers(papers, topics, selectedTopicIds, state);
 
   return {
     activePaper: rankedPapers[0] ?? null,
@@ -276,13 +274,7 @@ export async function getPaperDetailData(ownerId: string, paperId: string) {
 export async function recordPaperInteraction(
   ownerId: string,
   paperId: string,
-  action:
-    | "open_detail"
-    | "dismiss"
-    | "favorite"
-    | "save_to_playlist"
-    | "read"
-    | "already_read",
+  action: InteractionType,
   context = "feed",
 ) {
   const supabase = createServiceRoleClient();

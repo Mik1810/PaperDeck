@@ -159,6 +159,8 @@ MVP persistence now has a first server-side implementation:
 - added server actions for onboarding, dismiss, open detail, favorite, and save to `Read later`;
 - connected `/feed`, `/onboarding`, `/library`, `/settings`, and `/papers/[paperId]` to Supabase-backed data instead of static mock state;
 - made the onboarding topic picker interactive and persisted via server action;
+- added `src/lib/ranking/feed-ranking.ts` for MVP feed ranking from selected topics, hierarchical topic affinity, recent paper feedback, citation/year metadata, and seen-paper penalties;
+- made `open_detail` hide the opened paper from the active deck so the feed advances after the user opens a paper;
 - kept `SUPABASE_SERVICE_ROLE_KEY` server-only.
 - verified the catalog repository against the remote Supabase project and seeded 10 topics plus 4 starter papers.
 
@@ -168,6 +170,7 @@ Validation after the persistence work:
 npm run lint  -> passed
 npm run build -> passed
 Remote Supabase seed count -> 10 taxonomy topics, 4 papers
+Feed ranking build verification -> passed
 ```
 
 arXiv ingestion now has a first working implementation:
@@ -216,4 +219,4 @@ Configure the GitHub Actions ingestion secrets, then continue the ingestion work
 - add historical arXiv backfill mode for older result pages;
 - enrich imported papers with Semantic Scholar/OpenAlex metadata;
 - generate BGE-small embeddings offline;
-- rank feed results from real catalog data.
+- replace the current topic/feedback ranking with embedding-aware ranking.

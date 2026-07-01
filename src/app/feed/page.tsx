@@ -19,7 +19,7 @@ export default async function FeedPage() {
   return (
     <AppShell
       title="Today"
-      subtitle="A relevance-first deck tuned for algorithms, complexity, and programming languages."
+      subtitle="A relevance-first deck tuned from your topics and recent feedback."
       readLaterCount={readLaterCount}
     >
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">

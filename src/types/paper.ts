@@ -45,4 +45,6 @@ export type InteractionType =
   | "favorite"
   | "save_to_playlist"
   | "read"
-  | "seen";
+  | "seen"
+  | "not_interested"
+  | "already_read";

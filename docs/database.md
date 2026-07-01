@@ -32,6 +32,7 @@ Current implementation:
 - `src/lib/auth/session.ts` converts the Clerk session into the PaperDeck `owner_id`.
 - `src/lib/repositories/catalog.ts` seeds the initial mock catalog into Supabase and reads shared paper/topic data.
 - `src/lib/repositories/user-data.ts` persists profiles, interests, favorites, default `Read later`, playlist items, and user-paper interactions.
+- `src/lib/ranking/feed-ranking.ts` computes the current MVP feed ranking from selected topics, recent user feedback, and seen-paper penalties.
 - `src/app/actions.ts` exposes server actions for onboarding and paper interactions.
 
 The service-role key remains server-only and must never be imported into client components.
@@ -113,6 +114,28 @@ Each embedded paper also stores:
 - `embedded_at`
 
 This keeps future model migrations traceable.
+
+## MVP Feed Ranking
+
+The current live feed ranking is computed in `src/lib/ranking/feed-ranking.ts`, not persisted in `recommendations` yet.
+
+Inputs:
+
+- selected `user_interests`;
+- hierarchy from `taxonomy_topics.parent_id`;
+- recent `user_paper_interactions`;
+- favorites and `Read later` state;
+- paper metadata such as citation count, year, and classic flag.
+
+Current behavior:
+
+- exact topic matches rank highest;
+- child/parent topic matches still count with lower weight;
+- `open_detail`, `favorite`, `save_to_playlist`, and `read` add positive topic feedback;
+- `dismiss` and `not_interested` add negative topic feedback;
+- papers with `open_detail`, `dismiss`, `not_interested`, `read`, or `already_read` are hidden from the active deck.
+
+Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
 
 ## RLS Notes
 

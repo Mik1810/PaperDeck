@@ -58,6 +58,7 @@ Aggiornato al 2026-07-01:
   - L'onboarding salva gli interessi in `user_interests`.
   - Feed, library, settings e paper detail leggono dati da Supabase.
   - Le azioni dismiss, open detail, favorite e save to playlist scrivono interazioni utente.
+  - Il feed usa un primo ranking MVP con interessi selezionati, feedback recente e penalita' per paper gia' aperti/letti.
 - Ingestion arXiv MVP: implementata.
   - Script `scripts/ingest-arxiv.ts`.
   - Workflow GitHub Actions giornaliero/manuale.
@@ -447,6 +448,7 @@ Stato attuale:
 - Playlist default `Read later` persistita in `playlists`.
 - Salvataggio paper in `playlist_items`.
 - Library collegata ai dati persistenti.
+- Preferiti, salvataggi e aperture dettaglio sono segnali usati dal ranking MVP.
 - Rimozione paper da playlist e ordinamento manuale: da implementare.
 
 Futuro:
@@ -503,6 +505,14 @@ Segnali impliciti:
 Per MVP e' meglio partire con segnali espliciti. I segnali impliciti possono essere aggiunti dopo, con attenzione alla privacy.
 
 Decisione: l'apertura dettaglio tramite swipe right conta come segnale positivo leggero, inferiore a preferito e salvataggio in playlist.
+
+Stato attuale:
+
+- `src/lib/ranking/feed-ranking.ts` calcola il ranking lato server come modulo puro riusabile.
+- I topic selezionati hanno peso principale.
+- I feedback positivi su paper gia' aperti, preferiti o salvati aumentano il peso dei topic correlati.
+- `dismiss`, `not_interested`, `read`, `already_read` e `open_detail` rimuovono il paper dal deck attivo, cosi' il feed avanza dopo l'apertura dettaglio.
+- Embeddings e pgvector non sono ancora usati nel ranking live.
 
 ### Ranking MVP
 

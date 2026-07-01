@@ -26,6 +26,7 @@ This project follows Semantic Versioning.
 - Seed catalog persistence for initial topics and mock papers.
 - Persistent onboarding interests, favorites, default `Read later`, playlist items, and paper interactions.
 - Feed, library, settings, and paper detail pages wired to server-side Supabase data.
+- MVP feed ranking from selected topics, recent feedback, and seen-paper penalties.
 - arXiv ingestion script and GitHub Actions workflow for daily/manual metadata import.
 - Incremental arXiv category cursors stored in Supabase.
 - arXiv import deduplication by normalized arXiv ID across categories.
