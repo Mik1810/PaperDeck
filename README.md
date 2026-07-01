@@ -10,7 +10,7 @@ PaperDeck is a planned web app for discovering computer science papers through a
 
 ## Project Status
 
-PaperDeck is currently at `0.1.1`: an early MVP foundation with production auth, Supabase-backed user data, arXiv ingestion, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently at `0.1.2`: an early MVP foundation with production auth, Supabase-backed user data, arXiv ingestion, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
 
 ## MVP Scope
 
@@ -49,7 +49,7 @@ PaperDeck will use a hybrid ranking strategy:
 
 The current live ranking uses selected topics, topic hierarchy, recent explicit feedback, citation/year metadata, seen-paper penalties, and semantic candidates when a stored user profile vector exists. The embedding workflow is specified in [docs/embeddings.md](./docs/embeddings.md).
 
-The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`. The schema, pgvector match RPC, GitHub Actions worker, paper embedding dry-run, and server-side user profile aggregation are already in place.
+The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`. The schema, pgvector match RPC, GitHub Actions worker, topic/paper embedding dry-runs, and server-side user profile aggregation are already in place.
 
 ## Planned Architecture
 
@@ -76,7 +76,7 @@ CLERK_AUTHORIZED_PARTIES=http://localhost:3000,https://paperdeck.example.com
 
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
-SUPABASE_SERVICE_ROLE_KEY=replace_me_server_only
+SUPABASE_SERVICE_ROLE_KEY=replace_me
 ```
 
 `.env.local` is intentionally ignored by Git.
@@ -104,6 +104,7 @@ The embedding worker is documented in [docs/embeddings.md](./docs/embeddings.md)
 Run a local embedding dry-run:
 
 ```bash
+python3 scripts/embed_topics.py --dry-run --limit 10 --table-limit 100
 python3 scripts/embed_papers.py --dry-run --limit 3 --table-limit 20
 ```
 
@@ -129,7 +130,9 @@ Protected routes require Clerk production keys on public deployments. Developmen
 |-- ROADMAP.md
 |-- package.json
 |-- scripts/
+|   |-- embedding_common.py
 |   |-- embed_papers.py
+|   |-- embed_topics.py
 |   `-- ingest-arxiv.ts
 |-- src/
 |   |-- app/

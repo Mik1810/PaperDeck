@@ -20,39 +20,48 @@ from embedding_common import (
 
 
 @dataclass(frozen=True)
-class PaperCandidate:
+class TopicCandidate:
     id: str
-    title: str
-    abstract: str
+    slug: str
+    label: str
     text: str
     content_hash: str
     stale_reason: str
 
 
-class PaperEmbeddingClient(SupabaseRestClient):
-    def select_papers(self, table_limit: int) -> list[dict[str, Any]]:
+class TopicEmbeddingClient(SupabaseRestClient):
+    def select_topics(self, table_limit: int) -> list[dict[str, Any]]:
         return self.request_json(
-            "papers",
+            "taxonomy_topics",
             {
-                "select": "id,title,abstract,embedding,embedding_model,embedding_content_hash,ingested_at",
-                "order": "ingested_at.desc",
+                "select": "id,slug,label,parent_id,source,arxiv_category,depth,sort_order,created_at",
+                "order": "depth.asc,sort_order.asc,created_at.asc",
                 "limit": str(table_limit),
             },
         )
 
-    def update_paper_embedding(self, paper_id: str, payload: dict[str, Any]) -> None:
+    def select_topic_embeddings(self, model_name: str) -> list[dict[str, Any]]:
+        return self.request_json(
+            "topic_embeddings",
+            {
+                "select": "topic_id,embedding_model,embedding_content_hash,embedded_at",
+                "embedding_model": f"eq.{model_name}",
+            },
+        )
+
+    def upsert_topic_embedding(self, payload: dict[str, Any]) -> None:
         self.request_json(
-            "papers",
-            {"id": f"eq.{paper_id}"},
-            method="PATCH",
+            "topic_embeddings",
+            {"on_conflict": "topic_id,embedding_model"},
+            method="POST",
             payload=payload,
-            prefer="return=minimal",
+            prefer="resolution=merge-duplicates,return=minimal",
         )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Embed PaperDeck papers with a local sentence-transformers model.",
+        description="Embed PaperDeck taxonomy topics with a local sentence-transformers model.",
     )
     parser.add_argument("--model", default=os.getenv("EMBEDDING_MODEL", DEFAULT_MODEL))
     parser.add_argument(
@@ -63,24 +72,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--limit",
         type=int,
-        default=int(os.getenv("EMBEDDING_LIMIT", "256")),
-        help="Maximum number of papers to embed in this run.",
+        default=int(os.getenv("EMBEDDING_TOPIC_LIMIT", "256")),
+        help="Maximum number of topics to embed in this run.",
     )
     parser.add_argument(
         "--table-limit",
         type=int,
-        default=int(os.getenv("EMBEDDING_TABLE_LIMIT", "0")),
-        help="Maximum rows to inspect before local stale filtering. Defaults to max(limit * 4, 100).",
+        default=int(os.getenv("EMBEDDING_TOPIC_TABLE_LIMIT", "0")),
+        help="Maximum topic rows to inspect before local stale filtering. Defaults to max(limit * 4, 100).",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="List candidate papers without loading the model or writing embeddings.",
+        help="List candidate topics without loading the model or writing embeddings.",
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Embed inspected papers even when hash/model metadata already match.",
+        help="Embed inspected topics even when hash metadata already match.",
     )
     parser.add_argument(
         "--quiet",
@@ -102,60 +111,73 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def embedding_text(row: dict[str, Any]) -> str:
-    title = str(row.get("title") or "").strip()
-    abstract = str(row.get("abstract") or "").strip()
+def topic_embedding_text(
+    row: dict[str, Any],
+    topics_by_id: dict[str, dict[str, Any]],
+) -> str:
+    lines = [str(row.get("label") or "").strip()]
+    parent_id = row.get("parent_id")
+    parent = topics_by_id.get(parent_id) if parent_id else None
+    parent_label = str(parent.get("label") or "").strip() if parent else ""
+    arxiv_category = str(row.get("arxiv_category") or "").strip()
 
-    return f"{title}\n\n{abstract}".strip()
+    if parent_label:
+        lines.append(f"Parent topic: {parent_label}")
+
+    if arxiv_category:
+        lines.append(f"arXiv category: {arxiv_category}")
+
+    return "\n".join(line for line in lines if line).strip()
 
 
 def stale_reason(
-    row: dict[str, Any],
-    model_name: str,
+    existing_embedding: dict[str, Any] | None,
     text_hash: str,
     force: bool,
 ) -> str | None:
     if force:
         return "force"
 
-    if not row.get("embedding"):
+    if not existing_embedding:
         return "missing_embedding"
 
-    if row.get("embedding_model") != model_name:
-        return "model_changed"
-
-    if row.get("embedding_content_hash") != text_hash:
+    if existing_embedding.get("embedding_content_hash") != text_hash:
         return "content_changed"
 
     return None
 
 
 def load_candidates(
-    supabase: PaperEmbeddingClient,
+    supabase: TopicEmbeddingClient,
     model_name: str,
     limit: int,
     table_limit: int,
     force: bool,
-) -> list[PaperCandidate]:
-    candidates: list[PaperCandidate] = []
+) -> list[TopicCandidate]:
+    topics = supabase.select_topics(table_limit)
+    topics_by_id = {topic["id"]: topic for topic in topics}
+    existing_by_topic_id = {
+        row["topic_id"]: row for row in supabase.select_topic_embeddings(model_name)
+    }
+    candidates: list[TopicCandidate] = []
 
-    for row in supabase.select_papers(table_limit):
-        text = embedding_text(row)
+    for row in topics:
+        text = topic_embedding_text(row, topics_by_id)
 
         if not text:
             continue
 
         text_hash = content_hash(text)
-        reason = stale_reason(row, model_name, text_hash, force)
+        reason = stale_reason(existing_by_topic_id.get(row["id"]), text_hash, force)
 
         if not reason:
             continue
 
         candidates.append(
-            PaperCandidate(
+            TopicCandidate(
                 id=row["id"],
-                title=row["title"],
-                abstract=row.get("abstract") or "",
+                slug=row["slug"],
+                label=row["label"],
                 text=text,
                 content_hash=text_hash,
                 stale_reason=reason,
@@ -169,8 +191,8 @@ def load_candidates(
 
 
 def write_embeddings(
-    supabase: PaperEmbeddingClient,
-    candidates: list[PaperCandidate],
+    supabase: TopicEmbeddingClient,
+    candidates: list[TopicCandidate],
     embeddings: list[list[float]],
     model_name: str,
 ) -> None:
@@ -182,9 +204,9 @@ def write_embeddings(
                 f"Model produced {len(embedding)} dimensions, expected {EMBEDDING_DIMENSION}",
             )
 
-        supabase.update_paper_embedding(
-            candidate.id,
+        supabase.upsert_topic_embedding(
             {
+                "topic_id": candidate.id,
                 "embedding": vector_literal(embedding),
                 "embedding_model": model_name,
                 "embedding_dimension": EMBEDDING_DIMENSION,
@@ -197,7 +219,7 @@ def write_embeddings(
 def main() -> None:
     load_local_env()
     args = parse_args()
-    supabase = PaperEmbeddingClient()
+    supabase = TopicEmbeddingClient()
     candidates = load_candidates(
         supabase=supabase,
         model_name=args.model,
@@ -214,13 +236,14 @@ def main() -> None:
                     "model": args.model,
                     "inspected": args.table_limit,
                     "candidates": len(candidates),
-                    "papers": [
+                    "topics": [
                         {
                             "id": candidate.id,
-                            "title": candidate.title,
+                            "slug": candidate.slug,
+                            "label": candidate.label,
                             "staleReason": candidate.stale_reason,
                         }
-                        for candidate in candidates[:10]
+                        for candidate in candidates[:20]
                     ],
                 },
                 indent=2,

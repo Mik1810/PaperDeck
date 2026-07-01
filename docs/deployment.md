@@ -46,7 +46,7 @@ Production and Preview should have these values configured in Vercel:
 
 ```env
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_replace_me
-CLERK_SECRET_KEY=sk_live_replace_me
+CLERK_SECRET_KEY=sk_live_...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
@@ -55,7 +55,7 @@ CLERK_AUTHORIZED_PARTIES=https://paperdeck.michaelpiccirilli.it
 
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
-SUPABASE_SERVICE_ROLE_KEY=replace_me_server_only
+SUPABASE_SERVICE_ROLE_KEY=replace_me
 ```
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.

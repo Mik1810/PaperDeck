@@ -1,8 +1,12 @@
-name: Embed papers
+name: Embed papers and topics
 
 on:
   workflow_dispatch:
     inputs:
+      topic_limit:
+        description: "Maximum topics to embed in this run"
+        required: false
+        default: "256"
       limit:
         description: "Maximum papers to embed in this run"
         required: false
@@ -20,13 +24,14 @@ on:
     - cron: "47 4 * * *"
 
 jobs:
-  embed-papers:
+  embed-vectors:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL || 'BAAI/bge-small-en-v1.5' }}
+      EMBEDDING_TOPIC_LIMIT: ${{ github.event.inputs.topic_limit || vars.EMBEDDING_TOPIC_LIMIT || '256' }}
       EMBEDDING_LIMIT: ${{ github.event.inputs.limit || vars.EMBEDDING_LIMIT || '256' }}
       EMBEDDING_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.EMBEDDING_BATCH_SIZE || '64' }}
       EMBEDDING_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
@@ -53,6 +58,23 @@ jobs:
 
       - name: Install embedding dependencies
         run: python -m pip install -r requirements-embeddings.txt
+
+      - name: Embed topics
+        shell: bash
+        run: |
+          cmd=(
+            python scripts/embed_topics.py
+            --model "$EMBEDDING_MODEL"
+            --batch-size "$EMBEDDING_BATCH_SIZE"
+            --limit "$EMBEDDING_TOPIC_LIMIT"
+            --quiet
+          )
+
+          if [ "$EMBEDDING_DRY_RUN" = "true" ]; then
+            cmd+=(--dry-run)
+          fi
+
+          "${cmd[@]}"
 
       - name: Embed papers
         shell: bash

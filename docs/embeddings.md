@@ -66,7 +66,9 @@ Implemented files:
 supabase/migrations/20260701203000_add_embedding_workflow_tables.sql
 supabase/migrations/20260701211500_add_embedding_match_function.sql
 requirements-embeddings.txt
+scripts/embedding_common.py
 scripts/embed_papers.py
+scripts/embed_topics.py
 .github/workflows/embed-papers.yml
 src/lib/repositories/semantic-retrieval.ts
 src/lib/repositories/user-profile-embeddings.ts
@@ -77,8 +79,10 @@ Current status:
 - schema support has been added and applied to Supabase;
 - `papers.embedding_content_hash` exists;
 - `topic_embeddings` and `user_profile_embeddings` exist with RLS enabled;
+- `scripts/embedding_common.py` shares Supabase REST access, hashing, model loading, and pgvector formatting between workers;
 - `scripts/embed_papers.py` supports real Supabase candidate selection over REST;
-- `--dry-run` lists stale/missing paper embeddings without loading the model;
+- `scripts/embed_topics.py` supports real Supabase candidate selection and upserts for `topic_embeddings`;
+- `--dry-run` lists stale/missing topic and paper embeddings without loading the model;
 - `match_papers_by_embedding` is installed in Supabase for pgvector top-K retrieval;
 - `src/lib/repositories/semantic-retrieval.ts` loads the current user profile vector and calls the pgvector RPC;
 - `src/lib/repositories/user-profile-embeddings.ts` can refresh a user vector from stored topic/paper embeddings without loading any model;
@@ -105,7 +109,7 @@ Recommended input format:
 
 Do not embed full PDFs in the MVP. Full text/RAG is a later feature and should only use open-access content with clear licensing.
 
-Topic labels, arXiv categories, citation counts, and recency should stay outside the model input for now. They are structured reranking signals, not semantic text.
+For paper embeddings, topic labels, arXiv categories, citation counts, and recency should stay outside the model input for now. They are structured reranking signals, not semantic text.
 
 ## Paper Embedding Output
 
@@ -148,14 +152,22 @@ Topic embedding input:
 
 ```text
 <topic label>
-```
-
-Optional later input:
-
-```text
-<topic label>
 Parent topic: <parent label>
 arXiv category: <category>
+```
+
+The parent and arXiv lines are included only when available.
+
+Current implementation:
+
+```text
+scripts/embed_topics.py
+  -> reads taxonomy_topics
+  -> reads existing topic_embeddings for the selected model
+  -> hashes the exact topic embedding input
+  -> selects missing or stale topic vectors
+  -> supports --dry-run without loading sentence-transformers
+  -> upserts topic_embeddings when writing real vectors
 ```
 
 ## User Profile Embeddings
@@ -331,13 +343,15 @@ Implemented workflow:
 .github/workflows/embed-papers.yml
 ```
 
+The workflow name is `Embed papers and topics`; the filename remains `embed-papers.yml`.
+
 Triggers:
 
 ```yaml
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 3 * * *"
+    - cron: "47 4 * * *"
 ```
 
 Required secrets:
@@ -345,6 +359,15 @@ Required secrets:
 ```text
 NEXT_PUBLIC_SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
+```
+
+Optional repository variables:
+
+```text
+EMBEDDING_MODEL
+EMBEDDING_TOPIC_LIMIT
+EMBEDDING_LIMIT
+EMBEDDING_BATCH_SIZE
 ```
 
 Recommended cache paths:
@@ -357,12 +380,14 @@ Recommended cache paths:
 Initial command:
 
 ```bash
+python scripts/embed_topics.py --model BAAI/bge-small-en-v1.5 --batch-size 64 --limit 256
 python scripts/embed_papers.py --model BAAI/bge-small-en-v1.5 --batch-size 64 --limit 256
 ```
 
 Local dry-run:
 
 ```bash
+python3 scripts/embed_topics.py --dry-run --limit 10 --table-limit 100
 python3 scripts/embed_papers.py --dry-run --limit 3 --table-limit 20
 ```
 
@@ -385,7 +410,7 @@ For public repositories, standard GitHub-hosted runners are free. Do not use lar
 8. Done: add TypeScript retrieval repository using pgvector top-K.
 9. Done: blend semantic candidates with the existing `src/lib/ranking/feed-ranking.ts` reranker.
 10. Done: build user profile embedding generation from stored topic and paper vectors.
-11. Next: add topic embedding generation so cold-start users can get semantic profile vectors from selected interests.
+11. Done: add topic embedding generation so cold-start users can get semantic profile vectors from selected interests.
 12. Next: run a tiny real embedding batch after installing model dependencies on GitHub Actions or a Python environment with `sentence-transformers`.
 13. Update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
 

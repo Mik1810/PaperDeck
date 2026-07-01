@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project follows Semantic Versioning.
 
+## [0.1.2] - 2026-07-01
+
+### Added
+
+- Topic embedding worker with Supabase REST candidate selection, dry-run mode, and `topic_embeddings` upserts.
+- Shared Python embedding worker utilities for Supabase REST access, hashing, vector formatting, and model loading.
+- GitHub Actions embedding workflow step for topic vectors before paper vectors.
+
+### Changed
+
+- Project package version advanced from `0.1.1` to `0.1.2`.
+- Embedding documentation updated to describe topic embedding generation and dry-run commands.
+
 ## [0.1.1] - 2026-07-01
 
 ### Added

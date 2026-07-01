@@ -213,7 +213,10 @@ Embedding/ranked retrieval workflow is now specified:
 - added and applied the embedding schema migration for `papers.embedding_content_hash`, `topic_embeddings`, and `user_profile_embeddings`;
 - added `requirements-embeddings.txt`;
 - added `scripts/embed_papers.py` with Supabase REST candidate selection and `--dry-run`;
+- refactored embedding worker shared utilities into `scripts/embedding_common.py`;
+- added `scripts/embed_topics.py` with Supabase REST candidate selection, `--dry-run`, and `topic_embeddings` upserts;
 - added `.github/workflows/embed-papers.yml` with pip/HuggingFace caching;
+- updated the embedding workflow so it embeds topic vectors before paper vectors;
 - added and applied `match_papers_by_embedding` pgvector RPC;
 - added `src/lib/repositories/semantic-retrieval.ts`;
 - integrated `/feed` so stored user profile embeddings can provide semantic candidates, with fallback to topic/feedback ranking when no user vector exists;
@@ -221,6 +224,7 @@ Embedding/ranked retrieval workflow is now specified:
 - `/feed` now attempts to refresh `user_profile_embeddings` from stored topic/paper vectors before semantic retrieval;
 - stale user profile embeddings are cleared when the current user has no usable source vectors;
 - verified dry-run candidate selection against remote Supabase: 3 candidates found in the inspected slice;
+- verified topic embedding dry-run against remote Supabase: 10 topic candidates found in the inspected slice;
 - verified `match_papers_by_embedding` executes against remote Supabase with a zero vector and returns 0 rows while no paper embeddings exist;
 - verified remote schema: 19 public tables and 19 policies after the embedding migration;
 - Vercel will perform pgvector top-K retrieval and TypeScript reranking, but will not import model dependencies.
@@ -257,8 +261,7 @@ Configure the GitHub Actions ingestion secrets, then continue the ingestion work
 - broaden arXiv CS imports beyond the verified `cs.CC` smoke test;
 - add historical arXiv backfill mode for older result pages;
 - enrich imported papers with Semantic Scholar/OpenAlex metadata;
-- run the first real embedding batch;
-- add topic embedding generation for cold-start semantic profiles;
+- run the first real topic and paper embedding batch;
 - use embedding-aware ranking once real user profile vectors exist.
 
-The codebase is now at version `0.1.1`, representing the first production-authenticated, Supabase-backed MVP foundation plus the initial semantic retrieval path. It is not a `1.0.0` release: topic embedding generation, real embedding batches, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and ranking evaluation are still open.
+The codebase is now at version `0.1.2`, representing the first production-authenticated, Supabase-backed MVP foundation plus the initial semantic retrieval path and topic embedding worker. It is not a `1.0.0` release: real embedding batches, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and ranking evaluation are still open.
