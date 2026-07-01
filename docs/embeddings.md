@@ -69,6 +69,7 @@ requirements-embeddings.txt
 scripts/embed_papers.py
 .github/workflows/embed-papers.yml
 src/lib/repositories/semantic-retrieval.ts
+src/lib/repositories/user-profile-embeddings.ts
 ```
 
 Current status:
@@ -80,7 +81,9 @@ Current status:
 - `--dry-run` lists stale/missing paper embeddings without loading the model;
 - `match_papers_by_embedding` is installed in Supabase for pgvector top-K retrieval;
 - `src/lib/repositories/semantic-retrieval.ts` loads the current user profile vector and calls the pgvector RPC;
+- `src/lib/repositories/user-profile-embeddings.ts` can refresh a user vector from stored topic/paper embeddings without loading any model;
 - `/feed` uses semantic candidates when a user profile embedding exists and falls back to the current topic/feedback ranking otherwise;
+- `/feed` attempts to refresh the stored user profile embedding before semantic retrieval;
 - GitHub Actions workflow is ready but has not been run from GitHub yet.
 
 ## Paper Embedding Input
@@ -115,7 +118,7 @@ papers.embedding_dimension
 papers.embedded_at
 ```
 
-The next schema addition should also add:
+The current schema also stores:
 
 ```sql
 papers.embedding_content_hash
@@ -202,6 +205,21 @@ user_profile_embeddings (
 ```
 
 `input_signature` should represent selected topic IDs and recent interaction IDs/timestamps. If it changes, the profile vector is stale.
+
+Current implementation:
+
+```text
+src/lib/repositories/user-profile-embeddings.ts
+  -> reads selected user_interests
+  -> reads topic_embeddings for selected topics
+  -> reads favorite, Read later, and recent interaction paper IDs
+  -> reads paper embeddings for those papers
+  -> computes a normalized weighted vector
+  -> upserts user_profile_embeddings when the input signature changes
+  -> clears stale user_profile_embeddings if no source vectors are available
+```
+
+If no weighted source vectors exist yet, the refresh removes any stale stored vector and the feed keeps using the non-semantic fallback ranking.
 
 ## Paper Batch Selection
 
@@ -366,9 +384,10 @@ For public repositories, standard GitHub-hosted runners are free. Do not use lar
 7. Done: add pgvector top-K RPC.
 8. Done: add TypeScript retrieval repository using pgvector top-K.
 9. Done: blend semantic candidates with the existing `src/lib/ranking/feed-ranking.ts` reranker.
-10. Next: run a tiny real embedding batch after installing model dependencies on GitHub Actions or a Python environment with `sentence-transformers`.
-11. Next: build user profile embedding generation from topic and interaction vectors.
-12. Update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
+10. Done: build user profile embedding generation from stored topic and paper vectors.
+11. Next: add topic embedding generation so cold-start users can get semantic profile vectors from selected interests.
+12. Next: run a tiny real embedding batch after installing model dependencies on GitHub Actions or a Python environment with `sentence-transformers`.
+13. Update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
 
 ## Non-Goals For MVP
 

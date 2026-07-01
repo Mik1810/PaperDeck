@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project follows Semantic Versioning.
 
+## [0.1.1] - 2026-07-01
+
+### Added
+
+- Server-side user profile embedding aggregation from stored topic and paper vectors.
+- Feed refresh of stored user profile embeddings before pgvector semantic retrieval.
+- Stale user profile embedding cleanup when no current source vectors are available.
+
+### Changed
+
+- Project package version advanced from `0.1.0` to `0.1.1`.
+- README and embedding/database docs updated with the current semantic retrieval implementation status.
+
 ## [0.1.0] - 2026-07-01
 
 ### Added

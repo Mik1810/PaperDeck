@@ -7,6 +7,7 @@ import {
 } from "@/lib/ranking/feed-ranking";
 import { getAllPapers, getPapersByIds, getTopics } from "@/lib/repositories/catalog";
 import { getSemanticPaperCandidates } from "@/lib/repositories/semantic-retrieval";
+import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
 import type { InteractionType, Playlist } from "@/types/paper";
@@ -174,12 +175,14 @@ async function getUserPaperState(ownerId: string): Promise<UserPaperState> {
 }
 
 export async function getFeedPageData(ownerId: string) {
-  const [topics, selectedTopicIds, state, semanticCandidates] = await Promise.all([
+  const [topics, selectedTopicIds, state] = await Promise.all([
     getTopics(),
     getSelectedTopicIds(ownerId),
     getUserPaperState(ownerId),
-    getSemanticPaperCandidates(ownerId),
   ]);
+
+  await refreshUserProfileEmbedding(ownerId);
+  const semanticCandidates = await getSemanticPaperCandidates(ownerId);
   const papers = semanticCandidates?.papers.length
     ? semanticCandidates.papers
     : await getAllPapers();

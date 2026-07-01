@@ -217,6 +217,9 @@ Embedding/ranked retrieval workflow is now specified:
 - added and applied `match_papers_by_embedding` pgvector RPC;
 - added `src/lib/repositories/semantic-retrieval.ts`;
 - integrated `/feed` so stored user profile embeddings can provide semantic candidates, with fallback to topic/feedback ranking when no user vector exists;
+- added `src/lib/repositories/user-profile-embeddings.ts`;
+- `/feed` now attempts to refresh `user_profile_embeddings` from stored topic/paper vectors before semantic retrieval;
+- stale user profile embeddings are cleared when the current user has no usable source vectors;
 - verified dry-run candidate selection against remote Supabase: 3 candidates found in the inspected slice;
 - verified `match_papers_by_embedding` executes against remote Supabase with a zero vector and returns 0 rows while no paper embeddings exist;
 - verified remote schema: 19 public tables and 19 policies after the embedding migration;
@@ -255,7 +258,7 @@ Configure the GitHub Actions ingestion secrets, then continue the ingestion work
 - add historical arXiv backfill mode for older result pages;
 - enrich imported papers with Semantic Scholar/OpenAlex metadata;
 - run the first real embedding batch;
-- implement user profile embedding generation from topic and paper vectors;
+- add topic embedding generation for cold-start semantic profiles;
 - use embedding-aware ranking once real user profile vectors exist.
 
-The codebase is now at version `0.1.0`, representing the first production-authenticated, Supabase-backed MVP foundation. It is not a `1.0.0` release: embeddings, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and semantic ranking are still open.
+The codebase is now at version `0.1.1`, representing the first production-authenticated, Supabase-backed MVP foundation plus the initial semantic retrieval path. It is not a `1.0.0` release: topic embedding generation, real embedding batches, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and ranking evaluation are still open.

@@ -125,6 +125,8 @@ The schema now includes `papers.embedding_content_hash`, `topic_embeddings`, and
 
 `match_papers_by_embedding(query_embedding, match_count, embedding_model_filter)` performs pgvector top-K retrieval over `papers.embedding` and returns `paper_id` plus `semantic_score`. The feed repository uses it only when a stored user profile embedding exists.
 
+`src/lib/repositories/user-profile-embeddings.ts` refreshes `user_profile_embeddings` from stored topic and paper vectors. It does not call an embedding model; it only aggregates vectors that already exist in Supabase and clears stale stored profiles when no source vectors are available.
+
 ## MVP Feed Ranking
 
 The current live feed ranking is computed in `src/lib/ranking/feed-ranking.ts`, not persisted in `recommendations` yet.
@@ -149,7 +151,7 @@ Current behavior:
 
 Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
 
-Current integration already supports this path: if `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic candidates with pgvector, then applies the existing TypeScript reranker. Without a stored user vector, it falls back to the topic/feedback ranking.
+Current integration already supports this path: `/feed` first tries to refresh the stored user vector from available embeddings. If `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic candidates with pgvector, then applies the existing TypeScript reranker. Without a stored user vector, it falls back to the topic/feedback ranking.
 
 ## RLS Notes
 

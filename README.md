@@ -10,7 +10,7 @@ PaperDeck is a planned web app for discovering computer science papers through a
 
 ## Project Status
 
-PaperDeck is currently at `0.1.0`: an early MVP foundation with production auth, Supabase-backed user data, arXiv ingestion, and a first feedback-aware feed ranking. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently at `0.1.1`: an early MVP foundation with production auth, Supabase-backed user data, arXiv ingestion, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
 
 ## MVP Scope
 
@@ -47,9 +47,9 @@ PaperDeck will use a hybrid ranking strategy:
 - a small freshness boost;
 - a capped share of classic/high-impact papers.
 
-The current live ranking uses selected topics, topic hierarchy, recent explicit feedback, citation/year metadata, and seen-paper penalties. Local open-source embeddings are planned next for semantic similarity; the workflow is specified in [docs/embeddings.md](./docs/embeddings.md).
+The current live ranking uses selected topics, topic hierarchy, recent explicit feedback, citation/year metadata, seen-paper penalties, and semantic candidates when a stored user profile vector exists. The embedding workflow is specified in [docs/embeddings.md](./docs/embeddings.md).
 
-The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`.
+The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`. The schema, pgvector match RPC, GitHub Actions worker, paper embedding dry-run, and server-side user profile aggregation are already in place.
 
 ## Planned Architecture
 
@@ -99,7 +99,7 @@ Run a local dry-run:
 npm run ingest:arxiv -- --dry-run --categories=cs.CC --max-results=1
 ```
 
-The planned embedding worker is documented in [docs/embeddings.md](./docs/embeddings.md). It will run outside Vercel through GitHub Actions or locally, write vectors to Supabase/pgvector, and let Vercel perform lightweight retrieval and reranking.
+The embedding worker is documented in [docs/embeddings.md](./docs/embeddings.md). It runs outside Vercel through GitHub Actions or locally, writes vectors to Supabase/pgvector, and lets Vercel perform lightweight retrieval and reranking.
 
 Run a local embedding dry-run:
 
@@ -129,6 +129,7 @@ Protected routes require Clerk production keys on public deployments. Developmen
 |-- ROADMAP.md
 |-- package.json
 |-- scripts/
+|   |-- embed_papers.py
 |   `-- ingest-arxiv.ts
 |-- src/
 |   |-- app/
