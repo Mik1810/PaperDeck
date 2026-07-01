@@ -34,8 +34,9 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Segnalibro: salva prima in una playlist default tipo `Read later`.
 - Preview abstract: circa 10 righe su mobile, adattiva su desktop.
 - Embeddings MVP: modello open-source locale, con `BAAI/bge-small-en-v1.5` come default iniziale.
-- Worker batch online MVP: GitHub Actions schedulato e avviabile manualmente.
+- Worker batch online MVP: GitHub Actions giornaliero e avviabile manualmente.
 - Database online MVP: Supabase Postgres + pgvector.
+- Supabase region: preferire `eu-central-2` Zurich se disponibile, fallback `eu-central-1` Frankfurt.
 - Paper classici: massimo indicativo 10-15% del feed.
 - Digest: solo in-app nella prima versione.
 - Note personali: post-MVP.
@@ -561,6 +562,14 @@ Funzioni utili:
 - Jobs: worker schedulato separato.
 - Deploy: Vercel per frontend/backend iniziale, Supabase per database gestito.
 
+Supabase:
+
+- progetto: `PaperDeck`;
+- region preferita: `eu-central-2` Zurich, se disponibile nel form di creazione;
+- fallback: `eu-central-1` Frankfurt;
+- ulteriore fallback europeo: `eu-west-3` Paris;
+- evitare `eu-west-1` Ireland se sono disponibili Zurich o Frankfurt, perche' sono piu' vicine a Roma.
+
 Nota costi:
 
 - Per restare nel gratis, il primo prototipo puo' usare Supabase Postgres + pgvector.
@@ -593,7 +602,7 @@ Architettura free-first proposta:
 2. Supabase Postgres + pgvector sul free tier.
 3. Worker batch separato per ingestion e embeddings.
 4. Nel primissimo prototipo, worker eseguito localmente dal computer dello sviluppatore e push dei risultati nel database remoto.
-5. Per il primo deploy online, worker su GitHub Actions con `workflow_dispatch` manuale e schedule giornaliera/settimanale.
+5. Per il primo deploy online, worker su GitHub Actions con `workflow_dispatch` manuale e schedule giornaliera.
 6. Se il repo resta privato o i limiti GitHub Actions diventano stretti, mantenere fallback locale/manuale o valutare self-hosted runner.
 
 In questo modo l'app puo' stare online mentre embeddings e ingestion restano sostituibili, senza bloccare il deploy su Vercel.
@@ -864,6 +873,5 @@ Decisione proposta:
 
 ## Domande aperte
 
-1. Configurazione esatta del progetto Supabase: nome progetto, region e policy.
-2. Frequenza iniziale del worker GitHub Actions: giornaliera o settimanale.
-3. Dopo il primo feed funzionante, benchmark BGE-small vs E5-small-v2 vs MiniLM su paper reali.
+1. Policy Supabase/RLS precise per profilo, preferiti, playlist e interazioni.
+2. Dopo il primo feed funzionante, benchmark BGE-small vs E5-small-v2 vs MiniLM su paper reali.
