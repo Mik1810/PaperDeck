@@ -15,6 +15,7 @@ This project follows Semantic Versioning.
 - Mock paper, topic, playlist, and user interest data.
 - TypeScript domain types for papers, topics, playlists, and interactions.
 - Clerk SDK integration with provider, protected app routes, auth pages, and `.env.example`.
+- Supabase database plan and initial SQL schema with pgvector, ownership columns, indexes, and future RLS policies.
 - Initial product roadmap for PaperDeck.
 - Public README with project description, MVP scope, planned data sources, ranking approach, and architecture.
 - SVG logo under `logo/paperdeck-logo.svg`.

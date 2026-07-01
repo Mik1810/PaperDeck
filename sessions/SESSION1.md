@@ -83,6 +83,14 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 - Added `.env.example` documenting required Clerk environment variables.
 - Updated app shell to show Clerk sign-in/user controls.
 
+## Supabase Schema Planning Follow-Up
+
+- Added `docs/database.md` explaining the MVP database ownership model.
+- Added `supabase/schema.sql` with initial tables, indexes, pgvector setup, and RLS policies for future Clerk JWT integration.
+- Chose `owner_id text` fields populated with Clerk user IDs for user-owned records.
+- Documented the MVP rule: user-specific data goes through server-side code until Clerk JWT and Supabase RLS are fully configured.
+- Added Supabase environment variable placeholders to `.env.example`.
+
 ## Open Questions
 
 - Exact Supabase RLS policies for profiles, favorites, playlists, and interactions.
@@ -90,4 +98,4 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 
 ## Next Suggested Step
 
-Continue by adding Supabase configuration, database schema planning, RLS policies, and persistent interactions.
+Continue by creating the Supabase project, applying the schema, adding Supabase server clients, and wiring persistent interactions.

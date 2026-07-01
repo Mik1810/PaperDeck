@@ -569,6 +569,11 @@ Supabase:
 - fallback: `eu-central-1` Frankfurt;
 - ulteriore fallback europeo: `eu-west-3` Paris;
 - evitare `eu-west-1` Ireland se sono disponibili Zurich o Frankfurt, perche' sono piu' vicine a Roma.
+- schema iniziale: `supabase/schema.sql`;
+- documentazione modello dati: `docs/database.md`;
+- ownership MVP: record user-owned con `owner_id text` valorizzato con Clerk user ID;
+- accesso MVP: query user-specific tramite server routes/actions, senza esporre `SUPABASE_SERVICE_ROLE_KEY` al browser;
+- RLS: policy preparate per futura integrazione Clerk JWT, dove `auth.jwt() ->> 'sub'` deve corrispondere al Clerk user ID.
 
 Nota costi:
 
@@ -673,6 +678,7 @@ Pipeline iniziale:
 Entita' principali:
 
 - `User`
+- `Profile`
 - `UserInterest`
 - `Paper`
 - `PaperExternalId`
@@ -687,6 +693,8 @@ Entita' principali:
 - `TaxonomyTopic`
 - `TopicRelation`
 - `EmbeddingJob`
+- `IngestionRun`
+- `DigestItem`
 
 Campi minimi `Paper`:
 
@@ -714,7 +722,7 @@ Campi minimi `Paper`:
 
 Campi minimi `UserPaperInteraction`:
 
-- `userId`
+- `ownerId`
 - `paperId`
 - `action`: `open_detail`, `dislike`, `favorite`, `save_to_playlist`, `read`, `seen`, `not_interested`
 - `createdAt`
@@ -740,8 +748,8 @@ Output:
 
 - Progetto Next.js TypeScript.
 - Configurazione Clerk.
-- Database PostgreSQL.
-- Prisma/Drizzle schema.
+- Database Supabase Postgres + pgvector.
+- Schema SQL iniziale in `supabase/schema.sql`.
 - Layout mobile-first.
 - PWA basics.
 
@@ -873,5 +881,6 @@ Decisione proposta:
 
 ## Domande aperte
 
-1. Policy Supabase/RLS precise per profilo, preferiti, playlist e interazioni.
-2. Dopo il primo feed funzionante, benchmark BGE-small vs E5-small-v2 vs MiniLM su paper reali.
+1. Applicare lo schema al progetto Supabase e verificare estensioni `vector`/`pgcrypto`.
+2. Configurare e testare Clerk JWT per far rispettare le RLS policy direttamente da Supabase.
+3. Dopo il primo feed funzionante, benchmark BGE-small vs E5-small-v2 vs MiniLM su paper reali.

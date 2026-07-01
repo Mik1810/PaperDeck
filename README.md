@@ -61,7 +61,7 @@ The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with 
 
 ## Local Environment
 
-Create `.env.local` from `.env.example` and fill in the Clerk keys from the Clerk Dashboard:
+Create `.env.local` from `.env.example` and fill in the Clerk and Supabase keys:
 
 ```env
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_replace_me
@@ -70,9 +70,19 @@ NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
+
+NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
+SUPABASE_SERVICE_ROLE_KEY=replace_me_server_only
 ```
 
 `.env.local` is intentionally ignored by Git.
+
+## Database
+
+The initial database plan lives in [docs/database.md](./docs/database.md). The SQL schema draft is in [supabase/schema.sql](./supabase/schema.sql).
+
+The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data through trusted server code. RLS policies are included for the future Clerk JWT integration path.
 
 ## Repository Layout
 
@@ -81,6 +91,8 @@ NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
 |-- .env.example
 |-- AGENT.md
 |-- CHANGELOG.md
+|-- docs/
+|   `-- database.md
 |-- README.md
 |-- ROADMAP.md
 |-- package.json
@@ -92,6 +104,8 @@ NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
 |   `-- types/
 |-- sessions/
 |   `-- SESSION1.md
+|-- supabase/
+|   `-- schema.sql
 `-- logo/
     `-- paperdeck-logo.svg
 ```

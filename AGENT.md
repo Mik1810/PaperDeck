@@ -15,6 +15,8 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 - Auth: Clerk with Google login.
 - Auth implementation: `@clerk/nextjs`, `ClerkProvider`, and `src/proxy.ts` route protection.
 - Database: Supabase Postgres with pgvector.
+- Database ownership: user-owned rows store Clerk user IDs in `owner_id text`.
+- Database access MVP: user-specific queries should go through server-side code until Clerk JWT and Supabase RLS are configured end to end.
 - Hosting: Vercel for app and lightweight APIs.
 - Worker: GitHub Actions daily schedule plus manual dispatch.
 - Embeddings: start with `BAAI/bge-small-en-v1.5`.
@@ -31,6 +33,8 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 - `ROADMAP.md`: source of truth for product and architecture decisions.
 - `README.md`: public-facing repository overview.
 - `CHANGELOG.md`: short semver change history.
+- `docs/database.md`: Supabase ownership, access, and RLS plan.
+- `supabase/schema.sql`: initial schema and policy draft.
 - `sessions/`: session records. Add a new `SESSIONN.md` file for major planning or implementation sessions.
 - `logo/paperdeck-logo.svg`: repository logo.
 
@@ -42,6 +46,7 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 - Add or update a session file when a session produces meaningful decisions or implementation work.
 - Do not introduce paid services unless explicitly approved.
 - Keep the architecture free-first.
+- Do not expose `SUPABASE_SERVICE_ROLE_KEY` to browser code.
 - Do not put long-running ingestion, PDF parsing, or local embedding generation on Vercel Functions.
 - Prefer official APIs and documented sources over scraping.
 - Do not import or republish full text unless the license and source clearly allow it.
@@ -52,7 +57,7 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 1. Scaffold Next.js with TypeScript.
 2. Add mobile-first app shell.
 3. Configure Clerk Google login. Done.
-4. Configure Supabase and database schema.
+4. Configure Supabase and database schema. In progress.
 5. Add interest onboarding.
 6. Add paper card deck UI.
 7. Add favorites and default `Read later` playlist.
