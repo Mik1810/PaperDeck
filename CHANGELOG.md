@@ -8,6 +8,8 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Next.js scaffold with TypeScript, App Router, Tailwind, and ESLint.
+- Initial PaperDeck app shell replacing the default Next.js starter screen.
 - Initial product roadmap for PaperDeck.
 - Public README with project description, MVP scope, planned data sources, ranking approach, and architecture.
 - SVG logo under `logo/paperdeck-logo.svg`.
@@ -16,5 +18,4 @@ This project follows Semantic Versioning.
 
 ### Notes
 
-- No runnable application code exists yet.
-- Version `0.0.0` represents product definition and repository setup only.
+- Version `0.0.0` represents product definition, repository setup, and initial scaffold only.

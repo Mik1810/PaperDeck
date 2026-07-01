@@ -10,7 +10,7 @@ PaperDeck is a planned web app for discovering computer science papers through a
 
 ## Project Status
 
-PaperDeck is currently in product definition. The implementation scaffold is not created yet. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently in early scaffold. The repository contains the initial Next.js app shell and planning documents. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
 
 ## MVP Scope
 
@@ -67,6 +67,9 @@ The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with 
 |-- CHANGELOG.md
 |-- README.md
 |-- ROADMAP.md
+|-- package.json
+|-- src/
+|   `-- app/
 |-- sessions/
 |   `-- SESSION1.md
 `-- logo/
