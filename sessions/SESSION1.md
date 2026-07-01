@@ -108,10 +108,17 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 - Observed `/feed` returning `404` for unauthenticated command-line requests because Clerk rewrites protected routes when a public deployment uses development Clerk keys.
 - Added `docs/deployment.md` documenting the current deployment status, Vercel environment variables, and the need to switch to a Clerk production instance with `pk_live_` / `sk_live_` keys before public testing.
 
+## Clerk Production Preparation Follow-Up
+
+- Confirmed from Clerk/Vercel docs that a real production Clerk setup cannot use a `*.vercel.app` domain because production requires DNS records on a domain controlled by the project owner.
+- Added optional `CLERK_AUTHORIZED_PARTIES` support to `src/proxy.ts`.
+- Documented the production Clerk setup checklist, including custom domain, Clerk production keys, Google OAuth credentials, and Vercel environment variables.
+
 ## Open Questions
 
 - Configure Clerk JWT so Supabase can enforce the prepared RLS policies directly.
 - Switch Vercel from Clerk development keys to Clerk production keys for public protected-route testing.
+- Choose or purchase a project domain if we want Clerk production before launch.
 - Post-feed benchmark for BGE-small vs E5-small-v2 vs MiniLM.
 
 ## Next Suggested Step

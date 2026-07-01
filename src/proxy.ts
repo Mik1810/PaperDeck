@@ -1,5 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
+const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(",")
+  .map((party) => party.trim())
+  .filter(Boolean);
+
 const isProtectedRoute = createRouteMatcher([
   "/feed(.*)",
   "/library(.*)",
@@ -12,7 +16,7 @@ export default clerkMiddleware(async (auth, request) => {
   if (isProtectedRoute(request)) {
     await auth.protect();
   }
-});
+}, authorizedParties?.length ? { authorizedParties } : undefined);
 
 export const config = {
   matcher: [

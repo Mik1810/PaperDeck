@@ -15,6 +15,7 @@ This project follows Semantic Versioning.
 - Mock paper, topic, playlist, and user interest data.
 - TypeScript domain types for papers, topics, playlists, and interactions.
 - Clerk SDK integration with provider, protected app routes, auth pages, and `.env.example`.
+- Optional Clerk `authorizedParties` middleware configuration for production origin checks.
 - Supabase database plan and initial SQL schema with pgvector, ownership columns, indexes, and future RLS policies.
 - Initial Supabase schema applied and verified against the PaperDeck Supabase project.
 - Deployment notes for Vercel and the Clerk production-key requirement.

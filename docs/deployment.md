@@ -47,6 +47,7 @@ NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
+CLERK_AUTHORIZED_PARTIES=https://paperdeck.example.com
 
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
@@ -54,6 +55,19 @@ SUPABASE_SERVICE_ROLE_KEY=replace_me_server_only
 ```
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
+
+`CLERK_AUTHORIZED_PARTIES` is optional while developing, but should be set in production to the final app origin. Use a comma-separated list if more than one origin is intentionally allowed.
+
+## Production Setup Checklist
+
+1. Buy or choose a domain that you control.
+2. Add the domain to the Vercel project.
+3. In Clerk, create a production instance from the current development instance.
+4. Set the production instance domain in Clerk and complete the DNS records shown by Clerk.
+5. Configure Google as a production SSO connection with custom OAuth credentials. Copy the exact redirect URI shown by Clerk into Google Cloud Console.
+6. In Vercel, replace Clerk environment variables in Production with the `pk_live_...` and `sk_live_...` keys.
+7. Set `CLERK_AUTHORIZED_PARTIES` to the final app origin, for example `https://paperdeck.example.com`.
+8. Redeploy the Vercel project.
 
 ## Next Smoke Test
 
