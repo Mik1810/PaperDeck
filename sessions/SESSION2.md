@@ -268,4 +268,13 @@ Configure the GitHub Actions ingestion secrets, then continue the ingestion work
 - run broader topic and paper embedding batches through GitHub Actions or local `uv`;
 - use embedding-aware ranking once real user profile vectors exist.
 
+Configurare Clerk JWT per applicare RLS Supabase lato client in modo pieno.
+Configurare secrets GitHub per far girare davvero i workflow batch da GitHub.
+Espandere ingestion oltre smoke slice e aggiungere backfill storico.
+Eseguire batch embeddings più ampi e benchmark modelli.
+Playlist custom e ordinamento manuale ancora da fare.
+Fonte: SESSION2.md, ingestion.md, database.md, ROADMAP.md
+Nota importante di allineamento docs
+C’è una piccola incoerenza: in ROADMAP.md una parte dello “stato implementazione” risulta più indietro rispetto a quanto riportato in changelog/sessioni/docs embeddings (che sono più aggiornati). Quindi, per lo stato reale conviene fidarsi prima di CHANGELOG.md + SESSION2.md + embeddings.md.
+
 The codebase is now at version `0.1.3`, representing the first production-authenticated, Supabase-backed MVP foundation plus the initial semantic retrieval path, topic embedding worker, and first real embedding smoke batch. It is not a `1.0.0` release: broader embedding batches, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and ranking evaluation are still open.
