@@ -36,6 +36,19 @@ Future hardening:
 
 - `supabase/schema.sql`: initial schema, indexes, pgvector setup, and future RLS policies.
 
+## Applied Schema
+
+The initial schema was applied to the PaperDeck Supabase project on 2026-07-01.
+
+Validation after apply:
+
+- 16 public tables exist.
+- `pgcrypto` and `vector` extensions are enabled.
+- RLS is enabled on all public tables created by the schema.
+- 17 policies are present.
+
+Note: Supabase/Postgres warns that creating the `ivfflat` index on an empty `papers` table can have low recall until data is loaded. This is expected during setup.
+
 ## Core Tables
 
 ### User-Owned Tables

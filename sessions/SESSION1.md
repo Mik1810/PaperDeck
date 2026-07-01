@@ -91,6 +91,13 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 - Documented the MVP rule: user-specific data goes through server-side code until Clerk JWT and Supabase RLS are fully configured.
 - Added Supabase environment variable placeholders to `.env.example`.
 
+## Supabase Apply Follow-Up
+
+- Configured `DATABASE_URL` with the Supabase Session pooler because direct connection required IPv6.
+- Validated `supabase/schema.sql` with a transaction rollback dry-run.
+- Applied `supabase/schema.sql` to the PaperDeck Supabase project.
+- Verified 16 public tables, `pgcrypto`, `vector`, RLS enabled on all schema tables, and 17 policies.
+
 ## Open Questions
 
 - Exact Supabase RLS policies for profiles, favorites, playlists, and interactions.
@@ -98,4 +105,4 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 
 ## Next Suggested Step
 
-Continue by creating the Supabase project, applying the schema, adding Supabase server clients, and wiring persistent interactions.
+Continue by adding Supabase server clients and wiring persistent interactions.

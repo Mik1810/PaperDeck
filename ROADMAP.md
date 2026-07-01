@@ -570,6 +570,7 @@ Supabase:
 - ulteriore fallback europeo: `eu-west-3` Paris;
 - evitare `eu-west-1` Ireland se sono disponibili Zurich o Frankfurt, perche' sono piu' vicine a Roma.
 - schema iniziale: `supabase/schema.sql`;
+- schema applicato al progetto Supabase il 2026-07-01;
 - documentazione modello dati: `docs/database.md`;
 - ownership MVP: record user-owned con `owner_id text` valorizzato con Clerk user ID;
 - accesso MVP: query user-specific tramite server routes/actions, senza esporre `SUPABASE_SERVICE_ROLE_KEY` al browser;
@@ -881,6 +882,5 @@ Decisione proposta:
 
 ## Domande aperte
 
-1. Applicare lo schema al progetto Supabase e verificare estensioni `vector`/`pgcrypto`.
-2. Configurare e testare Clerk JWT per far rispettare le RLS policy direttamente da Supabase.
-3. Dopo il primo feed funzionante, benchmark BGE-small vs E5-small-v2 vs MiniLM su paper reali.
+1. Configurare e testare Clerk JWT per far rispettare le RLS policy direttamente da Supabase.
+2. Dopo il primo feed funzionante, benchmark BGE-small vs E5-small-v2 vs MiniLM su paper reali.
