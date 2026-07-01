@@ -34,9 +34,14 @@ yarn-error.log*
 .env*
 !.env.example
 
+# OAuth client secrets exported from provider dashboards
+client_secret_*.json
+oauth_client_*.json
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
