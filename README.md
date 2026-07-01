@@ -63,8 +63,12 @@ The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with 
 
 ```text
 .
+|-- AGENT.md
+|-- CHANGELOG.md
 |-- README.md
 |-- ROADMAP.md
+|-- sessions/
+|   `-- SESSION1.md
 `-- logo/
     `-- paperdeck-logo.svg
 ```
