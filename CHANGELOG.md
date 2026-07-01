@@ -17,6 +17,7 @@ This project follows Semantic Versioning.
 - Clerk SDK integration with provider, protected app routes, auth pages, and `.env.example`.
 - Supabase database plan and initial SQL schema with pgvector, ownership columns, indexes, and future RLS policies.
 - Initial Supabase schema applied and verified against the PaperDeck Supabase project.
+- Deployment notes for Vercel and the Clerk production-key requirement.
 - Initial product roadmap for PaperDeck.
 - Public README with project description, MVP scope, planned data sources, ranking approach, and architecture.
 - SVG logo under `logo/paperdeck-logo.svg`.

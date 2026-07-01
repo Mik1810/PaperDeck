@@ -84,6 +84,12 @@ The initial database plan lives in [docs/database.md](./docs/database.md). The S
 
 The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data through trusted server code. RLS policies are included for the future Clerk JWT integration path.
 
+## Deployment
+
+Deployment notes live in [docs/deployment.md](./docs/deployment.md). The current Vercel URL is <https://paper-deck-ecru.vercel.app/>.
+
+Protected routes require Clerk production keys on public deployments. Development keys are kept for local work.
+
 ## Repository Layout
 
 ```text
@@ -92,7 +98,8 @@ The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data
 |-- AGENT.md
 |-- CHANGELOG.md
 |-- docs/
-|   `-- database.md
+|   |-- database.md
+|   `-- deployment.md
 |-- README.md
 |-- ROADMAP.md
 |-- package.json

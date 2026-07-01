@@ -100,11 +100,20 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 - Observed the expected Postgres warning that the `ivfflat` index on an empty `papers` table can have low recall until data is loaded.
 - Verified application health after the schema apply with `npm run lint` and `npm run build`.
 
+## Vercel Deployment Follow-Up
+
+- Created a Vercel deployment at `https://paper-deck-ecru.vercel.app/`.
+- Verified that `/` redirects to `/feed`.
+- Verified that `/sign-in` and `/sign-up` return `200`.
+- Observed `/feed` returning `404` for unauthenticated command-line requests because Clerk rewrites protected routes when a public deployment uses development Clerk keys.
+- Added `docs/deployment.md` documenting the current deployment status, Vercel environment variables, and the need to switch to a Clerk production instance with `pk_live_` / `sk_live_` keys before public testing.
+
 ## Open Questions
 
 - Configure Clerk JWT so Supabase can enforce the prepared RLS policies directly.
+- Switch Vercel from Clerk development keys to Clerk production keys for public protected-route testing.
 - Post-feed benchmark for BGE-small vs E5-small-v2 vs MiniLM.
 
 ## Next Suggested Step
 
-Continue by adding Supabase server clients and wiring persistent interactions.
+Continue by completing Clerk production setup on Vercel, then add Supabase server clients and wire persistent interactions.
