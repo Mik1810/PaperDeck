@@ -124,6 +124,9 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 - Verified the deployed custom domain now serves `pk_live_...` instead of `pk_test_...`.
 - Verified browser-style unauthenticated access to `/feed` redirects to `/sign-in?redirect_url=...`.
 - Noted that plain non-browser `curl` requests to protected routes can still receive Clerk's protected-route `/404` rewrite because they lack browser/session context.
+- Added and verified the remaining Clerk DNS CNAME records for Frontend API, Account portal, mail, and DKIM.
+- Confirmed Clerk SSL certificates were issued for the Frontend API and Account portal.
+- Verified `https://clerk.paperdeck.michaelpiccirilli.it/npm/@clerk/clerk-js@6/dist/clerk.browser.js` now resolves and redirects to a concrete Clerk JS asset.
 
 ## Open Questions
 

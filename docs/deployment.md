@@ -14,6 +14,7 @@ Smoke-test result:
 - `/sign-up` returns `200`.
 - `/feed` returns `307` to `/sign-in?redirect_url=...` for an unauthenticated browser request.
 - The deployed app uses Clerk production keys (`pk_live_...` / `sk_live_...`) on the custom domain.
+- Clerk DNS configuration is verified and SSL certificates are issued for the Frontend API and Account portal.
 
 Plain command-line requests without browser-like headers can still receive a Clerk protected-route rewrite:
 
@@ -70,6 +71,14 @@ Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
 6. In Vercel, replace Clerk environment variables in Production with the `pk_live_...` and `sk_live_...` keys.
 7. Set `CLERK_AUTHORIZED_PARTIES` to `https://paperdeck.michaelpiccirilli.it`.
 8. Redeploy the Vercel project.
+
+The Clerk DNS records currently include:
+
+- `clerk.paperdeck.michaelpiccirilli.it` -> `frontend-api.clerk.services`
+- `accounts.paperdeck.michaelpiccirilli.it` -> `accounts.clerk.services`
+- `clkmail.paperdeck.michaelpiccirilli.it` -> Clerk mail service
+- `clk._domainkey.paperdeck.michaelpiccirilli.it` -> Clerk DKIM service
+- `clk2._domainkey.paperdeck.michaelpiccirilli.it` -> Clerk DKIM service
 
 ## Smoke Test
 
