@@ -68,6 +68,7 @@ Aggiornato al 2026-07-01:
   - Rispetto del rate limit arXiv: una richiesta ogni tre secondi, una connessione.
   - Cursori incrementali per categoria in `ingestion_cursors` e deduplica per `arxiv_id`.
 - Semantic Scholar/OpenAlex enrichment e worker embeddings: non ancora implementati.
+- Workflow embeddings/ranked retrieval: specificato in `docs/embeddings.md`; implementazione non ancora iniziata.
 - Clerk JWT per applicare RLS direttamente dal browser: non ancora configurato; l'MVP usa server actions con service role solo lato server.
 
 ## Principio sui contenuti
@@ -584,10 +585,14 @@ Strategia:
 
 1. Partire con `BAAI/bge-small-en-v1.5`.
 2. Salvare `embeddingModel`, `embeddingDimension` e `embeddedAt` per ogni paper.
-3. Non bloccare lo scaffold sul benchmark.
-4. Dopo il primo feed funzionante, preparare un piccolo benchmark interno con interessi reali e 50-100 paper valutati manualmente.
-5. Confrontare BGE-small, E5-small-v2 e MiniLM prima di stabilizzare definitivamente il modello.
-6. Se BGE-small non basta, valutare un modello piu' grande solo dopo aver misurato qualita', tempo batch e costi.
+3. Eseguire il modello fuori da Vercel, inizialmente su GitHub Actions o localmente.
+4. Salvare gli embedding in Supabase/pgvector e usare Vercel solo per retrieval leggero e reranking.
+5. Non bloccare lo scaffold sul benchmark.
+6. Dopo il primo feed funzionante, preparare un piccolo benchmark interno con interessi reali e 50-100 paper valutati manualmente.
+7. Confrontare BGE-small, E5-small-v2 e MiniLM prima di stabilizzare definitivamente il modello.
+8. Se BGE-small non basta, valutare un modello piu' grande solo dopo aver misurato qualita', tempo batch e costi.
+
+Specifica operativa: `docs/embeddings.md`.
 
 Nota: per E5 bisogna usare prefix coerenti tipo `query:` per il profilo utente e `passage:` per i paper. Questo va gestito a livello di embedding service.
 

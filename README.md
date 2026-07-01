@@ -47,7 +47,7 @@ PaperDeck will use a hybrid ranking strategy:
 - a small freshness boost;
 - a capped share of classic/high-impact papers.
 
-The current live ranking uses selected topics, topic hierarchy, recent explicit feedback, citation/year metadata, and seen-paper penalties. Local open-source embeddings are planned next for semantic similarity.
+The current live ranking uses selected topics, topic hierarchy, recent explicit feedback, citation/year metadata, and seen-paper penalties. Local open-source embeddings are planned next for semantic similarity; the workflow is specified in [docs/embeddings.md](./docs/embeddings.md).
 
 The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`.
 
@@ -99,6 +99,8 @@ Run a local dry-run:
 npm run ingest:arxiv -- --dry-run --categories=cs.CC --max-results=1
 ```
 
+The planned embedding worker is documented in [docs/embeddings.md](./docs/embeddings.md). It will run outside Vercel through GitHub Actions or locally, write vectors to Supabase/pgvector, and let Vercel perform lightweight retrieval and reranking.
+
 ## Deployment
 
 Deployment notes live in [docs/deployment.md](./docs/deployment.md). The current public URL is <https://paperdeck.michaelpiccirilli.it/>.
@@ -114,6 +116,7 @@ Protected routes require Clerk production keys on public deployments. Developmen
 |-- CHANGELOG.md
 |-- docs/
 |   |-- database.md
+|   |-- embeddings.md
 |   |-- ingestion.md
 |   `-- deployment.md
 |-- README.md

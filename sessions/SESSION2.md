@@ -133,6 +133,7 @@ Important Clerk behavior:
 - `sessions/SESSION1.md`: appended production deployment follow-up notes before this dedicated Session 2 file existed.
 - `docs/database.md`: Supabase ownership model, persistence layer, and MVP ranking notes.
 - `docs/ingestion.md`: arXiv ingestion workflow, cursors, dry-run, and GitHub Actions secrets.
+- `docs/embeddings.md`: offline embedding worker and ranked retrieval workflow specification.
 - `CHANGELOG.md`: reorganized `0.0.0` vs `0.1.0` and recorded MVP foundation changes.
 - `README.md`: updated the public URL, project status, current ranking state, and repository layout.
 - `ROADMAP.md`: kept implementation status aligned with completed persistence, ingestion, ranking, and interaction work.
@@ -203,6 +204,15 @@ arXiv ingestion now has a first working implementation:
 - deduplicated arXiv imports by normalized `arxiv_id` across categories;
 - kept the worker focused on metadata/abstract/link import and did not store PDF/full text.
 
+Embedding/ranked retrieval workflow is now specified:
+
+- added `docs/embeddings.md`;
+- decided that Python model inference runs outside Vercel, initially through GitHub Actions or locally;
+- paper embedding input is `title + abstract`, not PDF/full text;
+- BGE-small outputs 384-dimensional vectors for `papers.embedding`;
+- planned schema additions are `papers.embedding_content_hash`, `topic_embeddings`, and `user_profile_embeddings`;
+- Vercel will perform pgvector top-K retrieval and TypeScript reranking, but will not import model dependencies.
+
 Validation after arXiv ingestion work:
 
 ```text
@@ -235,7 +245,7 @@ Configure the GitHub Actions ingestion secrets, then continue the ingestion work
 - broaden arXiv CS imports beyond the verified `cs.CC` smoke test;
 - add historical arXiv backfill mode for older result pages;
 - enrich imported papers with Semantic Scholar/OpenAlex metadata;
-- generate BGE-small embeddings offline;
+- implement the schema and worker described in `docs/embeddings.md`;
 - replace the current topic/feedback ranking with embedding-aware ranking.
 
 The codebase is now at version `0.1.0`, representing the first production-authenticated, Supabase-backed MVP foundation. It is not a `1.0.0` release: embeddings, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and semantic ranking are still open.

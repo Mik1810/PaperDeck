@@ -101,6 +101,8 @@ Current arXiv ingestion writes one `ingestion_runs` row per non-dry-run executio
 
 The initial embedding model is `BAAI/bge-small-en-v1.5`, which produces 384-dimensional vectors.
 
+The full batch workflow is specified in [`docs/embeddings.md`](./embeddings.md).
+
 `papers.embedding` is defined as:
 
 ```sql
@@ -113,7 +115,7 @@ Each embedded paper also stores:
 - `embedding_dimension`
 - `embedded_at`
 
-This keeps future model migrations traceable.
+The next schema step should add `papers.embedding_content_hash`, `topic_embeddings`, and `user_profile_embeddings` as described in the embedding workflow. This keeps future model migrations and stale-vector detection traceable.
 
 ## MVP Feed Ranking
 

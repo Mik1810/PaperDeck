@@ -22,6 +22,7 @@ This project follows Semantic Versioning.
 - Incremental arXiv category cursors stored in Supabase.
 - arXiv import deduplication by normalized arXiv ID across categories.
 - Ingestion documentation with required secrets, local dry-run command, and arXiv API constraints.
+- Embedding and ranked retrieval workflow specification in `docs/embeddings.md`.
 
 ### Changed
 
