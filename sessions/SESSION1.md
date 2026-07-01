@@ -97,10 +97,12 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 - Validated `supabase/schema.sql` with a transaction rollback dry-run.
 - Applied `supabase/schema.sql` to the PaperDeck Supabase project.
 - Verified 16 public tables, `pgcrypto`, `vector`, RLS enabled on all schema tables, and 17 policies.
+- Observed the expected Postgres warning that the `ivfflat` index on an empty `papers` table can have low recall until data is loaded.
+- Verified application health after the schema apply with `npm run lint` and `npm run build`.
 
 ## Open Questions
 
-- Exact Supabase RLS policies for profiles, favorites, playlists, and interactions.
+- Configure Clerk JWT so Supabase can enforce the prepared RLS policies directly.
 - Post-feed benchmark for BGE-small vs E5-small-v2 vs MiniLM.
 
 ## Next Suggested Step
