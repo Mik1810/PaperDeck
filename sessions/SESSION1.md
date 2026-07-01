@@ -127,6 +127,8 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 - Added and verified the remaining Clerk DNS CNAME records for Frontend API, Account portal, mail, and DKIM.
 - Confirmed Clerk SSL certificates were issued for the Frontend API and Account portal.
 - Verified `https://clerk.paperdeck.michaelpiccirilli.it/npm/@clerk/clerk-js@6/dist/clerk.browser.js` now resolves and redirects to a concrete Clerk JS asset.
+- Configured Google OAuth custom credentials for the Clerk production instance.
+- Verified Google login succeeds in production and redirects the signed-in user to `/onboarding`.
 
 ## Open Questions
 

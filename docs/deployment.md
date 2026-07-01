@@ -15,6 +15,7 @@ Smoke-test result:
 - `/feed` returns `307` to `/sign-in?redirect_url=...` for an unauthenticated browser request.
 - The deployed app uses Clerk production keys (`pk_live_...` / `sk_live_...`) on the custom domain.
 - Clerk DNS configuration is verified and SSL certificates are issued for the Frontend API and Account portal.
+- Google OAuth production credentials are configured in Clerk and sign-in reaches `/onboarding`.
 
 Plain command-line requests without browser-like headers can still receive a Clerk protected-route rewrite:
 
@@ -99,6 +100,7 @@ Expected result:
 - `/` redirects to `/feed`.
 - `/feed` redirects unauthenticated users to `/sign-in`.
 - `/sign-in` and `/sign-up` return `200`.
+- Google sign-in redirects authenticated users to `/onboarding` on first sign-up.
 
 ## References
 

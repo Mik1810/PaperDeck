@@ -21,6 +21,7 @@ This project follows Semantic Versioning.
 - Deployment notes for Vercel and the Clerk production-key requirement.
 - Custom domain deployment at `paperdeck.michaelpiccirilli.it` verified with Clerk production keys.
 - Clerk production DNS records and SSL certificates verified for the custom domain.
+- Google OAuth production sign-in verified through Clerk.
 - Initial product roadmap for PaperDeck.
 - Public README with project description, MVP scope, planned data sources, ranking approach, and architecture.
 - SVG logo under `logo/paperdeck-logo.svg`.
