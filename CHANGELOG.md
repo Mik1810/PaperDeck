@@ -19,6 +19,7 @@ This project follows Semantic Versioning.
 - Supabase database plan and initial SQL schema with pgvector, ownership columns, indexes, and future RLS policies.
 - Initial Supabase schema applied and verified against the PaperDeck Supabase project.
 - Deployment notes for Vercel and the Clerk production-key requirement.
+- Custom domain deployment at `paperdeck.michaelpiccirilli.it` verified with Clerk production keys.
 - Initial product roadmap for PaperDeck.
 - Public README with project description, MVP scope, planned data sources, ranking approach, and architecture.
 - SVG logo under `logo/paperdeck-logo.svg`.

@@ -87,7 +87,7 @@ The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data
 
 ## Deployment
 
-Deployment notes live in [docs/deployment.md](./docs/deployment.md). The current Vercel URL is <https://paper-deck-ecru.vercel.app/>.
+Deployment notes live in [docs/deployment.md](./docs/deployment.md). The current public URL is <https://paperdeck.michaelpiccirilli.it/>.
 
 Protected routes require Clerk production keys on public deployments. Development keys are kept for local work.
 
