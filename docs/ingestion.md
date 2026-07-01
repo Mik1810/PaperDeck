@@ -33,7 +33,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=replace_me_server_only
 ARXIV_CATEGORIES=cs.AI,cs.CL,cs.CR,cs.CC,cs.DS,cs.LG,cs.LO,cs.PL,cs.SE,cs.SY
 ARXIV_MAX_RESULTS=25
-ARXIV_USER_AGENT=PaperDeck/0.0.0 (https://paperdeck.example.com)
+ARXIV_USER_AGENT=PaperDeck/0.1.0 (https://paperdeck.example.com)
 ```
 
 For a non-writing smoke test:

@@ -18,13 +18,18 @@ At the end of Session 1, PaperDeck had:
 
 ## Summary
 
-This session completed the production path for authentication and public access:
+This session completed the production path for authentication and public access, then moved the MVP from static scaffold to a first usable data-backed app:
 
 - added a custom production domain;
 - configured Clerk as a production secondary application;
 - completed Clerk DNS and SSL setup;
 - configured Google OAuth production credentials;
-- verified real Google sign-in in production.
+- verified real Google sign-in in production;
+- added Supabase-backed persistence for profiles, interests, favorites, `Read later`, interactions, and catalog reads;
+- added arXiv ingestion with category cursors;
+- added first feedback-aware feed ranking;
+- added `Read later` removal and detail-page ranking signals;
+- advanced the package version to `0.1.0`.
 
 The current public app URL is:
 
@@ -126,8 +131,12 @@ Important Clerk behavior:
 
 - `docs/deployment.md`: current production deployment, Clerk DNS, SSL, and smoke-test details.
 - `sessions/SESSION1.md`: appended production deployment follow-up notes before this dedicated Session 2 file existed.
-- `CHANGELOG.md`: recorded production deployment, Clerk DNS/SSL, and Google OAuth verification.
-- `README.md`: updated the public URL to `https://paperdeck.michaelpiccirilli.it/`.
+- `docs/database.md`: Supabase ownership model, persistence layer, and MVP ranking notes.
+- `docs/ingestion.md`: arXiv ingestion workflow, cursors, dry-run, and GitHub Actions secrets.
+- `CHANGELOG.md`: reorganized `0.0.0` vs `0.1.0` and recorded MVP foundation changes.
+- `README.md`: updated the public URL, project status, current ranking state, and repository layout.
+- `ROADMAP.md`: kept implementation status aligned with completed persistence, ingestion, ranking, and interaction work.
+- `package.json` / `package-lock.json`: version bumped to `0.1.0`.
 
 ## Commits
 
@@ -136,6 +145,10 @@ Important Clerk behavior:
 - `31de106` - Document custom domain Clerk deployment
 - `2ed7de1` - Document Clerk DNS certificate verification
 - `7e98caf` - Document Google OAuth production verification
+- `51712ff` - Add Supabase-backed MVP persistence
+- `8dbd566` - Add arXiv ingestion worker
+- `f1a929a` - Add incremental arXiv ingestion cursors
+- `47aa084` - Add MVP feed ranking
 
 ## Current Status
 
@@ -156,12 +169,15 @@ MVP persistence now has a first server-side implementation:
 - added Clerk session helper that maps authenticated users to `owner_id`;
 - added catalog repository that seeds the initial topic/paper mock data into Supabase;
 - added user-data repository for profiles, onboarding interests, favorites, `Read later`, playlist items, and user-paper interactions;
-- added server actions for onboarding, dismiss, open detail, favorite, and save to `Read later`;
+- added server actions for onboarding, dismiss, open detail, favorite, and `Read later` toggle;
 - connected `/feed`, `/onboarding`, `/library`, `/settings`, and `/papers/[paperId]` to Supabase-backed data instead of static mock state;
 - made the onboarding topic picker interactive and persisted via server action;
 - added `src/lib/ranking/feed-ranking.ts` for MVP feed ranking from selected topics, hierarchical topic affinity, recent paper feedback, citation/year metadata, and seen-paper penalties;
 - made `open_detail` hide the opened paper from the active deck so the feed advances after the user opens a paper;
-- kept `SUPABASE_SERVICE_ROLE_KEY` server-only.
+- changed `Read later` from one-way save to add/remove toggle;
+- added Library removal for `Read later` items;
+- added detail-page `Already read` and `Not interested` actions that record ranking signals and return to the feed;
+- kept `SUPABASE_SERVICE_ROLE_KEY` server-only;
 - verified the catalog repository against the remote Supabase project and seeded 10 topics plus 4 starter papers.
 
 Validation after the persistence work:
@@ -171,6 +187,7 @@ npm run lint  -> passed
 npm run build -> passed
 Remote Supabase seed count -> 10 taxonomy topics, 4 papers
 Feed ranking build verification -> passed
+Read later toggle and detail signal build verification -> passed
 ```
 
 arXiv ingestion now has a first working implementation:
@@ -208,7 +225,7 @@ Cursor DB state after idempotent run -> imported_count=0
 - Configure GitHub repository secrets for the arXiv ingestion workflow:
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
-- Add removal from `Read later` and manual playlist ordering.
+- Add custom private playlists and manual playlist ordering.
 - Post-feed benchmark for `BAAI/bge-small-en-v1.5` vs `intfloat/e5-small-v2` vs `sentence-transformers/all-MiniLM-L6-v2`.
 
 ## Next Suggested Step
@@ -220,3 +237,5 @@ Configure the GitHub Actions ingestion secrets, then continue the ingestion work
 - enrich imported papers with Semantic Scholar/OpenAlex metadata;
 - generate BGE-small embeddings offline;
 - replace the current topic/feedback ranking with embedding-aware ranking.
+
+The codebase is now at version `0.1.0`, representing the first production-authenticated, Supabase-backed MVP foundation. It is not a `1.0.0` release: embeddings, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and semantic ranking are still open.

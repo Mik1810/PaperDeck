@@ -13,7 +13,7 @@ import {
 import {
   dismissPaperAction,
   openPaperAction,
-  saveToReadLaterAction,
+  toggleReadLaterAction,
   toggleFavoriteAction,
 } from "@/app/actions";
 import type { Paper } from "@/types/paper";
@@ -124,7 +124,7 @@ export function PaperCard({
             />
           </button>
         </form>
-        <form action={saveToReadLaterAction}>
+        <form action={toggleReadLaterAction}>
           <input name="paperId" type="hidden" value={paper.id} />
           <button
             className={`grid h-12 w-full place-items-center rounded-lg border ${

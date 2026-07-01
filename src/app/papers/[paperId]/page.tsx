@@ -1,7 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Bookmark, ExternalLink, Heart } from "lucide-react";
-import { saveToReadLaterAction, toggleFavoriteAction } from "@/app/actions";
+import {
+  ArrowLeft,
+  Bookmark,
+  CheckCircle2,
+  ExternalLink,
+  Heart,
+  X,
+} from "lucide-react";
+import {
+  markAlreadyReadAction,
+  notInterestedAction,
+  toggleFavoriteAction,
+  toggleReadLaterAction,
+} from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { requireUserContext } from "@/lib/auth/session";
 import {
@@ -89,7 +101,7 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
               {isFavorite ? "Favorited" : "Favorite"}
             </button>
           </form>
-          <form action={saveToReadLaterAction}>
+          <form action={toggleReadLaterAction}>
             <input name="paperId" type="hidden" value={paper.id} />
             <button
               className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
@@ -105,6 +117,20 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
                 strokeWidth={2.5}
               />
               {isSaved ? "Saved" : "Read later"}
+            </button>
+          </form>
+          <form action={markAlreadyReadAction}>
+            <input name="paperId" type="hidden" value={paper.id} />
+            <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-sm font-black text-indigo-700">
+              <CheckCircle2 aria-hidden="true" size={18} strokeWidth={2.5} />
+              Already read
+            </button>
+          </form>
+          <form action={notInterestedAction}>
+            <input name="paperId" type="hidden" value={paper.id} />
+            <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 text-sm font-black text-rose-700">
+              <X aria-hidden="true" size={18} strokeWidth={2.5} />
+              Not interested
             </button>
           </form>
           <Link

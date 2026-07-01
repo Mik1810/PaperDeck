@@ -59,6 +59,8 @@ Aggiornato al 2026-07-01:
   - Feed, library, settings e paper detail leggono dati da Supabase.
   - Le azioni dismiss, open detail, favorite e save to playlist scrivono interazioni utente.
   - Il feed usa un primo ranking MVP con interessi selezionati, feedback recente e penalita' per paper gia' aperti/letti.
+  - `Read later` supporta aggiunta e rimozione da feed, dettaglio e library.
+  - Il dettaglio paper registra i segnali `already_read` e `not_interested`.
 - Ingestion arXiv MVP: implementata.
   - Script `scripts/ingest-arxiv.ts`.
   - Workflow GitHub Actions giornaliero/manuale.
@@ -432,6 +434,12 @@ Pagina dettaglio:
   - segna come gia' letto;
   - non raccomandare paper simili.
 
+Stato attuale:
+
+- Preferito e `Read later` sono toggle persistenti.
+- `Already read` registra `already_read` e rimuove il paper dal deck attivo.
+- `Not interested` registra `not_interested`, rimuove il paper dal deck attivo e influenza negativamente i topic correlati nel ranking MVP.
+
 ### Preferiti e playlist
 
 MVP:
@@ -449,7 +457,8 @@ Stato attuale:
 - Salvataggio paper in `playlist_items`.
 - Library collegata ai dati persistenti.
 - Preferiti, salvataggi e aperture dettaglio sono segnali usati dal ranking MVP.
-- Rimozione paper da playlist e ordinamento manuale: da implementare.
+- Rimozione paper da `Read later`: implementata.
+- Creazione playlist custom e ordinamento manuale: da implementare.
 
 Futuro:
 
@@ -776,7 +785,7 @@ Campi minimi `UserPaperInteraction`:
 
 - `ownerId`
 - `paperId`
-- `action`: `open_detail`, `dislike`, `favorite`, `save_to_playlist`, `read`, `seen`, `not_interested`
+- `action`: `open_detail`, `dismiss`, `favorite`, `save_to_playlist`, `read`, `seen`, `not_interested`, `already_read`
 - `createdAt`
 - `context`: feed, search, playlist, digest
 
@@ -854,6 +863,8 @@ Output:
 - Creazione playlist private.
 - Aggiunta/rimozione paper.
 - Vista playlist.
+
+Stato attuale: lista preferiti, playlist default `Read later`, aggiunta/rimozione da `Read later` e vista library implementate; creazione playlist custom e ordinamento manuale da fare.
 
 ### Fase 7: link esterni e accessibilita' articolo
 

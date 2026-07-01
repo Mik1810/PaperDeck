@@ -7,7 +7,7 @@ import {
   ensureUserProfile,
   recordPaperInteraction,
   saveSelectedTopics,
-  saveToReadLater,
+  toggleReadLater,
   toggleFavorite,
 } from "@/lib/repositories/user-data";
 
@@ -68,14 +68,38 @@ export async function toggleFavoriteAction(formData: FormData) {
   revalidatePath(`/papers/${paperId}`);
 }
 
-export async function saveToReadLaterAction(formData: FormData) {
+export async function toggleReadLaterAction(formData: FormData) {
   const user = await requireUserContext();
   await ensureUserProfile(user);
   const paperId = requirePaperId(formData);
 
-  await saveToReadLater(user.ownerId, paperId);
+  await toggleReadLater(user.ownerId, paperId);
 
   revalidatePath("/feed");
   revalidatePath("/library");
   revalidatePath(`/papers/${paperId}`);
+}
+
+export async function markAlreadyReadAction(formData: FormData) {
+  const user = await requireUserContext();
+  await ensureUserProfile(user);
+  const paperId = requirePaperId(formData);
+
+  await recordPaperInteraction(user.ownerId, paperId, "already_read", "detail");
+
+  revalidatePath("/feed");
+  revalidatePath(`/papers/${paperId}`);
+  redirect("/feed");
+}
+
+export async function notInterestedAction(formData: FormData) {
+  const user = await requireUserContext();
+  await ensureUserProfile(user);
+  const paperId = requirePaperId(formData);
+
+  await recordPaperInteraction(user.ownerId, paperId, "not_interested", "detail");
+
+  revalidatePath("/feed");
+  revalidatePath(`/papers/${paperId}`);
+  redirect("/feed");
 }

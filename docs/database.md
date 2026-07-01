@@ -31,7 +31,7 @@ Current implementation:
 - `src/lib/supabase/server.ts` creates a service-role Supabase client for server-only code.
 - `src/lib/auth/session.ts` converts the Clerk session into the PaperDeck `owner_id`.
 - `src/lib/repositories/catalog.ts` seeds the initial mock catalog into Supabase and reads shared paper/topic data.
-- `src/lib/repositories/user-data.ts` persists profiles, interests, favorites, default `Read later`, playlist items, and user-paper interactions.
+- `src/lib/repositories/user-data.ts` persists profiles, interests, favorites, default `Read later`, playlist items, Read later toggles, and user-paper interactions.
 - `src/lib/ranking/feed-ranking.ts` computes the current MVP feed ranking from selected topics, recent user feedback, and seen-paper penalties.
 - `src/app/actions.ts` exposes server actions for onboarding and paper interactions.
 
@@ -134,6 +134,8 @@ Current behavior:
 - `open_detail`, `favorite`, `save_to_playlist`, and `read` add positive topic feedback;
 - `dismiss` and `not_interested` add negative topic feedback;
 - papers with `open_detail`, `dismiss`, `not_interested`, `read`, or `already_read` are hidden from the active deck.
+
+`Already read` and `Not interested` are recorded from the paper detail page. Removing a paper from `Read later` deletes the playlist item but does not add negative feedback.
 
 Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
 

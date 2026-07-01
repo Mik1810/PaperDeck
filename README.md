@@ -10,7 +10,7 @@ PaperDeck is a planned web app for discovering computer science papers through a
 
 ## Project Status
 
-PaperDeck is currently in early MVP implementation. The repository contains the Next.js app skeleton, Clerk production auth, Supabase schema, a server-side persistence layer, seeded topic/paper catalog data, route structure, and planning documents. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently at `0.1.0`: an early MVP foundation with production auth, Supabase-backed user data, arXiv ingestion, and a first feedback-aware feed ranking. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
 
 ## MVP Scope
 
@@ -21,7 +21,8 @@ PaperDeck is currently in early MVP implementation. The repository contains the 
 - Swipe left to dismiss a paper.
 - Swipe right to open the paper detail view.
 - Heart button for favorites.
-- Bookmark button for the default `Read later` playlist.
+- Bookmark button to add/remove papers from the default `Read later` playlist.
+- Detail actions for `Already read` and `Not interested` signals.
 - External links to arXiv, DOI, publisher pages, or legal PDFs when available.
 - In-app digest.
 - Private favorites and playlists.
@@ -41,11 +42,12 @@ PaperDeck will use a hybrid ranking strategy:
 
 - user-selected CS interests;
 - paper topics and categories;
-- local open-source embeddings;
 - explicit interactions such as dismiss, open detail, favorite, and save;
 - penalties for papers already seen or marked as known;
 - a small freshness boost;
 - a capped share of classic/high-impact papers.
+
+The current live ranking uses selected topics, topic hierarchy, recent explicit feedback, citation/year metadata, and seen-paper penalties. Local open-source embeddings are planned next for semantic similarity.
 
 The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`.
 
@@ -85,7 +87,7 @@ The initial database plan lives in [docs/database.md](./docs/database.md). The S
 
 The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data through trusted server code. RLS policies are included for the future Clerk JWT integration path.
 
-Current server-side persistence covers profiles, onboarding interests, favorites, the default `Read later` playlist, playlist items, paper interactions, and a seeded starter catalog.
+Current server-side persistence covers profiles, onboarding interests, favorites, the default `Read later` playlist, playlist items, paper interactions, and a seeded starter catalog. The feed ranking is computed server-side in `src/lib/ranking/feed-ranking.ts`.
 
 ## Ingestion
 
@@ -129,6 +131,7 @@ Protected routes require Clerk production keys on public deployments. Developmen
 |   |-- SESSION1.md
 |   `-- SESSION2.md
 |-- supabase/
+|   |-- migrations/
 |   `-- schema.sql
 `-- logo/
     `-- paperdeck-logo.svg

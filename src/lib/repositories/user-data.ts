@@ -319,9 +319,28 @@ export async function toggleFavorite(ownerId: string, paperId: string) {
   await recordPaperInteraction(ownerId, paperId, "favorite");
 }
 
-export async function saveToReadLater(ownerId: string, paperId: string) {
+export async function toggleReadLater(ownerId: string, paperId: string) {
   const supabase = createServiceRoleClient();
   const playlistId = await ensureReadLaterPlaylist(ownerId);
+  const { data: existing, error: existingError } = await supabase
+    .from("playlist_items")
+    .select("paper_id")
+    .eq("playlist_id", playlistId)
+    .eq("paper_id", paperId)
+    .maybeSingle();
+
+  assertNoError(existingError, "Find Read later item");
+
+  if (existing) {
+    const { error } = await supabase
+      .from("playlist_items")
+      .delete()
+      .eq("playlist_id", playlistId)
+      .eq("paper_id", paperId);
+
+    assertNoError(error, "Remove from Read later");
+    return;
+  }
 
   const { error } = await supabase.from("playlist_items").upsert(
     {

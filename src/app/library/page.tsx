@@ -1,3 +1,5 @@
+import { BookmarkX } from "lucide-react";
+import { toggleReadLaterAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { PaperListItem } from "@/components/paper-list-item";
 import { requireUserContext } from "@/lib/auth/session";
@@ -60,7 +62,23 @@ export default async function LibraryPage() {
             <div className="mt-3 space-y-3">
               {readLaterPapers.length ? (
                 readLaterPapers.map((paper) => (
-                  <PaperListItem key={paper.id} paper={paper} />
+                  <PaperListItem
+                    key={paper.id}
+                    action={
+                      <form action={toggleReadLaterAction}>
+                        <input name="paperId" type="hidden" value={paper.id} />
+                        <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-black text-emerald-700">
+                          <BookmarkX
+                            aria-hidden="true"
+                            size={17}
+                            strokeWidth={2.5}
+                          />
+                          Remove from Read later
+                        </button>
+                      </form>
+                    }
+                    paper={paper}
+                  />
                 ))
               ) : (
                 <p className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm font-semibold text-slate-500">
