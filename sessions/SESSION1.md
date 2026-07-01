@@ -73,6 +73,16 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 - Added expandable abstract behavior on paper cards.
 - Added a concrete paper detail route for the card open action.
 
+## Clerk Auth Follow-Up
+
+- Installed `@clerk/nextjs`.
+- Added `ClerkProvider` in the root layout.
+- Added `src/proxy.ts` using `clerkMiddleware()` and `createRouteMatcher()`.
+- Protected `/feed`, `/library`, `/onboarding`, `/papers/*`, and `/settings`.
+- Added public `/sign-in` and `/sign-up` pages with Clerk prebuilt components.
+- Added `.env.example` documenting required Clerk environment variables.
+- Updated app shell to show Clerk sign-in/user controls.
+
 ## Open Questions
 
 - Exact Supabase RLS policies for profiles, favorites, playlists, and interactions.
@@ -80,4 +90,4 @@ This session established PaperDeck as a mobile-first academic paper discovery ap
 
 ## Next Suggested Step
 
-Continue from the skeleton by adding Clerk, Supabase configuration, database schema planning, and persistent interactions.
+Continue by adding Supabase configuration, database schema planning, RLS policies, and persistent interactions.

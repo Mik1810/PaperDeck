@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BookOpenCheck, Search } from "lucide-react";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { BookOpenCheck } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 
 type AppShellProps = {
@@ -46,9 +47,24 @@ export function AppShell({ children, title, subtitle, action }: AppShellProps) {
             ))}
           </nav>
 
-          <button className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm">
-            <Search aria-label="Search papers" size={18} strokeWidth={2.4} />
-          </button>
+          <div className="flex items-center gap-2">
+            <Show when="signed-out">
+              <SignInButton mode="modal">
+                <button className="h-10 rounded-lg bg-slate-950 px-4 text-sm font-black text-white shadow-sm">
+                  Sign in
+                </button>
+              </SignInButton>
+            </Show>
+            <Show when="signed-in">
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "h-10 w-10",
+                  },
+                }}
+              />
+            </Show>
+          </div>
         </div>
       </header>
 

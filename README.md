@@ -59,10 +59,26 @@ The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with 
 - Batch ingestion and embeddings: GitHub Actions worker, scheduled daily and runnable manually.
 - Initial deployment strategy: free-first, avoiding paid AI APIs and keeping long-running work outside Vercel Functions.
 
+## Local Environment
+
+Create `.env.local` from `.env.example` and fill in the Clerk keys from the Clerk Dashboard:
+
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_replace_me
+CLERK_SECRET_KEY=sk_test_replace_me
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
+```
+
+`.env.local` is intentionally ignored by Git.
+
 ## Repository Layout
 
 ```text
 .
+|-- .env.example
 |-- AGENT.md
 |-- CHANGELOG.md
 |-- README.md
@@ -72,6 +88,7 @@ The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with 
 |   |-- app/
 |   |-- components/
 |   |-- lib/
+|   |-- proxy.ts
 |   `-- types/
 |-- sessions/
 |   `-- SESSION1.md

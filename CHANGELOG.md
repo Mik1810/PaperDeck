@@ -14,6 +14,7 @@ This project follows Semantic Versioning.
 - Shared UI components for the app shell, bottom navigation, paper cards, and paper list items.
 - Mock paper, topic, playlist, and user interest data.
 - TypeScript domain types for papers, topics, playlists, and interactions.
+- Clerk SDK integration with provider, protected app routes, auth pages, and `.env.example`.
 - Initial product roadmap for PaperDeck.
 - Public README with project description, MVP scope, planned data sources, ranking approach, and architecture.
 - SVG logo under `logo/paperdeck-logo.svg`.

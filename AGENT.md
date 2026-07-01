@@ -13,6 +13,7 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 - App language: user-facing product can start in English; planning conversation may be Italian.
 - Domain: computer science only for MVP.
 - Auth: Clerk with Google login.
+- Auth implementation: `@clerk/nextjs`, `ClerkProvider`, and `src/proxy.ts` route protection.
 - Database: Supabase Postgres with pgvector.
 - Hosting: Vercel for app and lightweight APIs.
 - Worker: GitHub Actions daily schedule plus manual dispatch.
@@ -50,7 +51,7 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 
 1. Scaffold Next.js with TypeScript.
 2. Add mobile-first app shell.
-3. Configure Clerk Google login.
+3. Configure Clerk Google login. Done.
 4. Configure Supabase and database schema.
 5. Add interest onboarding.
 6. Add paper card deck UI.
