@@ -210,7 +210,12 @@ Embedding/ranked retrieval workflow is now specified:
 - decided that Python model inference runs outside Vercel, initially through GitHub Actions or locally;
 - paper embedding input is `title + abstract`, not PDF/full text;
 - BGE-small outputs 384-dimensional vectors for `papers.embedding`;
-- planned schema additions are `papers.embedding_content_hash`, `topic_embeddings`, and `user_profile_embeddings`;
+- added and applied the embedding schema migration for `papers.embedding_content_hash`, `topic_embeddings`, and `user_profile_embeddings`;
+- added `requirements-embeddings.txt`;
+- added `scripts/embed_papers.py` with Supabase REST candidate selection and `--dry-run`;
+- added `.github/workflows/embed-papers.yml` with pip/HuggingFace caching;
+- verified dry-run candidate selection against remote Supabase: 3 candidates found in the inspected slice;
+- verified remote schema: 19 public tables and 19 policies after the embedding migration;
 - Vercel will perform pgvector top-K retrieval and TypeScript reranking, but will not import model dependencies.
 
 Validation after arXiv ingestion work:

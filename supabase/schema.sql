@@ -1,5 +1,5 @@
 -- PaperDeck initial Supabase schema.
--- Version: 0.0.0
+-- Version: 0.1.0
 -- Auth model:
 --   - Clerk handles authentication.
 --   - User-owned rows store Clerk user IDs in owner_id.
@@ -83,6 +83,7 @@ create table papers (
   embedding vector(384),
   embedding_model text,
   embedding_dimension integer,
+  embedding_content_hash text,
   embedded_at timestamptz,
   created_at timestamptz not null default now(),
   ingested_at timestamptz not null default now()
@@ -115,12 +116,32 @@ create table paper_external_ids (
   primary key (paper_id, provider, external_id)
 );
 
+create table topic_embeddings (
+  topic_id uuid not null references taxonomy_topics(id) on delete cascade,
+  embedding vector(384) not null,
+  embedding_model text not null,
+  embedding_dimension integer not null,
+  embedding_content_hash text not null,
+  embedded_at timestamptz not null default now(),
+  primary key (topic_id, embedding_model)
+);
+
 create table user_interests (
   owner_id text not null references profiles(owner_id) on delete cascade,
   topic_id uuid not null references taxonomy_topics(id) on delete cascade,
   weight real not null default 1,
   selected_at timestamptz not null default now(),
   primary key (owner_id, topic_id)
+);
+
+create table user_profile_embeddings (
+  owner_id text not null references profiles(owner_id) on delete cascade,
+  embedding vector(384) not null,
+  embedding_model text not null,
+  embedding_dimension integer not null,
+  input_signature text not null,
+  generated_at timestamptz not null default now(),
+  primary key (owner_id, embedding_model)
 );
 
 create table playlists (
@@ -213,12 +234,16 @@ create index taxonomy_topics_parent_idx on taxonomy_topics(parent_id);
 create index papers_published_at_idx on papers(published_at desc);
 create index papers_year_idx on papers(year desc);
 create index papers_source_idx on papers(source);
+create index papers_embedding_content_hash_idx on papers(embedding_content_hash)
+where embedding_content_hash is not null;
 create unique index papers_doi_unique_idx on papers(doi) where doi is not null;
 create unique index papers_arxiv_unique_idx on papers(arxiv_id) where arxiv_id is not null;
 create unique index papers_semantic_scholar_unique_idx on papers(semantic_scholar_id) where semantic_scholar_id is not null;
 create unique index papers_openalex_unique_idx on papers(openalex_id) where openalex_id is not null;
 create index paper_topics_topic_idx on paper_topics(topic_id);
 create index paper_authors_paper_idx on paper_authors(paper_id);
+create index topic_embeddings_model_idx on topic_embeddings(embedding_model);
+create index user_profile_embeddings_generated_idx on user_profile_embeddings(owner_id, generated_at desc);
 create index playlist_items_paper_idx on playlist_items(paper_id);
 create index user_paper_interactions_owner_created_idx on user_paper_interactions(owner_id, created_at desc);
 create index recommendations_owner_score_idx on recommendations(owner_id, score desc);
@@ -245,6 +270,8 @@ alter table papers enable row level security;
 alter table paper_authors enable row level security;
 alter table paper_topics enable row level security;
 alter table paper_external_ids enable row level security;
+alter table topic_embeddings enable row level security;
+alter table user_profile_embeddings enable row level security;
 alter table ingestion_runs enable row level security;
 alter table ingestion_cursors enable row level security;
 
@@ -357,3 +384,12 @@ using (auth.jwt() ->> 'sub' is not null);
 create policy "paper_external_ids_read_authenticated"
 on paper_external_ids for select
 using (auth.jwt() ->> 'sub' is not null);
+
+create policy "topic_embeddings_read_authenticated"
+on topic_embeddings for select
+using (auth.jwt() ->> 'sub' is not null);
+
+create policy "user_profile_embeddings_own"
+on user_profile_embeddings for all
+using (owner_id = auth.jwt() ->> 'sub')
+with check (owner_id = auth.jwt() ->> 'sub');

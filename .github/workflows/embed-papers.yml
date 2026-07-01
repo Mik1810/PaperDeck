@@ -1,0 +1,72 @@
+name: Embed papers
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Maximum papers to embed in this run"
+        required: false
+        default: "256"
+      batch_size:
+        description: "Embedding batch size"
+        required: false
+        default: "64"
+      dry_run:
+        description: "List candidates without loading the model or writing"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "47 4 * * *"
+
+jobs:
+  embed-papers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL || 'BAAI/bge-small-en-v1.5' }}
+      EMBEDDING_LIMIT: ${{ github.event.inputs.limit || vars.EMBEDDING_LIMIT || '256' }}
+      EMBEDDING_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.EMBEDDING_BATCH_SIZE || '64' }}
+      EMBEDDING_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      HF_HOME: /home/runner/.cache/huggingface
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-embeddings.txt
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-huggingface-bge-small-en-v1-5-v1
+          restore-keys: |
+            ${{ runner.os }}-huggingface-
+
+      - name: Install embedding dependencies
+        run: python -m pip install -r requirements-embeddings.txt
+
+      - name: Embed papers
+        shell: bash
+        run: |
+          cmd=(
+            python scripts/embed_papers.py
+            --model "$EMBEDDING_MODEL"
+            --batch-size "$EMBEDDING_BATCH_SIZE"
+            --limit "$EMBEDDING_LIMIT"
+            --quiet
+          )
+
+          if [ "$EMBEDDING_DRY_RUN" = "true" ]; then
+            cmd+=(--dry-run)
+          fi
+
+          "${cmd[@]}"

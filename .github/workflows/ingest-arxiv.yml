@@ -23,7 +23,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       ARXIV_CATEGORIES: ${{ github.event.inputs.categories || vars.ARXIV_CATEGORIES || 'cs.AI,cs.CL,cs.CR,cs.CC,cs.DS,cs.LG,cs.LO,cs.PL,cs.SE,cs.SY' }}
       ARXIV_MAX_RESULTS: ${{ github.event.inputs.max_results || vars.ARXIV_MAX_RESULTS || '25' }}
-      ARXIV_USER_AGENT: ${{ vars.ARXIV_USER_AGENT || 'PaperDeck/0.0.0 (https://paperdeck.michaelpiccirilli.it)' }}
+      ARXIV_USER_AGENT: ${{ vars.ARXIV_USER_AGENT || 'PaperDeck/0.1.0 (https://paperdeck.michaelpiccirilli.it)' }}
 
     steps:
       - name: Checkout

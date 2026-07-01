@@ -23,6 +23,7 @@ This project follows Semantic Versioning.
 - arXiv import deduplication by normalized arXiv ID across categories.
 - Ingestion documentation with required secrets, local dry-run command, and arXiv API constraints.
 - Embedding and ranked retrieval workflow specification in `docs/embeddings.md`.
+- Embedding schema migration, Python embedding worker dry-run, and GitHub Actions embedding workflow.
 
 ### Changed
 

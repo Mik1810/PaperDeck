@@ -51,12 +51,12 @@ Future hardening:
 
 The initial schema was applied to the PaperDeck Supabase project on 2026-07-01.
 
-Validation after apply:
+Validation after the latest embedding schema migration:
 
-- 16 public tables exist.
+- 19 public tables exist.
 - `pgcrypto` and `vector` extensions are enabled.
 - RLS is enabled on all public tables created by the schema.
-- 17 policies are present.
+- 19 policies are present.
 
 Note: Supabase/Postgres warns that creating the `ivfflat` index on an empty `papers` table can have low recall until data is loaded. This is expected during setup.
 
@@ -70,6 +70,7 @@ Note: Supabase/Postgres warns that creating the `ivfflat` index on an empty `pap
 - `playlist_items`
 - `favorites`
 - `user_paper_interactions`
+- `user_profile_embeddings`
 - `recommendations`
 - `digests`
 - `digest_items`
@@ -84,12 +85,14 @@ These tables contain or derive ownership from `owner_id`.
 - `paper_external_ids`
 - `taxonomy_topics`
 - `topic_relations`
+- `topic_embeddings`
 
 These are shared paper and topic catalog data. Authenticated users can read them once Clerk JWT integration is active.
 
 ### Worker Tables
 
 - `ingestion_runs`
+- `ingestion_cursors`
 
 This tracks batch imports from arXiv, Semantic Scholar, OpenAlex, and later sources.
 
@@ -113,9 +116,12 @@ Each embedded paper also stores:
 
 - `embedding_model`
 - `embedding_dimension`
+- `embedding_content_hash`
 - `embedded_at`
 
-The next schema step should add `papers.embedding_content_hash`, `topic_embeddings`, and `user_profile_embeddings` as described in the embedding workflow. This keeps future model migrations and stale-vector detection traceable.
+The schema now includes `papers.embedding_content_hash`, `topic_embeddings`, and `user_profile_embeddings` as described in the embedding workflow. This keeps future model migrations and stale-vector detection traceable.
+
+`topic_embeddings` stores offline topic vectors. `user_profile_embeddings` stores aggregate user vectors built from selected topics and interaction feedback.
 
 ## MVP Feed Ranking
 

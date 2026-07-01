@@ -101,6 +101,12 @@ npm run ingest:arxiv -- --dry-run --categories=cs.CC --max-results=1
 
 The planned embedding worker is documented in [docs/embeddings.md](./docs/embeddings.md). It will run outside Vercel through GitHub Actions or locally, write vectors to Supabase/pgvector, and let Vercel perform lightweight retrieval and reranking.
 
+Run a local embedding dry-run:
+
+```bash
+python3 scripts/embed_papers.py --dry-run --limit 3 --table-limit 20
+```
+
 ## Deployment
 
 Deployment notes live in [docs/deployment.md](./docs/deployment.md). The current public URL is <https://paperdeck.michaelpiccirilli.it/>.

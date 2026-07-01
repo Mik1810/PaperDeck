@@ -114,5 +114,5 @@ References:
 
 - Add Semantic Scholar enrichment for citations and external URLs.
 - Add OpenAlex enrichment for DOI, venue, open-access status, and topics.
-- Add BGE-small embedding generation outside Vercel, following [`docs/embeddings.md`](./embeddings.md).
+- Run the first real BGE-small embedding batch outside Vercel, following [`docs/embeddings.md`](./embeddings.md).
 - Add historical backfill mode for older arXiv pages.
