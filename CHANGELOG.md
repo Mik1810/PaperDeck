@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project follows Semantic Versioning.
 
+## [0.1.3] - 2026-07-01
+
+### Added
+
+- First real BGE-small embedding smoke batch written to Supabase: 2 topic vectors and 1 paper vector.
+- Verification notes for the local `uv run --with-requirements requirements-embeddings.txt` embedding path.
+- Offline embedding benchmark plan for BGE-small, E5-small-v2, and MiniLM.
+
+### Changed
+
+- Project package version advanced from `0.1.2` to `0.1.3`.
+- Embedding documentation updated with the first real batch result and model comparison plan.
+
 ## [0.1.2] - 2026-07-01
 
 ### Added

@@ -88,6 +88,7 @@ Current status:
 - `src/lib/repositories/user-profile-embeddings.ts` can refresh a user vector from stored topic/paper embeddings without loading any model;
 - `/feed` uses semantic candidates when a user profile embedding exists and falls back to the current topic/feedback ranking otherwise;
 - `/feed` attempts to refresh the stored user profile embedding before semantic retrieval;
+- a first real local BGE-small smoke batch has written 2 topic vectors and 1 paper vector to Supabase;
 - GitHub Actions workflow is ready but has not been run from GitHub yet.
 
 ## Paper Embedding Input
@@ -335,6 +336,54 @@ final_score =
 
 These weights are starting defaults, not final product values. They should be benchmarked after enough real user judgments exist.
 
+## Benchmark Plan
+
+Baseline models:
+
+```text
+BAAI/bge-small-en-v1.5
+intfloat/e5-small-v2
+sentence-transformers/all-MiniLM-L6-v2
+```
+
+Evaluation set:
+
+```text
+20-50 selected topics
+100-300 paper candidates across CS categories
+user judgments from right swipe, favorite, Read later, not interested, already read
+manual seed judgments for a few known interests while real feedback is sparse
+```
+
+Offline protocol:
+
+1. Generate paper embeddings for the same paper set with each model.
+2. Generate topic embeddings with the same input template for each model.
+3. Build user profile vectors from identical selected topics and interaction weights.
+4. Retrieve top-K papers with pgvector for each model.
+5. Apply the same TypeScript reranker weights.
+6. Compare ranked lists against held-out positive and negative judgments.
+
+Metrics:
+
+```text
+Recall@20        useful for discovery coverage
+NDCG@20          useful for ranked order quality
+MRR@10           useful for whether a strong paper appears early
+negative@20      count of not_interested/already_read papers in the top 20
+latency          Supabase RPC + reranker time, excluding offline embedding generation
+storage          vector table size per model
+```
+
+Decision rule:
+
+```text
+Keep BGE-small unless another model improves NDCG@20 or Recall@20 by at least 10%
+without materially increasing storage, runtime complexity, or GitHub Actions duration.
+```
+
+Benchmarking is offline-only. It should not introduce live model inference on Vercel or a paid embedding API.
+
 ## GitHub Actions Workflow
 
 Implemented workflow:
@@ -393,6 +442,24 @@ python3 scripts/embed_papers.py --dry-run --limit 3 --table-limit 20
 
 The dry-run does not import `sentence-transformers`; it only needs Supabase environment variables.
 
+Local real smoke run used:
+
+```bash
+uv run --isolated --with-requirements requirements-embeddings.txt \
+  python scripts/embed_topics.py --limit 2 --table-limit 100 --batch-size 2 --quiet
+
+uv run --isolated --with-requirements requirements-embeddings.txt \
+  python scripts/embed_papers.py --limit 1 --table-limit 20 --batch-size 1 --quiet
+```
+
+Verified result on remote Supabase:
+
+```text
+topic_embeddings: 2 rows for BAAI/bge-small-en-v1.5, dimension 384
+papers.embedding: 1 row for BAAI/bge-small-en-v1.5, dimension 384
+match_papers_by_embedding: returns the embedded paper with semantic_score 1.0 when queried with its own vector
+```
+
 For public repositories, standard GitHub-hosted runners are free. Do not use larger/GPU runners unless we explicitly accept paid usage.
 
 ## Implementation Steps
@@ -411,8 +478,9 @@ For public repositories, standard GitHub-hosted runners are free. Do not use lar
 9. Done: blend semantic candidates with the existing `src/lib/ranking/feed-ranking.ts` reranker.
 10. Done: build user profile embedding generation from stored topic and paper vectors.
 11. Done: add topic embedding generation so cold-start users can get semantic profile vectors from selected interests.
-12. Next: run a tiny real embedding batch after installing model dependencies on GitHub Actions or a Python environment with `sentence-transformers`.
-13. Update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
+12. Done: run a tiny real embedding batch from a local Python environment with `sentence-transformers` managed by `uv`.
+13. Done: update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
+14. Next: run broader topic and paper embedding batches through GitHub Actions or local `uv`.
 
 ## Non-Goals For MVP
 

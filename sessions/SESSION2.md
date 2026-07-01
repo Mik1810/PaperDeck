@@ -225,7 +225,11 @@ Embedding/ranked retrieval workflow is now specified:
 - stale user profile embeddings are cleared when the current user has no usable source vectors;
 - verified dry-run candidate selection against remote Supabase: 3 candidates found in the inspected slice;
 - verified topic embedding dry-run against remote Supabase: 10 topic candidates found in the inspected slice;
-- verified `match_papers_by_embedding` executes against remote Supabase with a zero vector and returns 0 rows while no paper embeddings exist;
+- ran the first real BGE-small local smoke batch through `uv run --with-requirements requirements-embeddings.txt`;
+- wrote 2 topic embeddings and 1 paper embedding to remote Supabase;
+- verified remote embedded rows have 384 dimensions;
+- verified `match_papers_by_embedding` against the real embedded paper vector; it returned the same paper with semantic score `1.0`;
+- added the offline benchmark plan for BGE-small vs E5-small-v2 vs MiniLM in `docs/embeddings.md`;
 - verified remote schema: 19 public tables and 19 policies after the embedding migration;
 - Vercel will perform pgvector top-K retrieval and TypeScript reranking, but will not import model dependencies.
 
@@ -261,7 +265,7 @@ Configure the GitHub Actions ingestion secrets, then continue the ingestion work
 - broaden arXiv CS imports beyond the verified `cs.CC` smoke test;
 - add historical arXiv backfill mode for older result pages;
 - enrich imported papers with Semantic Scholar/OpenAlex metadata;
-- run the first real topic and paper embedding batch;
+- run broader topic and paper embedding batches through GitHub Actions or local `uv`;
 - use embedding-aware ranking once real user profile vectors exist.
 
-The codebase is now at version `0.1.2`, representing the first production-authenticated, Supabase-backed MVP foundation plus the initial semantic retrieval path and topic embedding worker. It is not a `1.0.0` release: real embedding batches, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and ranking evaluation are still open.
+The codebase is now at version `0.1.3`, representing the first production-authenticated, Supabase-backed MVP foundation plus the initial semantic retrieval path, topic embedding worker, and first real embedding smoke batch. It is not a `1.0.0` release: broader embedding batches, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and ranking evaluation are still open.

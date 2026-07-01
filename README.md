@@ -10,7 +10,7 @@ PaperDeck is a planned web app for discovering computer science papers through a
 
 ## Project Status
 
-PaperDeck is currently at `0.1.2`: an early MVP foundation with production auth, Supabase-backed user data, arXiv ingestion, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently at `0.1.3`: an early MVP foundation with production auth, Supabase-backed user data, arXiv ingestion, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
 
 ## MVP Scope
 
@@ -49,7 +49,7 @@ PaperDeck will use a hybrid ranking strategy:
 
 The current live ranking uses selected topics, topic hierarchy, recent explicit feedback, citation/year metadata, seen-paper penalties, and semantic candidates when a stored user profile vector exists. The embedding workflow is specified in [docs/embeddings.md](./docs/embeddings.md).
 
-The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`. The schema, pgvector match RPC, GitHub Actions worker, topic/paper embedding dry-runs, and server-side user profile aggregation are already in place.
+The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`. The schema, pgvector match RPC, GitHub Actions worker, topic/paper embedding dry-runs, first real embedding smoke batch, and server-side user profile aggregation are already in place.
 
 ## Planned Architecture
 
