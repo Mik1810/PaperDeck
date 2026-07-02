@@ -206,23 +206,32 @@ export async function saveSelectedTopics(ownerId: string, topicIds: string[]) {
 }
 
 export async function getOnboardingData(ownerId: string) {
-  const topics = await getTopics();
-  const selectedTopicIds = await getSelectedTopicIds(ownerId);
+  const [topics, feedState] = await Promise.all([
+    getTopics(),
+    getFeedState(ownerId),
+  ]);
 
   return {
     topics,
-    selectedTopicIds,
+    selectedTopicIds: feedState.selectedTopicIds,
   };
 }
 
-async function getUserPaperState(ownerId: string): Promise<UserPaperState> {
+type FeedState = {
+  selectedTopicIds: Set<string>;
+  userState: UserPaperState;
+};
+
+async function getFeedState(ownerId: string): Promise<FeedState> {
   const supabase = createServiceRoleClient();
 
   const [
+    { data: interests, error: interestsError },
     { data: favorites, error: favoritesError },
     { data: readLaterPlaylist, error: readLaterPlaylistError },
     { data: interactions, error: interactionsError },
   ] = await Promise.all([
+    supabase.from("user_interests").select("topic_id").eq("owner_id", ownerId),
     supabase.from("favorites").select("paper_id").eq("owner_id", ownerId),
     supabase
       .from("playlists")
@@ -235,37 +244,46 @@ async function getUserPaperState(ownerId: string): Promise<UserPaperState> {
       .select("paper_id, action")
       .eq("owner_id", ownerId)
       .order("created_at", { ascending: false })
-      .limit(500),
+      .limit(200),
   ]);
 
+  assertNoError(interestsError, "Load selected topics");
   assertNoError(favoritesError, "Load favorites");
   assertNoError(readLaterPlaylistError, "Load Read later playlist");
-  assertNoError(interactionsError, "Load negative interactions");
+  assertNoError(interactionsError, "Load interactions");
 
   const playlistItems =
     (readLaterPlaylist?.playlist_items as Array<{ paper_id: string }> | undefined) ??
     [];
 
   return {
-    favoriteIds: new Set((favorites ?? []).map((item) => item.paper_id as string)),
-    readLaterIds: new Set(playlistItems.map((item) => item.paper_id)),
-    seenIds: new Set(
-      ((interactions ?? []) as RankingInteraction[])
-        .filter((item) => isFeedHiddenAction(item.action))
-        .map((item) => item.paper_id),
+    selectedTopicIds: new Set(
+      ((interests ?? []) as Array<{ topic_id: string }>).map((item) => item.topic_id),
     ),
-    interactions: (interactions ?? []) as RankingInteraction[],
+    userState: {
+      favoriteIds: new Set(
+        (favorites ?? []).map((item) => item.paper_id as string),
+      ),
+      readLaterIds: new Set(playlistItems.map((item) => item.paper_id)),
+      seenIds: new Set(
+        ((interactions ?? []) as RankingInteraction[])
+          .filter((item) => isFeedHiddenAction(item.action))
+          .map((item) => item.paper_id),
+      ),
+      interactions: (interactions ?? []) as RankingInteraction[],
+    },
   };
 }
 
 export async function getFeedPageData(ownerId: string) {
   const startedAt = performance.now();
   const timings: Record<string, number> = {};
-  const [topics, selectedTopicIds, state] = await Promise.all([
+  const [topics, feedState] = await Promise.all([
     measureAsync(timings, "topics", getTopics()),
-    measureAsync(timings, "selected_topics", getSelectedTopicIds(ownerId)),
-    measureAsync(timings, "user_state", getUserPaperState(ownerId)),
+    measureAsync(timings, "feed_state", getFeedState(ownerId)),
   ]);
+  const selectedTopicIds = feedState.selectedTopicIds;
+  const state = feedState.userState;
 
   const semanticCandidates = await measureAsync(
     timings,
@@ -390,18 +408,19 @@ export async function getLibraryPageData(ownerId: string) {
 }
 
 export async function getSettingsPageData(ownerId: string) {
-  const topics = await getTopics();
-  const selectedTopicIds = await getSelectedTopicIds(ownerId);
-  const state = await getUserPaperState(ownerId);
+  const [topics, feedState] = await Promise.all([
+    getTopics(),
+    getFeedState(ownerId),
+  ]);
 
   return {
     interests: topics.map((topic: TopicRow) => ({
       id: topic.id,
       label: topic.label,
       depth: topic.depth,
-      selected: selectedTopicIds.has(topic.id),
+      selected: feedState.selectedTopicIds.has(topic.id),
     })),
-    readLaterCount: state.readLaterIds.size,
+    readLaterCount: feedState.userState.readLaterIds.size,
   };
 }
 

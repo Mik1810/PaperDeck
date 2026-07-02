@@ -96,10 +96,13 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
   - Success condition: normal `/feed` read path does not perform unnecessary profile embedding writes.
   - Done 2026-07-02 for the read path: `/feed` no longer calls `refreshUserProfileEmbedding(ownerId)`. Follow-up still needed for refresh-on-write/background profile vector updates.
 
-- [ ] Collapse feed Supabase round trips.
-  - Current feed path loads topics, selected interests, read-later playlist, favorites, playlist items, interactions, semantic candidates, and paper rows in multiple calls.
-  - Success condition: reduce query count or move some data to precomputed/cached structures without compromising correctness.
-  - Progress 2026-07-02: removed runtime profile upsert, runtime seed writes, profile embedding refresh, and separate read-later playlist creation from read paths. Latest production feed actions are under 1s, so this is no longer the immediate blocker, but full query-count collapse is still open.
+- [x] Collapse feed Supabase round trips.
+  - Done 2026-07-02: merged getSelectedTopicIds + getUserPaperState into getFeedState.
+  - Single Supabase client runs 4 queries (interests, favorites, playlists, interactions) in Promise.all.
+  - Feed now makes 2 parallel calls (getTopics + getFeedState) instead of 3 separate ones.
+  - Interaction load reduced from 500 to 200 rows.
+  - Also applied to getSettingsPageData and getOnboardingData.
+  - Success condition met: queried count reduced at application level without regressing correctness.
 
 - [x] Optimize paper detail actions.
   - Latest production HAR shows a detail-page `POST /papers/[paperId]` action taking 1454ms, with most time in server wait.
