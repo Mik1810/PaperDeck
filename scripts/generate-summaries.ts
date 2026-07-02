@@ -44,12 +44,12 @@ type TriageSummary = {
 };
 
 const CURSOR_KEY = "triage_summary_enrich";
-const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given the full text of a paper, produce a structured JSON summary with exactly these four fields. Each field must be around 100 words. Do NOT repeat or paraphrase the abstract — synthesise new, original insights from the full paper text.
+const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given the text of a paper (which may contain PDF artifacts, garbled symbols, or LaTeX fragments), ignore formatting noise and extract the semantic meaning. Produce a structured JSON summary with exactly these four fields. Each field must be around 100 words. Do NOT repeat or paraphrase the abstract — synthesize new, original insights.
 
 - "why_it_matters": What specific problem or gap does this paper address? Explain the real-world stakes, the limitation of prior work, or the concrete scenario that motivated this research.
 - "main_contribution": What exactly did the authors build, prove, or discover? Describe the method, algorithm, framework, dataset, or theorem. Include specific names, metrics, baselines, and key numbers from experiments.
-- "prerequisites": What specific background should a reader have? Name concrete concepts, prior architectures, formal tools, or mathematical frameworks (e.g., "LTL model checking", "Graph Neural Networks", "attention mechanisms in Transformers").
-- "read_if_you_care_about": Who specifically would find this paper most relevant? Name exact research communities, subfields, systems, or application domains. Be narrow — avoid "anyone in AI".
+- "prerequisites": What specific background should a reader have? Name concrete concepts, prior architectures, formal tools, or mathematical frameworks.
+- "read_if_you_care_about": Who specifically would find this paper most relevant? Name exact research communities, subfields, systems, or application domains.
 
 Write in English. Output ONLY the JSON object, no other text.`;
 
@@ -173,6 +173,14 @@ async function fetchPaperContent(arxivId: string, jinaApiKey: string | null) {
   }
 
   return response.text();
+}
+
+function cleanText(text: string) {
+  return text
+    .replace(/[^\x20-\x7E\u00A0-\u00FF\u0100-\u017F\u2010-\u2060\u2190-\u21FF\u2200-\u22FF\u2300-\u23FF\u03B1-\u03C9\u2207]/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function chunkText(text: string, maxChars: number) {
@@ -305,7 +313,7 @@ async function generateSummary(
     try {
       const fullText = await fetchPaperContent(paper.arxiv_id, config.jinaApiKey);
       if (fullText && fullText.length > 200) {
-        content = fullText;
+        content = cleanText(fullText);
         console.error(`  Jina: fetched ${fullText.length} chars for ${paper.arxiv_id}`);
       }
     } catch (error) {
