@@ -182,6 +182,14 @@ function chunkText(text: string, maxChars: number) {
 
   const chunks: string[] = [];
   const paragraphs = text.split(/\n\n+/);
+
+  if (paragraphs.length === 1) {
+    for (let i = 0; i < text.length; i += maxChars) {
+      chunks.push(text.slice(i, i + maxChars));
+    }
+    return chunks;
+  }
+
   let current = "";
 
   for (const paragraph of paragraphs) {
