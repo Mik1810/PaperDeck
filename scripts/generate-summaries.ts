@@ -305,8 +305,8 @@ async function generateSummary(
     try {
       const fullText = await fetchPaperContent(paper.arxiv_id, config.jinaApiKey);
       if (fullText && fullText.length > 200) {
-        content = fullText;
-        console.error(`  Jina: fetched ${fullText.length} chars for ${paper.arxiv_id}`);
+        content = fullText.slice(0, MAX_CHARS);
+        console.error(`  Jina: using first ${content.length} chars for ${paper.arxiv_id}`);
       }
     } catch (error) {
       console.error(
@@ -315,29 +315,7 @@ async function generateSummary(
     }
   }
 
-  const chunks = chunkText(content, MAX_CHARS);
-
-  if (chunks.length === 1) {
-    return summarizeChunk(config, paper.title, chunks[0], 0, 1);
-  }
-
-  const chunkSummaries: TriageSummary[] = [];
-
-  for (let i = 0; i < chunks.length; i++) {
-    console.error(`  Chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)`);
-
-    const summary = await summarizeChunk(
-      config,
-      paper.title,
-      chunks[i],
-      i,
-      chunks.length,
-    );
-
-    chunkSummaries.push(summary);
-  }
-
-  return mergeChunkSummaries(config, paper.title, chunkSummaries);
+  return summarizeChunk(config, paper.title, content, 0, 1);
 }
 
 async function mergeChunkSummaries(
