@@ -51,7 +51,7 @@ export function FeedDeck({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <section className="flex justify-center">
+      <section className="lg:pr-0">
         {visibleActivePaper ? (
           <PaperCard
             key={visibleActivePaper.id}
@@ -76,7 +76,7 @@ export function FeedDeck({
             sourcePath="/feed"
           />
         ) : (
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm lg:max-w-2xl">
+          <div className="w-full rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm lg:max-w-2xl">
             <h2 className="text-lg font-black text-slate-950">
               No papers left in this seed deck
             </h2>
