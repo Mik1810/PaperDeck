@@ -104,7 +104,7 @@ function parseArgs(): SummaryConfig {
     dryRun:
       args.includes("--dry-run") || process.env.LLM_DRY_RUN === "true",
     requestDelayMs: Number(
-      process.env.LLM_REQUEST_DELAY_MS ?? 15000,
+      process.env.LLM_REQUEST_DELAY_MS ?? 5000,
     ),
   };
 }
@@ -513,7 +513,10 @@ async function main() {
       `Batch ${Math.floor(i / config.batchSize) + 1}: ${batch.length} papers`,
     );
 
-    for (const paper of batch) {
+    for (const [paperIndex, paper] of batch.entries()) {
+      if (paperIndex > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
       try {
         const summary = await generateSummary(config, paper);
 
