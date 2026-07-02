@@ -604,9 +604,22 @@ export async function deletePlaylist(ownerId: string, playlistId: string) {
 
 export async function addToPlaylist(playlistId: string, paperId: string) {
   const supabase = createServiceRoleClient();
+  const { data: maxRow } = await supabase
+    .from("playlist_items")
+    .select("position")
+    .eq("playlist_id", playlistId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const nextPosition = ((maxRow?.position as number) ?? -1) + 1;
+
   const { error } = await supabase
     .from("playlist_items")
-    .upsert({ playlist_id: playlistId, paper_id: paperId, position: 0 }, { onConflict: "playlist_id,paper_id" });
+    .upsert(
+      { playlist_id: playlistId, paper_id: paperId, position: nextPosition },
+      { onConflict: "playlist_id,paper_id" },
+    );
 
   assertNoError(error, "Add to playlist");
 }
@@ -620,4 +633,23 @@ export async function removeFromPlaylist(playlistId: string, paperId: string) {
     .eq("paper_id", paperId);
 
   assertNoError(error, "Remove from playlist");
+}
+
+export async function reorderPlaylistItems(
+  playlistId: string,
+  orderedPaperIds: string[],
+) {
+  const supabase = createServiceRoleClient();
+
+  for (let i = 0; i < orderedPaperIds.length; i++) {
+    const { error } = await supabase
+      .from("playlist_items")
+      .update({ position: i })
+      .eq("playlist_id", playlistId)
+      .eq("paper_id", orderedPaperIds[i]);
+
+    if (error) {
+      throw error;
+    }
+  }
 }

@@ -14,6 +14,7 @@ import {
   deletePlaylist,
   addToPlaylist,
   removeFromPlaylist,
+  reorderPlaylistItems,
 } from "@/lib/repositories/user-data";
 import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
@@ -170,5 +171,18 @@ export async function removeFromPlaylistAction(formData: FormData) {
   }
 
   await removeFromPlaylist(playlistId, paperId);
+  revalidatePath("/library");
+}
+
+export async function reorderPlaylistAction(formData: FormData) {
+  await requireOwnerId();
+  const playlistId = formData.get("playlistId") as string;
+  const paperIds = formData.getAll("paperId") as string[];
+
+  if (!playlistId || !paperIds.length) {
+    throw new Error("Missing playlistId or paperIds");
+  }
+
+  await reorderPlaylistItems(playlistId, paperIds);
   revalidatePath("/library");
 }
