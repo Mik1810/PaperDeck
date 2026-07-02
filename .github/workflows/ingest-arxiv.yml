@@ -11,6 +11,11 @@ on:
         description: "Maximum papers to fetch in this run"
         required: false
         default: "25"
+      dry_run:
+        description: "Fetch and report importable papers without writing"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "17 4 * * *"
 
@@ -23,6 +28,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       ARXIV_CATEGORIES: ${{ github.event.inputs.categories || vars.ARXIV_CATEGORIES || 'cs.AI,cs.CL,cs.CR,cs.CC,cs.DS,cs.LG,cs.LO,cs.PL,cs.SE,cs.SY' }}
       ARXIV_MAX_RESULTS: ${{ github.event.inputs.max_results || vars.ARXIV_MAX_RESULTS || '25' }}
+      ARXIV_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
       ARXIV_USER_AGENT: ${{ vars.ARXIV_USER_AGENT || 'PaperDeck/0.1.0 (https://paperdeck.michaelpiccirilli.it)' }}
 
     steps:
@@ -39,4 +45,12 @@ jobs:
         run: npm ci
 
       - name: Ingest arXiv papers
-        run: npm run ingest:arxiv
+        shell: bash
+        run: |
+          cmd=(npm run ingest:arxiv)
+
+          if [ "$ARXIV_DRY_RUN" = "true" ]; then
+            cmd+=(-- --dry-run)
+          fi
+
+          "${cmd[@]}"
