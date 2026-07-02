@@ -93,7 +93,7 @@ function parseArgs(): SummaryConfig {
   };
 
   return {
-    model: process.env.LLM_MODEL ?? "gemini-2.0-flash",
+    model: process.env.LLM_MODEL ?? "gemini-flash-latest",
     baseUrl: process.env.LLM_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai",
     apiKey: process.env.LLM_API_KEY ?? "",
     jinaApiKey: process.env.JINA_API_KEY ?? null,
@@ -216,32 +216,50 @@ function chunkText(text: string, maxChars: number) {
   return chunks;
 }
 
-async function callLLM(
+async function callGemini(
   config: SummaryConfig,
-  body: Record<string, unknown>,
+  messages: Array<{ role: string; content: string }>,
+  maxTokens: number,
   retries = 3,
-): Promise<{ choices: Array<{ message: { content: string | null; reasoning?: string } }> }> {
+): Promise<string> {
+  const systemMsg = messages.find((m) => m.role === "system");
+  const userMsg = messages.find((m) => m.role === "user");
+  const systemInstruction = systemMsg
+    ? { system_instruction: { parts: [{ text: systemMsg.content }] } }
+    : {};
+
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-        "HTTP-Referer": "https://paperdeck.michaelpiccirilli.it",
-        "X-Title": "PaperDeck",
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...systemInstruction,
+          contents: [{ parts: [{ text: userMsg?.content ?? "" }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: maxTokens,
+            responseMimeType: "application/json",
+          },
+        }),
       },
-      body: JSON.stringify(body),
-    });
+    );
 
     if (response.ok) {
-      return response.json();
+      const data = (await response.json()) as {
+        candidates?: Array<{
+          content?: { parts?: Array<{ text?: string }> };
+        }>;
+      };
+      return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     }
 
     if (response.status === 429 && attempt < retries) {
       const retryAfter = response.headers.get("Retry-After");
       const delay = retryAfter
         ? Number(retryAfter) * 1000
-        : (attempt + 1) * 15000;
+        : (attempt + 1) * 10000;
       console.error(
         `  Rate limited, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
       );
@@ -249,12 +267,13 @@ async function callLLM(
       continue;
     }
 
+    const errorText = await response.text();
     throw new Error(
-      `LLM API error: ${response.status} ${response.statusText}`,
+      `Gemini API error (${response.status}): ${errorText.slice(0, 200)}`,
     );
   }
 
-  throw new Error("LLM API error: max retries exceeded");
+  throw new Error("Gemini API error: max retries exceeded");
 }
 
 async function summarizeChunk(
@@ -271,36 +290,20 @@ async function summarizeChunk(
 
   const userContent = `Paper title: ${title}\n\n${prefix}${chunk}`;
 
-  const data = await callLLM(config, {
-    model: config.model,
-    messages: [
+  const raw = await callGemini(
+    config,
+    [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userContent },
     ],
-    response_format: { type: "json_object" },
-    temperature: 0.3,
-    max_tokens: 1600,
-  });
-
-  const message = data.choices?.[0]?.message;
-  const raw = (message?.content ?? "") || (message?.reasoning ?? "");
-
-  if (!raw) {
-    throw new Error("Empty LLM response");
-  }
+    1600,
+  );
 
   try {
     return JSON.parse(extractJson(raw)) as TriageSummary;
   } catch {
-    if (message?.reasoning && message.reasoning !== raw) {
-      try {
-        return JSON.parse(extractJson(message.reasoning)) as TriageSummary;
-      } catch {
-        // fall through to error
-      }
-    }
     console.error(`  JSON parse failed, raw: ${raw.slice(0, 200)}`);
-    throw new Error("LLM did not return valid JSON");
+    throw new Error("Gemini did not return valid JSON");
   }
 }
 
@@ -368,19 +371,14 @@ async function mergeChunkSummaries(
   const userContent =
     `Paper title: ${title}\n\nCombine these partial summaries into a single final summary:\n\n${parts}`;
 
-  const data = await callLLM(config, {
-    model: config.model,
-    messages: [
+  const raw = await callGemini(
+    config,
+    [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userContent },
     ],
-    response_format: { type: "json_object" },
-    temperature: 0.3,
-    max_tokens: 1600,
-  });
-
-  const message = data.choices?.[0]?.message;
-  const raw = (message?.content ?? "") || (message?.reasoning ?? "");
+    1600,
+  );
 
   try {
     return JSON.parse(extractJson(raw)) as TriageSummary;
