@@ -2,6 +2,7 @@ import { BookmarkX } from "lucide-react";
 import { toggleReadLaterAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { PaperListItem } from "@/components/paper-list-item";
+import { PlaylistPapers } from "@/components/playlist-papers";
 import { PlaylistSidebar } from "@/components/playlist-sidebar";
 import { requireOwnerId } from "@/lib/auth/session";
 import { getLibraryPageData } from "@/lib/repositories/user-data";
@@ -38,26 +39,16 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
         <PlaylistSidebar
           playlists={playlists}
           selectedId={selectedPlaylistId ?? null}
-          selectedPapers={selectedPapers}
         />
 
         <section className="space-y-5">
-          {selectedPlaylist ? (
+          {selectedPlaylist && selectedPlaylistId ? (
             <div>
               <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
                 {selectedPlaylist.name}
               </h2>
-              <div className="mt-3 space-y-3">
-                {selectedPlaylist.paperIds.length ? (
-                  <p className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm font-semibold text-slate-500">
-                    {selectedPlaylist.paperIds.length} paper in this playlist.
-                    Use the sidebar to manage papers.
-                  </p>
-                ) : (
-                  <p className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm font-semibold text-slate-500">
-                    No papers in this playlist yet.
-                  </p>
-                )}
+              <div className="mt-3">
+                <PlaylistPapers playlistId={selectedPlaylistId} papers={selectedPapers} />
               </div>
             </div>
           ) : null}

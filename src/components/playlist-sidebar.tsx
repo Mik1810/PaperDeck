@@ -3,26 +3,10 @@
 import { useState } from "react";
 import { BookmarkX, Pencil, Plus, Trash2 } from "lucide-react";
 import {
-  DndContext,
-  closestCenter,
-  DragEndEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import {
   createPlaylistAction,
   deletePlaylistAction,
-  removeFromPlaylistAction,
   renamePlaylistAction,
-  reorderPlaylistAction,
 } from "@/app/actions";
-import { SortablePlaylistPaper } from "@/components/sortable-playlist-paper";
 import type { Paper } from "@/types/paper";
 
 type PlaylistSummary = {
@@ -35,45 +19,12 @@ type PlaylistSummary = {
 type Props = {
   playlists: PlaylistSummary[];
   selectedId: string | null;
-  selectedPapers: Paper[];
 };
 
-export function PlaylistSidebar({ playlists, selectedId, selectedPapers }: Props) {
+export function PlaylistSidebar({ playlists, selectedId }: Props) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
-  const [orderedPapers, setOrderedPapers] = useState(selectedPapers);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-  );
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-
-    if (!over || active.id === over.id) {
-      return;
-    }
-
-    const oldIndex = orderedPapers.findIndex((p) => p.id === active.id);
-    const newIndex = orderedPapers.findIndex((p) => p.id === over.id);
-
-    if (oldIndex === -1 || newIndex === -1) {
-      return;
-    }
-
-    const newOrder = arrayMove(orderedPapers, oldIndex, newIndex);
-    setOrderedPapers(newOrder);
-
-    const formData = new FormData();
-    formData.set("playlistId", selectedId!);
-
-    for (const paper of newOrder) {
-      formData.append("paperId", paper.id);
-    }
-
-    reorderPlaylistAction(formData);
-  }
 
   return (
     <aside className="space-y-3">
@@ -206,29 +157,6 @@ export function PlaylistSidebar({ playlists, selectedId, selectedPapers }: Props
           )}
         </div>
       ))}
-
-      {selectedId ? (
-        <div className="mt-6 space-y-2">
-          <DndContext
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-            sensors={sensors}
-          >
-            <SortableContext
-              items={orderedPapers.map((p) => p.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {orderedPapers.map((paper) => (
-                <SortablePlaylistPaper
-                  key={paper.id}
-                  paper={paper}
-                  playlistId={selectedId}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
-        </div>
-      ) : null}
     </aside>
   );
 }
