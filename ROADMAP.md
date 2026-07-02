@@ -65,16 +65,33 @@ Aggiornato al 2026-07-02:
   - Script `scripts/ingest-arxiv.ts` con 10 categorie CS di default.
   - Workflow GitHub Actions giornaliero/manuale.
   - Modalita' backfill storico con `--backfill` e `--backfill-pages`.
-  - Import di metadati, abstract, autori, categorie, link arXiv/PDF e DOI quando presente.
-  - Rispetto del rate limit arXiv: una richiesta ogni tre secondi, una connessione.
-  - Cursori incrementali per categoria e cursori separati per backfill.
   - 447 paper arXiv nel database, 0 duplicati `arxiv_id`.
-- Enrichment esterno: implementato.
-  - Semantic Scholar: 277 paper arricchiti con citation count, venue corretta, DOI, S2 ID.
-  - OpenAlex: 11 paper arricchiti con venue publisher, open access status, topic, abstract.
-  - Unpaywall: 21 URL open access legali salvati per paper con DOI.
-- Worker embeddings: specificato in `docs/embeddings.md`; primo smoke batch completato.
-- Clerk JWT per applicare RLS direttamente dal browser: non ancora configurato; l'MVP usa server actions con service role solo lato server.
+- Enrichment esterno: completato.
+  - Semantic Scholar: 277 paper con citation count, venue corretta, DOI, S2 ID.
+  - OpenAlex: 11 paper con venue publisher, open access status, topic, abstract.
+  - Unpaywall: 24 URL open access legali per paper con DOI.
+- Embedding batch: completati.
+  - 64 topic embeddings (BGE-small-en-v1.5) in `topic_embeddings`.
+  - 449 paper embeddings (BGE-small-en-v1.5) in `papers.embedding`.
+  - RPC `match_papers_by_embedding` per cosine similarity search attiva.
+- Feed semantico: profilo utente collegato a onboarding e feed lazy generation.
+- LLM triage summary: implementato.
+  - Worker `scripts/generate-summaries.ts` con Jina AI Reader + GitHub Models.
+  - Summary JSONB in `papers.triage_summary` con 4 sezioni strutturate.
+  - Visualizzati nella pagina paper detail sotto l'abstract.
+- Clerk JWT + Supabase RLS: configurato.
+  - `createClerkAuthenticatedClient()` per query Supabase con JWT Clerk + anon key.
+  - RLS policy attive, verificate con smoke test.
+- MathJax 3: rendering LaTeX in abstract e summary su detail page e feed card.
+- Sicurezza: audit service-role completato, checklist rotazione secret documentata.
+- Test: suite Playwright smoke con 5 test dev-auth.
+- Osservabilita': log `feed_timing` esteso con diagnostica semantic retrieval.
+
+## Prossimi passi
+
+- Benchmark offline modelli embedding (BGE-small vs E5-small-v2 vs MiniLM).
+- Rivedere strategia storage summary JSONB prima di scalare oltre 10K paper.
+- Feature P2: playlist custom, digest in-app, metadati paper detail migliorati.
 
 ## Principio sui contenuti
 

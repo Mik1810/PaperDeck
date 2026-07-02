@@ -183,9 +183,8 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
 
 ## P1 - Keep Documentation Aligned
 
-- [ ] Update `ROADMAP.md` implementation status.
-  - Current issue: `ROADMAP.md` still says embeddings are not implemented, while `SESSION2.md`, `CHANGELOG.md`, and `docs/embeddings.md` show implemented embedding workers, pgvector RPC, user profile vectors, and a real smoke batch.
-  - Success condition: roadmap status matches version `0.1.3`.
+- [x] Update `ROADMAP.md` implementation status.
+  - Done 2026-07-02: all sections updated through SESSION6 including embeddings, summaries, RLS, MathJax, security audit, tests, observability.
 
 - [x] Update `docs/ingestion.md` after GitHub Actions secrets are configured and the first GitHub-hosted ingestion dry-run succeeds.
   - Resolved: docs now record the first GitHub-hosted ingestion dry-run.
@@ -195,9 +194,8 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
   - Resolved: docs now record the first GitHub-hosted embedding dry-run and tiny write-mode run.
   - Success condition: docs record the successful run date, mode, and batch size.
 
-- [ ] Normalize the end of `sessions/SESSION2.md`.
-  - Current issue: the final added notes are useful but less structured than the rest of the session log.
-  - Success condition: open questions and next steps are grouped consistently.
+- [x] Normalize the end of `sessions/SESSION2.md`.
+  - Done 2026-07-02: restructured into numbered Open Questions, ordered Next Steps, and session state summary. Removed duplicate content.
 
 ## P1 - Ingestion
 

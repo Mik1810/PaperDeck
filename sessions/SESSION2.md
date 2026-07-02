@@ -250,31 +250,33 @@ Cursor DB state after idempotent run -> imported_count=0
 
 ## Open Questions
 
-- Configure Clerk JWT so Supabase can enforce the prepared RLS policies directly.
-- Decide whether local development should switch back to Clerk development keys while keeping live keys only on Vercel Production.
-- Configure GitHub repository secrets for the arXiv ingestion workflow:
-  - `NEXT_PUBLIC_SUPABASE_URL`
-  - `SUPABASE_SERVICE_ROLE_KEY`
-- Add custom private playlists and manual playlist ordering.
-- Post-feed benchmark for `BAAI/bge-small-en-v1.5` vs `intfloat/e5-small-v2` vs `sentence-transformers/all-MiniLM-L6-v2`.
+1. **Clerk JWT RLS**: configurare Clerk JWT per applicare le RLS policy di Supabase lato client.
+2. **Dev auth**: decidere se lo sviluppo locale deve usare le key Clerk di development o solo `PAPERDECK_DEV_AUTH`.
+3. **GitHub secrets**: configurare `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` per i workflow Actions.
+4. **Ingestion**: ampliare oltre lo smoke test `cs.CC`, aggiungere backfill storico.
+5. **Enrichment**: arricchire paper con Semantic Scholar e OpenAlex.
+6. **Embeddings**: eseguire batch completi di topic e paper embeddings, benchmark modelli.
+7. **Playlist**: aggiungere playlist custom private e ordinamento manuale.
+8. **Docs**: allineare ROADMAP.md con CHANGELOG.md e docs/embeddings.md.
 
-## Next Suggested Step
+## Next Steps (ordinati per priorità)
 
-Configure the GitHub Actions ingestion secrets, then continue the ingestion worker path:
+1. Configurare i GitHub Actions secrets per ingestion e embeddings.
+2. Ampliare ingestion arXiv oltre `cs.CC` a tutte le 10 categorie CS.
+3. Aggiungere backfill storico per paper arXiv meno recenti.
+4. Arricchire con Semantic Scholar (citation count, venue, DOI, S2 ID).
+5. Arricchire con OpenAlex (venue, open access, topic, abstract).
+6. Arricchire con Unpaywall (URL open access legali).
+7. Eseguire batch embeddings completi (topic + paper) con BGE-small.
+8. Collegare il profilo utente al feed semantico.
+9. Configurare Clerk JWT per RLS Supabase.
+10. Benchmark modelli embedding (BGE-small vs E5-small-v2 vs MiniLM).
 
-- broaden arXiv CS imports beyond the verified `cs.CC` smoke test;
-- add historical arXiv backfill mode for older result pages;
-- enrich imported papers with Semantic Scholar/OpenAlex metadata;
-- run broader topic and paper embedding batches through GitHub Actions or local `uv`;
-- use embedding-aware ranking once real user profile vectors exist.
+## Stato al termine della sessione
 
-Configurare Clerk JWT per applicare RLS Supabase lato client in modo pieno.
-Configurare secrets GitHub per far girare davvero i workflow batch da GitHub.
-Espandere ingestion oltre smoke slice e aggiungere backfill storico.
-Eseguire batch embeddings più ampi e benchmark modelli.
-Playlist custom e ordinamento manuale ancora da fare.
-Fonte: SESSION2.md, ingestion.md, database.md, ROADMAP.md
-Nota importante di allineamento docs
-C’è una piccola incoerenza: in ROADMAP.md una parte dello “stato implementazione” risulta più indietro rispetto a quanto riportato in changelog/sessioni/docs embeddings (che sono più aggiornati). Quindi, per lo stato reale conviene fidarsi prima di CHANGELOG.md + SESSION2.md + embeddings.md.
-
-The codebase is now at version `0.1.3`, representing the first production-authenticated, Supabase-backed MVP foundation plus the initial semantic retrieval path, topic embedding worker, and first real embedding smoke batch. It is not a `1.0.0` release: broader embedding batches, richer ingestion, custom playlists, Clerk JWT/RLS hardening, and ranking evaluation are still open.
+- Versione: `0.1.3`
+- Database: 6 paper totali, 4 arXiv
+- Ingestion: script arXiv funzionante con cursori incrementali per `cs.CC`
+- Embeddings: smoke batch completato (2 topic, 1 paper)
+- RLS: policy SQL preparate, non ancora attivate con Clerk JWT
+- L'effettivo stato implementativo e' in CHANGELOG.md + SESSION2.md + docs/embeddings.md
