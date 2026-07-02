@@ -16,15 +16,23 @@ function extractJson(text: string) {
   return content.slice(start, end + 1);
 }
 
+type LlmProvider = "cloudflare" | "gemini";
+type LlmMessage = { role: "system" | "user"; content: string };
+
 type SummaryConfig = {
+  provider: LlmProvider;
   model: string;
-  baseUrl: string;
   apiKey: string;
+  cloudflareAccountId: string;
+  cloudflareApiToken: string;
   jinaApiKey: string | null;
   batchSize: number;
   limit: number;
   dryRun: boolean;
   requestDelayMs: number;
+  maxInputChars: number;
+  maxOutputTokens: number;
+  retries: number;
 };
 
 type PaperRow = {
@@ -44,6 +52,8 @@ type TriageSummary = {
 };
 
 const CURSOR_KEY = "triage_summary_enrich";
+const DEFAULT_CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
 const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given the text of a paper (which may contain PDF artifacts, garbled symbols, or LaTeX fragments), ignore formatting noise and extract the semantic meaning. Produce a structured JSON summary with exactly these four fields. Each field must be around 100 words. Do NOT repeat or paraphrase the abstract — synthesize new, original insights.
 
 - "why_it_matters": What specific problem or gap does this paper address? Explain the real-world stakes, the limitation of prior work, or the concrete scenario that motivated this research.
@@ -53,8 +63,35 @@ const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. G
 
 Write in English. Output ONLY the JSON object, no other text.`;
 
-const MAX_CHARS = 500000;
 const JINA_BASE = "https://r.jina.ai";
+const TRIAGE_SUMMARY_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    why_it_matters: {
+      type: "string",
+      description: "Why this paper matters and what gap it addresses.",
+    },
+    main_contribution: {
+      type: "string",
+      description: "The paper's concrete method, finding, artifact, or result.",
+    },
+    prerequisites: {
+      type: "string",
+      description: "Background concepts a reader should know first.",
+    },
+    read_if_you_care_about: {
+      type: "string",
+      description: "The specific reader profile, subfield, or application area.",
+    },
+  },
+  required: [
+    "why_it_matters",
+    "main_contribution",
+    "prerequisites",
+    "read_if_you_care_about",
+  ],
+  additionalProperties: false,
+} as const;
 
 function loadLocalEnv() {
   const envPath = path.join(process.cwd(), ".env.local");
@@ -91,11 +128,24 @@ function parseArgs(): SummaryConfig {
     const prefix = `--${name}=`;
     return args.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
   };
+  const providerArg = argValue("provider");
+  const modelArg = argValue("model");
+  const envProvider = process.env.LLM_PROVIDER;
+  const envModel = process.env.LLM_MODEL;
+  const provider = parseProvider(providerArg ?? envProvider, modelArg ?? envModel);
+  const hasExplicitProvider = Boolean(providerArg ?? envProvider);
 
   return {
-    model: process.env.LLM_MODEL ?? "gemini-flash-latest",
-    baseUrl: process.env.LLM_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai",
+    provider,
+    model:
+      modelArg ??
+      resolveEnvModel(provider, envModel, hasExplicitProvider),
     apiKey: process.env.LLM_API_KEY ?? "",
+    cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
+    cloudflareApiToken:
+      process.env.CLOUDFLARE_API_TOKEN ??
+      process.env.CLOUDFLARE_AUTH_TOKEN ??
+      "",
     jinaApiKey: process.env.JINA_API_KEY ?? null,
     batchSize: Number(
       argValue("batch-size") ?? process.env.LLM_BATCH_SIZE ?? 5,
@@ -106,7 +156,92 @@ function parseArgs(): SummaryConfig {
     requestDelayMs: Number(
       process.env.LLM_REQUEST_DELAY_MS ?? 5000,
     ),
+    maxInputChars: Number(
+      argValue("max-input-chars") ??
+        process.env.LLM_MAX_INPUT_CHARS ??
+        500000,
+    ),
+    maxOutputTokens: Number(
+      argValue("max-output-tokens") ??
+        process.env.LLM_MAX_OUTPUT_TOKENS ??
+        3200,
+    ),
+    retries: Number(process.env.LLM_RETRIES ?? 5),
   };
+}
+
+function parseProvider(value: string | undefined, model: string | undefined): LlmProvider {
+  if (!value || value === "cloudflare") {
+    if (!value && model?.startsWith("gemini")) {
+      return "gemini";
+    }
+
+    return "cloudflare";
+  }
+
+  if (value === "gemini") {
+    return value;
+  }
+
+  throw new Error(
+    `Unsupported LLM_PROVIDER "${value}". Expected "cloudflare" or "gemini".`,
+  );
+}
+
+function defaultModelFor(provider: LlmProvider) {
+  return provider === "cloudflare"
+    ? DEFAULT_CLOUDFLARE_MODEL
+    : DEFAULT_GEMINI_MODEL;
+}
+
+function isLikelyProviderModel(provider: LlmProvider, model: string) {
+  if (provider === "cloudflare") {
+    return model.startsWith("@cf/");
+  }
+
+  return model.startsWith("gemini");
+}
+
+function resolveEnvModel(
+  provider: LlmProvider,
+  envModel: string | undefined,
+  hasExplicitProvider: boolean,
+) {
+  if (!envModel) {
+    return defaultModelFor(provider);
+  }
+
+  if (hasExplicitProvider && !isLikelyProviderModel(provider, envModel)) {
+    return defaultModelFor(provider);
+  }
+
+  return envModel;
+}
+
+function requireLlmConfig(config: SummaryConfig) {
+  if (config.dryRun) {
+    return;
+  }
+
+  if (config.provider === "cloudflare") {
+    if (!config.cloudflareAccountId) {
+      throw new Error("Missing CLOUDFLARE_ACCOUNT_ID (required for Cloudflare Workers AI)");
+    }
+
+    if (!config.cloudflareApiToken) {
+      throw new Error("Missing CLOUDFLARE_API_TOKEN (required for Cloudflare Workers AI)");
+    }
+
+    return;
+  }
+
+  if (!config.apiKey) {
+    throw new Error("Missing LLM_API_KEY (required for Gemini write mode)");
+  }
+}
+
+function modelLabel(config: SummaryConfig) {
+  return `${config.provider}:${config.model}`;
 }
 
 function requireEnv(name: string) {
@@ -218,9 +353,9 @@ function chunkText(text: string, maxChars: number) {
 
 async function callGemini(
   config: SummaryConfig,
-  messages: Array<{ role: string; content: string }>,
+  messages: LlmMessage[],
   maxTokens: number,
-  retries = 5,
+  retries = config.retries,
 ): Promise<string> {
   const systemMsg = messages.find((m) => m.role === "system");
   const userMsg = messages.find((m) => m.role === "user");
@@ -276,6 +411,169 @@ async function callGemini(
   throw new Error("Gemini API error: max retries exceeded");
 }
 
+type CloudflareAiEnvelope = {
+  success?: boolean;
+  result?: unknown;
+  errors?: Array<{ code?: number | string; message?: string }>;
+  messages?: unknown[];
+};
+
+function getRetryDelayMs(response: Response, attempt: number) {
+  const retryAfter = response.headers.get("Retry-After");
+  const retryAfterSeconds = retryAfter ? Number(retryAfter) : NaN;
+
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return retryAfterSeconds * 1000;
+  }
+
+  return (attempt + 1) * 15000;
+}
+
+function shouldRetryLlmStatus(status: number) {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function cloudflareErrorMessage(data: CloudflareAiEnvelope | null, fallback: string) {
+  const message = data?.errors
+    ?.map((error) =>
+      [error.code, error.message].filter(Boolean).join(": "),
+    )
+    .filter(Boolean)
+    .join("; ");
+
+  return message || fallback.slice(0, 300);
+}
+
+function cloudflareResultToText(result: unknown): string | null {
+  if (typeof result === "string") {
+    return result;
+  }
+
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const record = result as Record<string, unknown>;
+  const response = record.response;
+
+  if (typeof response === "string") {
+    return response;
+  }
+
+  if (response && typeof response === "object") {
+    return JSON.stringify(response);
+  }
+
+  const choices = record.choices;
+
+  if (Array.isArray(choices)) {
+    const firstChoice = choices[0] as Record<string, unknown> | undefined;
+    const message = firstChoice?.message as Record<string, unknown> | undefined;
+    const content = message?.content ?? firstChoice?.text;
+
+    if (typeof content === "string") {
+      return content;
+    }
+
+    if (content && typeof content === "object") {
+      return JSON.stringify(content);
+    }
+  }
+
+  return null;
+}
+
+async function callCloudflareWorkersAi(
+  config: SummaryConfig,
+  messages: LlmMessage[],
+  maxTokens: number,
+  retries = config.retries,
+): Promise<string> {
+  const url =
+    `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/ai/run/${config.model}`;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.cloudflareApiToken}`,
+      },
+      body: JSON.stringify({
+        messages,
+        temperature: 0.2,
+        max_tokens: maxTokens,
+        max_completion_tokens: maxTokens,
+        response_format: {
+          type: "json_schema",
+          json_schema: TRIAGE_SUMMARY_JSON_SCHEMA,
+        },
+      }),
+    });
+
+    const responseText = await response.text();
+    let data: CloudflareAiEnvelope | null = null;
+
+    try {
+      data = JSON.parse(responseText) as CloudflareAiEnvelope;
+    } catch {
+      data = null;
+    }
+
+    if (response.ok && data?.success !== false) {
+      const content = cloudflareResultToText(data?.result);
+
+      if (content) {
+        return content;
+      }
+
+      throw new Error(
+        `Cloudflare Workers AI returned no text content: ${responseText.slice(0, 300)}`,
+      );
+    }
+
+    if (shouldRetryLlmStatus(response.status) && attempt < retries) {
+      const delay = getRetryDelayMs(response, attempt);
+      console.error(
+        `  ${response.status} error, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      continue;
+    }
+
+    throw new Error(
+      `Cloudflare Workers AI error (${response.status}): ${cloudflareErrorMessage(data, responseText)}`,
+    );
+  }
+
+  throw new Error("Cloudflare Workers AI error: max retries exceeded");
+}
+
+async function callLlm(
+  config: SummaryConfig,
+  messages: LlmMessage[],
+  maxTokens: number,
+) {
+  if (config.provider === "cloudflare") {
+    return callCloudflareWorkersAi(config, messages, maxTokens);
+  }
+
+  return callGemini(config, messages, maxTokens);
+}
+
+function parseTriageSummary(raw: string, provider: LlmProvider) {
+  try {
+    return JSON.parse(raw) as TriageSummary;
+  } catch {
+    try {
+      return JSON.parse(extractJson(raw)) as TriageSummary;
+    } catch {
+      console.error(`  JSON parse failed, raw: ${raw.slice(0, 200)}`);
+      throw new Error(`${provider} did not return valid JSON`);
+    }
+  }
+}
+
 async function summarizeChunk(
   config: SummaryConfig,
   title: string,
@@ -290,21 +588,16 @@ async function summarizeChunk(
 
   const userContent = `Paper title: ${title}\n\n${prefix}${chunk}`;
 
-  const raw = await callGemini(
+  const raw = await callLlm(
     config,
     [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userContent },
     ],
-    1600,
+    config.maxOutputTokens,
   );
 
-  try {
-    return JSON.parse(raw) as TriageSummary;
-  } catch {
-    console.error(`  JSON parse failed, raw: ${raw.slice(0, 200)}`);
-    throw new Error("Gemini did not return valid JSON");
-  }
+  return parseTriageSummary(raw, config.provider);
 }
 
 async function generateSummary(
@@ -327,7 +620,7 @@ async function generateSummary(
     }
   }
 
-  const chunks = chunkText(content, MAX_CHARS);
+  const chunks = chunkText(content, config.maxInputChars);
 
   if (chunks.length === 1) {
     return summarizeChunk(config, paper.title, chunks[0], 0, 1);
@@ -371,17 +664,17 @@ async function mergeChunkSummaries(
   const userContent =
     `Paper title: ${title}\n\nCombine these partial summaries into a single final summary:\n\n${parts}`;
 
-  const raw = await callGemini(
+  const raw = await callLlm(
     config,
     [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userContent },
     ],
-    1600,
+    config.maxOutputTokens,
   );
 
   try {
-    return JSON.parse(extractJson(raw)) as TriageSummary;
+    return parseTriageSummary(raw, config.provider);
   } catch {
     return summaries[0];
   }
@@ -414,7 +707,7 @@ async function updatePaper(
     .from("papers")
     .update({
       triage_summary: summary,
-      triage_summary_model: config.model,
+      triage_summary_model: modelLabel(config),
       triage_summary_generated_at: new Date().toISOString(),
     })
     .eq("id", paper.id);
@@ -466,12 +759,10 @@ async function main() {
   loadLocalEnv();
   const config = parseArgs();
 
-  if (!config.dryRun && !config.apiKey) {
-    throw new Error("Missing LLM_API_KEY (required for write mode)");
-  }
+  requireLlmConfig(config);
 
   console.error(
-    `Generating summaries with ${config.model} (limit ${config.limit}, dry-run: ${config.dryRun})`,
+    `Generating summaries with ${modelLabel(config)} (limit ${config.limit}, dry-run: ${config.dryRun})`,
   );
 
   const supabase = createSupabaseClient();
@@ -497,6 +788,7 @@ async function main() {
   }
 
   const cursor = await getCursor(supabase);
+  const previousImportedCount = cursor?.imported_count ?? 0;
   let totalGenerated = 0;
   let totalFailed = 0;
 
@@ -541,7 +833,11 @@ async function main() {
     }
 
     const lastPaper = batch[batch.length - 1];
-    await updateCursor(supabase, totalGenerated, lastPaper.id);
+    await updateCursor(
+      supabase,
+      previousImportedCount + totalGenerated,
+      lastPaper.id,
+    );
   }
 
   const summary = {

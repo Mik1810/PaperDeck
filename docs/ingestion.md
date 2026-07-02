@@ -314,7 +314,7 @@ OA URLs stored in paper_external_ids (provider: unpaywall_oa)
 
 ## LLM Triage Summaries
 
-The summary worker generates structured triage summaries for papers using an OpenAI-compatible LLM:
+The summary worker generates structured triage summaries for papers using a configured LLM provider. Cloudflare Workers AI is the default provider; Gemini remains available as a fallback:
 
 ```bash
 npm run generate:summaries
@@ -323,23 +323,37 @@ npm run generate:summaries
 It:
 
 - finds papers with an abstract but no existing `triage_summary`;
-- sends the title and abstract to an LLM with a structured output prompt;
+- fetches full-paper text from arXiv through Jina AI Reader when possible, falling back to the abstract;
+- sends the title and paper text to an LLM with a structured output prompt;
 - generates four sections: `why_it_matters`, `main_contribution`, `prerequisites`, `read_if_you_care_about`;
 - stores the result as JSONB in `papers.triage_summary` with model and generation timestamp metadata;
 - the paper detail page reads pre-stored summaries — no LLM call on page load;
 - tracks progress in `ingestion_cursors` with key `triage_summary_enrich`.
 
-Uses the OpenAI chat completions API format, compatible with OpenAI, OpenRouter, Groq, DeepSeek, and local models via Ollama/llama.cpp.
+Cloudflare Workers AI uses the REST API with `messages` and JSON mode. The default model is `@cf/zai-org/glm-4.7-flash`.
 
 Configuration:
 
 ```env
-LLM_API_KEY=sk_replace_me
-LLM_MODEL=gpt-4o-mini
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_BATCH_SIZE=5
-LLM_LIMIT=50
-LLM_REQUEST_DELAY_MS=2000
+LLM_PROVIDER=cloudflare
+LLM_MODEL=@cf/zai-org/glm-4.7-flash
+CLOUDFLARE_ACCOUNT_ID=replace_me
+CLOUDFLARE_API_TOKEN=replace_me
+LLM_BATCH_SIZE=1
+LLM_LIMIT=3
+LLM_REQUEST_DELAY_MS=10000
+LLM_RETRIES=5
+LLM_MAX_INPUT_CHARS=500000
+LLM_MAX_OUTPUT_TOKENS=3200
+JINA_API_KEY=
+```
+
+For Gemini fallback:
+
+```env
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-flash-latest
+LLM_API_KEY=replace_me
 ```
 
 For a non-writing dry-run:
@@ -349,6 +363,28 @@ npm run generate:summaries -- --dry-run --limit=5
 ```
 
 Dry-runs report the number of papers needing summaries without calling the LLM API.
+
+For a small Cloudflare write test:
+
+```bash
+npm run generate:summaries -- --provider=cloudflare --limit=2 --batch-size=1
+```
+
+Required GitHub repository secrets for the scheduled summary workflow:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+```
+
+Optional secrets:
+
+```text
+JINA_API_KEY
+LLM_API_KEY        # only for Gemini fallback
+```
 
 ## Next Ingestion Work
 
