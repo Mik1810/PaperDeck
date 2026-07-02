@@ -8,7 +8,7 @@ import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 type AppShellProps = {
   children: ReactNode;
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   action?: ReactNode;
   readLaterCount?: number;
 };
