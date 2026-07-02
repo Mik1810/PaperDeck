@@ -645,7 +645,10 @@ async function callGitHubModels(
           max_tokens: maxTokens,
           response_format: {
             type: "json_schema",
-            json_schema: TRIAGE_SUMMARY_JSON_SCHEMA,
+            json_schema: {
+              name: "triage_summary",
+              schema: TRIAGE_SUMMARY_JSON_SCHEMA,
+            },
           },
         }),
       },
