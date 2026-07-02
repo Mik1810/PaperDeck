@@ -9,6 +9,11 @@ import {
   saveSelectedTopics,
   toggleReadLater,
   toggleFavorite,
+  createPlaylist,
+  renamePlaylist,
+  deletePlaylist,
+  addToPlaylist,
+  removeFromPlaylist,
 } from "@/lib/repositories/user-data";
 import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
@@ -107,4 +112,63 @@ export async function verifyClerkRlsAction() {
   }
 
   return { count: count ?? 0 };
+}
+
+export async function createPlaylistAction(formData: FormData) {
+  const ownerId = await requireOwnerId();
+  const name = formData.get("name");
+
+  if (typeof name !== "string" || !name.trim()) {
+    throw new Error("Playlist name is required");
+  }
+
+  await createPlaylist(ownerId, name.trim());
+  revalidatePath("/library");
+}
+
+export async function renamePlaylistAction(formData: FormData) {
+  const ownerId = await requireOwnerId();
+  const playlistId = requirePaperId(formData);
+  const name = formData.get("name");
+
+  if (typeof name !== "string" || !name.trim()) {
+    throw new Error("Playlist name is required");
+  }
+
+  await renamePlaylist(ownerId, playlistId, name.trim());
+  revalidatePath("/library");
+}
+
+export async function deletePlaylistAction(formData: FormData) {
+  const ownerId = await requireOwnerId();
+  const playlistId = requirePaperId(formData);
+
+  await deletePlaylist(ownerId, playlistId);
+  revalidatePath("/library");
+}
+
+export async function addToPlaylistAction(formData: FormData) {
+  await requireOwnerId();
+  const playlistId = formData.get("playlistId");
+  const paperId = formData.get("paperId");
+
+  if (typeof playlistId !== "string" || typeof paperId !== "string") {
+    throw new Error("Missing playlistId or paperId");
+  }
+
+  await addToPlaylist(playlistId, paperId);
+  revalidatePath("/library");
+}
+
+export async function removeFromPlaylistAction(formData: FormData) {
+  await requireOwnerId();
+  const playlistId = formData.get("playlistId");
+  const paperId = formData.get("paperId");
+
+  if (typeof playlistId !== "string" || typeof paperId !== "string") {
+    throw new Error("Missing playlistId or paperId");
+  }
+
+  await removeFromPlaylist(playlistId, paperId);
+  revalidatePath("/library");
 }

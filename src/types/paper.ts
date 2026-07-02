@@ -45,6 +45,7 @@ export type Playlist = {
   id: string;
   name: string;
   paperIds: string[];
+  isDefault?: boolean;
 };
 
 export type InteractionType =

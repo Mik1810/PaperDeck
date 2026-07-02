@@ -326,14 +326,14 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
 
 ## P2 - Product Features
 
-- [ ] Add custom private playlists.
-  - MVP currently uses default `Read later`.
-  - Needed behavior:
-    - create playlist;
-    - rename playlist;
-    - delete playlist;
-    - add/remove paper;
-    - show playlist detail.
+- [x] Add custom private playlists.
+  - Done 2026-07-02: added full playlist CRUD with custom names.
+  - Repository: createPlaylist, renamePlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist.
+  - Server actions: create/rename/delete/add/remove via form actions with revalidatePath.
+  - UI: PlaylistSidebar client component with inline create form, rename inline edit, delete button with hover visibility.
+  - Library page now supports `?playlist=` searchParam for playlist selection.
+  - "Read later" default playlist is protected from rename/deletion (is_default flag).
+  - Playlist type extended with isDefault field.
 
 - [ ] Add manual playlist ordering.
   - Persist `playlist_items.position`.

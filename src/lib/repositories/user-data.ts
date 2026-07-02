@@ -341,7 +341,7 @@ export async function getLibraryPageData(ownerId: string) {
   ] = await Promise.all([
     supabase
       .from("playlists")
-      .select("id, name, playlist_items(paper_id)")
+      .select("id, name, is_default, playlist_items(paper_id)")
       .eq("owner_id", ownerId)
       .order("created_at", { ascending: true }),
     supabase.from("favorites").select("paper_id").eq("owner_id", ownerId),
@@ -378,6 +378,7 @@ export async function getLibraryPageData(ownerId: string) {
     paperIds: ((playlist.playlist_items ?? []) as Array<{ paper_id: string }>).map(
       (item) => item.paper_id,
     ),
+    isDefault: (playlist.is_default as boolean) ?? false,
   }));
 
   return {
@@ -559,4 +560,64 @@ export async function toggleReadLater(ownerId: string, paperId: string) {
 
   assertNoError(error, "Save to Read later");
   await recordPaperInteraction(ownerId, paperId, "save_to_playlist");
+}
+
+export async function createPlaylist(ownerId: string, name: string) {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("playlists")
+    .insert({ owner_id: ownerId, name, is_default: false })
+    .select("id, name")
+    .single();
+
+  assertNoError(error, "Create playlist");
+  return data as { id: string; name: string };
+}
+
+export async function renamePlaylist(
+  ownerId: string,
+  playlistId: string,
+  name: string,
+) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("playlists")
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq("id", playlistId)
+    .eq("owner_id", ownerId)
+    .neq("is_default", true);
+
+  assertNoError(error, "Rename playlist");
+}
+
+export async function deletePlaylist(ownerId: string, playlistId: string) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("playlists")
+    .delete()
+    .eq("id", playlistId)
+    .eq("owner_id", ownerId)
+    .neq("is_default", true);
+
+  assertNoError(error, "Delete playlist");
+}
+
+export async function addToPlaylist(playlistId: string, paperId: string) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("playlist_items")
+    .upsert({ playlist_id: playlistId, paper_id: paperId, position: 0 }, { onConflict: "playlist_id,paper_id" });
+
+  assertNoError(error, "Add to playlist");
+}
+
+export async function removeFromPlaylist(playlistId: string, paperId: string) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("playlist_items")
+    .delete()
+    .eq("playlist_id", playlistId)
+    .eq("paper_id", paperId);
+
+  assertNoError(error, "Remove from playlist");
 }
