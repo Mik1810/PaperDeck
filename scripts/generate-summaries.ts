@@ -53,7 +53,7 @@ const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. G
 
 Write in English. Output ONLY the JSON object, no other text.`;
 
-const MAX_CHARS = 15000;
+const MAX_CHARS = 500000;
 const JINA_BASE = "https://r.jina.ai";
 
 function loadLocalEnv() {
@@ -93,8 +93,8 @@ function parseArgs(): SummaryConfig {
   };
 
   return {
-    model: process.env.LLM_MODEL ?? "nvidia/nemotron-3-nano-30b-a3b:free",
-    baseUrl: process.env.LLM_BASE_URL ?? "https://openrouter.ai/api/v1",
+    model: process.env.LLM_MODEL ?? "gemini-2.0-flash",
+    baseUrl: process.env.LLM_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai",
     apiKey: process.env.LLM_API_KEY ?? "",
     jinaApiKey: process.env.JINA_API_KEY ?? null,
     batchSize: Number(
@@ -277,6 +277,7 @@ async function summarizeChunk(
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userContent },
     ],
+    response_format: { type: "json_object" },
     temperature: 0.3,
     max_tokens: 1600,
   });
@@ -373,6 +374,7 @@ async function mergeChunkSummaries(
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userContent },
     ],
+    response_format: { type: "json_object" },
     temperature: 0.3,
     max_tokens: 1600,
   });
