@@ -55,7 +55,7 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
         </Link>
       }
     >
-      <article className="mx-auto max-w-3xl rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+      <article className="mx-auto w-full max-w-4xl rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
         <div className="flex flex-wrap gap-2">
           {paper.topics.map((topic) => (
             <span
@@ -89,6 +89,15 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
           sourcePath={`/papers/${paper.id}`}
         />
 
+        <section className="mt-8 border-t border-slate-200 pt-6">
+          <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
+            Abstract
+          </h2>
+          <div className="mt-4 text-sm leading-7 italic text-slate-600">
+            <MathContent text={paper.abstract} />
+          </div>
+        </section>
+
         {paper.triageSummary ? (
           <section className="mt-8 border-t border-slate-200 pt-6">
             <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
@@ -105,15 +114,6 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
             </div>
           </section>
         ) : null}
-
-        <section className="mt-8 border-t border-slate-200 pt-6">
-          <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
-            Abstract
-          </h2>
-          <div className="mt-4 text-base leading-8 text-slate-700">
-            <MathContent text={paper.abstract} />
-          </div>
-        </section>
       </article>
     </AppShell>
   );

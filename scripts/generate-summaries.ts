@@ -44,16 +44,14 @@ type TriageSummary = {
 };
 
 const CURSOR_KEY = "triage_summary_enrich";
-const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given the full text of a paper, produce a structured JSON summary with exactly these four fields:
+const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given the full text of a paper, produce a structured JSON summary with exactly these four fields. Each field should be 2-3 sentences citing specific findings, methods, datasets, metrics, or results from the paper. Avoid vague or generic statements.
 
-- "why_it_matters": One sentence explaining the real-world or research significance.
-- "main_contribution": One sentence describing what the paper contributes or proves.
-- "prerequisites": One sentence listing the concepts or background a reader should have.
-- "read_if_you_care_about": One sentence naming who would find this paper most relevant.
+- "why_it_matters": What specific problem does this solve? Mention the concrete gap, limitation, or real-world scenario.
+- "main_contribution": What exact method, algorithm, framework, or dataset does the paper introduce? Name it and say how it works.
+- "prerequisites": What exact background should a reader have? Name specific concepts, prior work, or tools (e.g., "LTL model checking", "Graph Neural Networks", "Transformer architectures").
+- "read_if_you_care_about": Who specifically would find this relevant? Name subfields, systems, or application domains.
 
-Be concise. Each field must be a single sentence. Do not repeat the title. Write in English.
-
-Your entire response must be exactly a JSON object with these four keys. Do not include any other text, explanations, or markdown formatting. Output ONLY the JSON object.`;
+Write in English. Output ONLY the JSON object, no other text.`;
 
 const MAX_CHARS = 80000;
 const JINA_BASE = "https://r.jina.ai";
@@ -231,7 +229,7 @@ async function summarizeChunk(
         { role: "user", content: userContent },
       ],
       temperature: 0.3,
-      max_tokens: 800,
+      max_tokens: 600,
     }),
   });
 
@@ -344,7 +342,7 @@ async function mergeChunkSummaries(
         { role: "user", content: userContent },
       ],
       temperature: 0.3,
-      max_tokens: 800,
+      max_tokens: 600,
     }),
   });
 
