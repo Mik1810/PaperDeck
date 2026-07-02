@@ -55,3 +55,6 @@ har/
 
 #Python cache
 __pycache__/
+
+# Log files
+*.log
