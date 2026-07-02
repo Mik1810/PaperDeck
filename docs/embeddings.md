@@ -395,6 +395,20 @@ without materially increasing storage, runtime complexity, or GitHub Actions dur
 
 Benchmarking is offline-only. It should not introduce live model inference on Vercel or a paid embedding API.
 
+### Benchmark Results (2026-07-02)
+
+Run locally with `uv run python scripts/benchmark_embeddings.py` on 64 topics (31 with arXiv category) and 447 papers.
+
+| Model | Dim | Enc Topics | Enc Papers | Rec@20 | Med@20 | Delta vs BGE |
+|---|---|---|---|---|---|---|
+| **all-MiniLM-L6-v2** | 384 | 0.0s | **0.9s** | **0.206** | 0.000 | **+17.4%** |
+| BGE-small-v1.5 | 384 | 0.5s | 3.1s | 0.176 | 0.050 | baseline |
+| E5-small-v2 | 384 | 0.0s | 2.9s | 0.165 | 0.050 | -6.4% |
+
+**Decision: switch to MiniLM.** It exceeds the 10% improvement threshold on Rec@20 with better speed (3x faster paper encoding).
+
+Rec@20 measures the fraction of top-20 retrieved papers that share the same arXiv category as the query topic, using category overlap as a relevance proxy without manual labels.
+
 ## GitHub Actions Workflow
 
 Implemented workflow:
