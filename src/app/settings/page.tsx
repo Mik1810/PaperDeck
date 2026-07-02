@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { requireOwnerId } from "@/lib/auth/session";
 import { getSettingsPageData } from "@/lib/repositories/user-data";
+import { SettingsInterestEditor } from "@/components/settings-interest-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -41,25 +42,7 @@ export default async function SettingsPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
-          <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
-            Interests
-          </h2>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {interests.map((interest) => (
-              <span
-                key={interest.id}
-                className={`rounded-lg px-3 py-2 text-sm font-bold ${
-                  interest.selected
-                    ? "bg-teal-50 text-teal-800"
-                    : "bg-slate-100 text-slate-500"
-                }`}
-              >
-                {interest.label}
-              </span>
-            ))}
-          </div>
-        </section>
+        <SettingsInterestEditor interests={interests} />
       </div>
     </AppShell>
   );

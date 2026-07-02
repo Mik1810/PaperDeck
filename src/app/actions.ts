@@ -66,6 +66,17 @@ export async function saveOnboardingInterestsAction(formData: FormData) {
   redirect("/feed");
 }
 
+export async function saveSettingsInterestsAction(topicIds: string[]) {
+  const ownerId = await requireOwnerId();
+
+  await saveSelectedTopics(ownerId, topicIds);
+  await refreshUserProfileEmbedding(ownerId);
+
+  revalidatePath("/feed");
+  revalidatePath("/settings");
+  revalidatePath("/library");
+}
+
 export async function dismissPaperAction(formData: FormData) {
   const ownerId = await requireOwnerId();
   await recordPaperInteraction(ownerId, requirePaperId(formData), "dismiss");
