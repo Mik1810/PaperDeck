@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOwnerId, requireUserContext } from "@/lib/auth/session";
 import {
-  ensureUserProfileForOwner,
   ensureUserProfile,
   recordPaperInteraction,
   saveSelectedTopics,
@@ -60,7 +59,6 @@ export async function saveOnboardingInterestsAction(formData: FormData) {
 
 export async function dismissPaperAction(formData: FormData) {
   const ownerId = await requireOwnerId();
-  await ensureUserProfileForOwner(ownerId);
   await recordPaperInteraction(ownerId, requirePaperId(formData), "dismiss");
 
   revalidatePath(sourcePathFrom(formData, "/feed"));
@@ -68,7 +66,6 @@ export async function dismissPaperAction(formData: FormData) {
 
 export async function openPaperAction(formData: FormData) {
   const ownerId = await requireOwnerId();
-  await ensureUserProfileForOwner(ownerId);
   const paperId = requirePaperId(formData);
 
   await recordPaperInteraction(ownerId, paperId, "open_detail");
@@ -79,7 +76,6 @@ export async function openPaperAction(formData: FormData) {
 
 export async function toggleFavoriteAction(formData: FormData) {
   const ownerId = await requireOwnerId();
-  await ensureUserProfileForOwner(ownerId);
   const paperId = requirePaperId(formData);
 
   await toggleFavorite(ownerId, paperId);
@@ -89,32 +85,9 @@ export async function toggleFavoriteAction(formData: FormData) {
 
 export async function toggleReadLaterAction(formData: FormData) {
   const ownerId = await requireOwnerId();
-  await ensureUserProfileForOwner(ownerId);
   const paperId = requirePaperId(formData);
 
   await toggleReadLater(ownerId, paperId);
 
   revalidatePath(sourcePathFrom(formData, "/feed"));
-}
-
-export async function markAlreadyReadAction(formData: FormData) {
-  const ownerId = await requireOwnerId();
-  await ensureUserProfileForOwner(ownerId);
-  const paperId = requirePaperId(formData);
-
-  await recordPaperInteraction(ownerId, paperId, "already_read", "detail");
-
-  revalidatePath("/feed");
-  redirect("/feed");
-}
-
-export async function notInterestedAction(formData: FormData) {
-  const ownerId = await requireOwnerId();
-  await ensureUserProfileForOwner(ownerId);
-  const paperId = requirePaperId(formData);
-
-  await recordPaperInteraction(ownerId, paperId, "not_interested", "detail");
-
-  revalidatePath("/feed");
-  redirect("/feed");
 }

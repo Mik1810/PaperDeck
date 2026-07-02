@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-02
 
-Sources: `sessions/SESSION2.md`, `docs/ingestion.md`, `docs/embeddings.md`, `docs/database.md`, `ROADMAP.md`, GitHub Actions runs inspected with `gh`, and the 2026-07-02 positioning discussion about R Discovery.
+Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`, `docs/ingestion.md`, `docs/embeddings.md`, `docs/database.md`, `ROADMAP.md`, GitHub Actions runs inspected with `gh`, and the 2026-07-02 positioning discussion about R Discovery.
 
 ## P0 - Product Positioning After R Discovery Check
 
@@ -54,7 +54,7 @@ Sources: `sessions/SESSION2.md`, `docs/ingestion.md`, `docs/embeddings.md`, `doc
   - Success condition: feed/detail/library reads no longer write seed data during user requests.
   - Done 2026-07-02: read paths no longer call `ensureSeedCatalog()`; explicit seed command added as `npm run seed:catalog`.
 
-- [ ] Measure mobile interaction latency before and after fixes.
+- [x] Measure mobile interaction latency before and after fixes.
   - Target interactions:
     - dismiss;
     - open detail;
@@ -62,7 +62,18 @@ Sources: `sessions/SESSION2.md`, `docs/ingestion.md`, `docs/embeddings.md`, `doc
     - save/read-later;
     - back to feed.
   - Success condition: record p50/p95 timings on mobile Chrome or responsive Playwright before and after optimization.
-  - Progress 2026-07-02: baseline HAR for favorite click showed `POST /feed` taking 11.5s; post-fix local Clerk-development logs show favorite/read-later `POST /feed` completing around 0.6-0.8s, but p50/p95 browser measurements are still pending.
+  - Progress 2026-07-02: baseline HAR for favorite click showed `POST /feed` taking 11.5s; post-fix local Clerk-development logs showed favorite/read-later `POST /feed` completing around 0.6-0.8s before the final production retest.
+  - Done 2026-07-02: production HAR after deploying the latency fixes and running Vercel Functions in Paris (`cdg1`) shows `POST /feed` at 539ms, 376ms, and 954ms. This is a small interaction sample rather than a full benchmark suite, but it confirms the feed regression is resolved for the MVP.
+
+- [x] Pin Vercel Functions near the Supabase database.
+  - Supabase is hosted in Paris, so Vercel Functions should run in Paris (`cdg1`) rather than the previous default Washington, D.C. (`iad1`) path.
+  - Success condition: production response headers show `x-vercel-id` with `cdg1`.
+  - Done 2026-07-02: production HAR confirms `cdg1`; `vercel.json` now pins `"regions": ["cdg1"]` so the setting is reproducible from the repo.
+
+- [x] Disable automatic prefetch on authenticated navigation links.
+  - Production HAR before this change showed extra RSC requests to `/settings`, `/library`, `/onboarding`, and `/feed` around feed actions.
+  - Success condition: feed action HAR no longer shows broad navigation prefetch traffic around each tap.
+  - Done 2026-07-02: `AppShell` and `BottomNav` links use `prefetch={false}`; the latest production HAR no longer shows the previous repeated navigation RSC burst.
 
 - [x] Add optimistic UI for deck actions.
   - Actions:
@@ -88,7 +99,18 @@ Sources: `sessions/SESSION2.md`, `docs/ingestion.md`, `docs/embeddings.md`, `doc
 - [ ] Collapse feed Supabase round trips.
   - Current feed path loads topics, selected interests, read-later playlist, favorites, playlist items, interactions, semantic candidates, and paper rows in multiple calls.
   - Success condition: reduce query count or move some data to precomputed/cached structures without compromising correctness.
-  - Progress 2026-07-02: removed runtime profile upsert, runtime seed writes, profile embedding refresh, and separate read-later playlist creation from read paths. Full query-count collapse is still open.
+  - Progress 2026-07-02: removed runtime profile upsert, runtime seed writes, profile embedding refresh, and separate read-later playlist creation from read paths. Latest production feed actions are under 1s, so this is no longer the immediate blocker, but full query-count collapse is still open.
+
+- [x] Optimize paper detail actions.
+  - Latest production HAR shows a detail-page `POST /papers/[paperId]` action taking 1454ms, with most time in server wait.
+  - Success condition: detail actions such as `Already read` and `Not interested` complete closer to the feed action range or use a lighter mutation path.
+  - Done 2026-07-02: `Already read` and `Not interested` now post to `/papers/[paperId]/feedback`, which records the interaction and returns a plain 303 redirect instead of a Server Action/RSC redirect that waits on `/feed` rendering.
+  - Detail favorite/read-later buttons now use optimistic client state, detail page state reads no longer load the full 500-row interaction set, and common mutations no longer upsert the profile on every click unless a profile foreign-key miss requires a retry.
+  - Verification 2026-07-02: `npm run lint` and `npm run build` passed. Focused local repository timing for the detail feedback insert path was 600ms cold, then 148ms and 80ms warm. A production HAR retest after deployment should confirm the new `/papers/[paperId]/feedback` POST separately from the following `/feed` navigation.
+
+- [ ] Consider route-handler mutations for deck actions if latency regresses.
+  - Current Server Action/RSC path is acceptable after the latest production HAR, but it still returns an RSC payload for simple favorite/read-later/dismiss mutations.
+  - Success condition: only pursue this if production feed action latency climbs above the current sub-1s range or the UI needs even faster reconciliation.
 
 - [x] Add lightweight server timing logs for feed.
   - Log phases:

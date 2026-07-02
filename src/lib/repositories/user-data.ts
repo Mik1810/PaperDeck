@@ -20,10 +20,39 @@ type UserPaperState = {
   interactions: RankingInteraction[];
 };
 
-function assertNoError(error: { message: string } | null, context: string) {
+type RepositoryError = {
+  code?: string;
+  details?: string | null;
+  message: string;
+};
+
+function assertNoError(error: RepositoryError | null, context: string) {
   if (error) {
     throw new Error(`${context}: ${error.message}`);
   }
+}
+
+function isMissingProfileError(error: RepositoryError | null) {
+  if (!error || error.code !== "23503") {
+    return false;
+  }
+
+  return `${error.message} ${error.details ?? ""}`.includes("profiles");
+}
+
+async function mutateWithProfileRetry(
+  ownerId: string,
+  context: string,
+  mutate: () => PromiseLike<{ error: RepositoryError | null }>,
+) {
+  let { error } = await mutate();
+
+  if (isMissingProfileError(error)) {
+    await ensureUserProfileForOwner(ownerId);
+    ({ error } = await mutate());
+  }
+
+  assertNoError(error, context);
 }
 
 async function measureAsync<T>(
@@ -104,16 +133,24 @@ export async function ensureReadLaterPlaylist(ownerId: string) {
     return existingId;
   }
 
-  const { data: created, error: createError } = await supabase
-    .from("playlists")
-    .insert({
-      owner_id: ownerId,
-      name: "Read later",
-      description: "Default private queue for papers to revisit.",
-      is_default: true,
-    })
-    .select("id")
-    .single();
+  const createPlaylist = () =>
+    supabase
+      .from("playlists")
+      .insert({
+        owner_id: ownerId,
+        name: "Read later",
+        description: "Default private queue for papers to revisit.",
+        is_default: true,
+      })
+      .select("id")
+      .single();
+
+  let { data: created, error: createError } = await createPlaylist();
+
+  if (isMissingProfileError(createError)) {
+    await ensureUserProfileForOwner(ownerId);
+    ({ data: created, error: createError } = await createPlaylist());
+  }
 
   assertNoError(createError, "Create Read later playlist");
   if (!created) {
@@ -354,14 +391,73 @@ export async function getSettingsPageData(ownerId: string) {
 export async function getPaperDetailData(ownerId: string, paperId: string) {
   const [papers, state] = await Promise.all([
     getPapersByIds([paperId]),
-    getUserPaperState(ownerId),
+    getPaperDetailState(ownerId, paperId),
   ]);
 
   return {
     paper: papers[0] ?? null,
-    isFavorite: state.favoriteIds.has(paperId),
-    isSaved: state.readLaterIds.has(paperId),
-    readLaterCount: state.readLaterIds.size,
+    isFavorite: state.isFavorite,
+    isSaved: state.isSaved,
+    readLaterCount: state.readLaterCount,
+  };
+}
+
+async function getPaperDetailState(ownerId: string, paperId: string) {
+  const supabase = createServiceRoleClient();
+  const [
+    { data: favorite, error: favoriteError },
+    { data: readLaterPlaylist, error: readLaterPlaylistError },
+  ] = await Promise.all([
+    supabase
+      .from("favorites")
+      .select("paper_id")
+      .eq("owner_id", ownerId)
+      .eq("paper_id", paperId)
+      .maybeSingle(),
+    supabase
+      .from("playlists")
+      .select("id")
+      .eq("owner_id", ownerId)
+      .eq("name", "Read later")
+      .maybeSingle(),
+  ]);
+
+  assertNoError(favoriteError, "Load detail favorite state");
+  assertNoError(readLaterPlaylistError, "Load detail Read later playlist");
+
+  const playlistId = readLaterPlaylist?.id as string | undefined;
+
+  if (!playlistId) {
+    return {
+      isFavorite: Boolean(favorite),
+      isSaved: false,
+      readLaterCount: 0,
+    };
+  }
+
+  const [
+    { data: readLaterItem, error: readLaterItemError },
+    { count: readLaterCount, error: readLaterCountError },
+  ] = await Promise.all([
+    supabase
+      .from("playlist_items")
+      .select("paper_id")
+      .eq("playlist_id", playlistId)
+      .eq("paper_id", paperId)
+      .maybeSingle(),
+    supabase
+      .from("playlist_items")
+      .select("paper_id", { count: "exact", head: true })
+      .eq("playlist_id", playlistId),
+  ]);
+
+  assertNoError(readLaterItemError, "Load detail Read later state");
+  assertNoError(readLaterCountError, "Count detail Read later items");
+
+  return {
+    isFavorite: Boolean(favorite),
+    isSaved: Boolean(readLaterItem),
+    readLaterCount: readLaterCount ?? 0,
   };
 }
 
@@ -372,14 +468,14 @@ export async function recordPaperInteraction(
   context = "feed",
 ) {
   const supabase = createServiceRoleClient();
-  const { error } = await supabase.from("user_paper_interactions").insert({
-    owner_id: ownerId,
-    paper_id: paperId,
-    action,
-    context,
-  });
-
-  assertNoError(error, `Record ${action} interaction`);
+  await mutateWithProfileRetry(ownerId, `Record ${action} interaction`, () =>
+    supabase.from("user_paper_interactions").insert({
+      owner_id: ownerId,
+      paper_id: paperId,
+      action,
+      context,
+    }),
+  );
 }
 
 export async function toggleFavorite(ownerId: string, paperId: string) {
@@ -404,12 +500,12 @@ export async function toggleFavorite(ownerId: string, paperId: string) {
     return;
   }
 
-  const { error } = await supabase.from("favorites").insert({
-    owner_id: ownerId,
-    paper_id: paperId,
-  });
-
-  assertNoError(error, "Add favorite");
+  await mutateWithProfileRetry(ownerId, "Add favorite", () =>
+    supabase.from("favorites").insert({
+      owner_id: ownerId,
+      paper_id: paperId,
+    }),
+  );
   await recordPaperInteraction(ownerId, paperId, "favorite");
 }
 

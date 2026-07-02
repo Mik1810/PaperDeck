@@ -194,6 +194,51 @@ steady-state GET /feed: commonly about 0.3-0.5s
 
 These are server log observations, not a formal p50/p95 browser measurement.
 
+## Production Latency Retests
+
+After the local fixes, Vercel Functions were moved to Paris (`cdg1`) to match the Paris Supabase database.
+
+Initial production HAR after the region change still showed slow feed actions:
+
+```text
+HAR: har/paperdeck.michaelpiccirilli.it.har
+POST /feed: 2241ms, 2126ms, 2067ms, 2697ms
+Median: about 2241ms
+Header: x-vercel-id included cdg1
+Issue: forms were still missing sourcePath=/feed, so production was not yet serving the updated latency code.
+```
+
+Two small follow-up changes were made:
+
+- added `vercel.json` with `regions: ["cdg1"]` so the Paris function region is tracked in the repository;
+- disabled automatic Next.js prefetch on authenticated navigation links in `AppShell` and `BottomNav`, because the HAR showed repeated RSC prefetches for `/settings`, `/library`, `/onboarding`, and `/feed` around deck actions.
+
+Verification after those changes:
+
+```text
+npm run lint -> passed
+```
+
+Latest production HAR after deploying the updated code:
+
+```text
+HAR: har/paperdeck.michaelpiccirilli.it.har
+POST /feed: 539ms, 376ms, 954ms
+Median: 539ms
+Max: 954ms
+sourcePath=/feed: present in all POST /feed forms
+Header: x-vercel-id includes cdg1
+Page load: onContentLoad about 1442ms, onLoad about 1856ms
+```
+
+Interpretation:
+
+- The original production favorite-click regression went from 11.5s to sub-1s feed actions.
+- The previous 2.1-2.7s production result was caused by testing an older deployment that lacked the `sourcePath` revalidation change.
+- Clerk is not the current feed bottleneck; the latest Clerk session touch in the HAR was about 306ms.
+- Navigation prefetch noise is much lower after disabling prefetch on authenticated nav links.
+- One remaining slow interaction in the latest HAR is a detail-page `POST /papers/[paperId]` action at 1454ms, likely from `Already read` or `Not interested`.
+
 ## Current Status
 
 Completed:
@@ -207,31 +252,36 @@ Completed:
 - Revalidation blast radius is reduced.
 - Feed timing logs are available.
 - Local Clerk production-key error is avoidable with either dev keys or local-only auth bypass.
+- Production Vercel Functions run in Paris (`cdg1`) near the Paris Supabase database.
+- Feed deck production actions are now under 1s in the latest HAR sample.
 
 Still open:
 
-- User should retest Chrome favorite/read-later/dismiss latency with Clerk development keys.
-- Record post-fix p50/p95 timings for target interactions.
+- If needed, run a larger formal p50/p95 benchmark for the deck interactions.
 - Move user profile embedding refresh to refresh-on-write or a background worker.
-- Further collapse Supabase query count on `/feed`.
-- Re-test production after deployment because localhost without Clerk bypass is the only production-like local auth mode.
+- Further collapse Supabase query count on `/feed`, though it is no longer the immediate latency blocker.
+- Optimize detail-page actions; latest production HAR shows `POST /papers/[paperId]` at 1454ms.
+- Consider route-handler/background mutations for simple deck actions only if feed action latency regresses above the current sub-1s range.
 
-## Next Suggested Step
+## Prompt For Next Session
 
-Run local latency tests with Clerk development keys:
+Use this prompt to continue in a fresh session:
 
-```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
-PAPERDECK_DEV_AUTH=false
+```text
+Continue PaperDeck from sessions/SESSION3.md and TASKS.md.
+
+Current state:
+- The original production feed favorite latency was 11.5s.
+- After removing runtime seed writes/profile embedding refresh, adding optimistic deck UI, reducing revalidatePath scope with sourcePath, pinning Vercel Functions to Paris cdg1, and disabling authenticated nav prefetch, the latest production HAR shows POST /feed at 539ms, 376ms, and 954ms.
+- Feed latency is acceptable for the MVP.
+- The latest remaining performance issue is detail-page actions: a production HAR showed POST /papers/[paperId] at 1454ms.
+
+Next task:
+1. Inspect detail-page actions (`Already read`, `Not interested`, favorite, read-later) and their server path.
+2. Reduce detail action latency without broad refactors.
+3. Prefer existing patterns unless a route-handler mutation is clearly simpler and safer.
+4. Run lint/build or focused verification.
+5. Update TASKS.md and the new session notes with measured results.
+
+Be careful with the dirty worktree; do not revert unrelated changes.
 ```
-
-Then capture a new HAR for:
-
-- favorite;
-- read-later;
-- dismiss;
-- open detail;
-- back to feed.
-
-Compare the new `POST /feed` timing against the original 11.5s HAR and use the `feed_timing` server logs to identify remaining backend bottlenecks.

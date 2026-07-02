@@ -1,20 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  Bookmark,
-  CheckCircle2,
-  ExternalLink,
-  Heart,
-  X,
-} from "lucide-react";
-import {
-  markAlreadyReadAction,
-  notInterestedAction,
-  toggleFavoriteAction,
-  toggleReadLaterAction,
-} from "@/app/actions";
+import { ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { PaperDetailActions } from "@/components/paper-detail-actions";
 import { requireOwnerId } from "@/lib/auth/session";
 import { getPaperDetailData } from "@/lib/repositories/user-data";
 
@@ -78,86 +66,14 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
           </p>
         ) : null}
 
-        <div className="mt-7 flex flex-wrap gap-2">
-          <form action={toggleFavoriteAction}>
-            <input name="paperId" type="hidden" value={paper.id} />
-            <input
-              name="sourcePath"
-              type="hidden"
-              value={`/papers/${paper.id}`}
-            />
-            <button
-              className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
-                isFavorite
-                  ? "border-pink-300 bg-pink-50 text-pink-700"
-                  : "border-pink-200 bg-white text-pink-700"
-              }`}
-            >
-              <Heart
-                aria-hidden="true"
-                fill={isFavorite ? "currentColor" : "none"}
-                size={18}
-                strokeWidth={2.5}
-              />
-              {isFavorite ? "Favorited" : "Favorite"}
-            </button>
-          </form>
-          <form action={toggleReadLaterAction}>
-            <input name="paperId" type="hidden" value={paper.id} />
-            <input
-              name="sourcePath"
-              type="hidden"
-              value={`/papers/${paper.id}`}
-            />
-            <button
-              className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
-                isSaved
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                  : "border-emerald-200 bg-white text-emerald-700"
-              }`}
-            >
-              <Bookmark
-                aria-hidden="true"
-                fill={isSaved ? "currentColor" : "none"}
-                size={18}
-                strokeWidth={2.5}
-              />
-              {isSaved ? "Saved" : "Read later"}
-            </button>
-          </form>
-          <form action={markAlreadyReadAction}>
-            <input name="paperId" type="hidden" value={paper.id} />
-            <input
-              name="sourcePath"
-              type="hidden"
-              value={`/papers/${paper.id}`}
-            />
-            <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-sm font-black text-indigo-700">
-              <CheckCircle2 aria-hidden="true" size={18} strokeWidth={2.5} />
-              Already read
-            </button>
-          </form>
-          <form action={notInterestedAction}>
-            <input name="paperId" type="hidden" value={paper.id} />
-            <input
-              name="sourcePath"
-              type="hidden"
-              value={`/papers/${paper.id}`}
-            />
-            <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 text-sm font-black text-rose-700">
-              <X aria-hidden="true" size={18} strokeWidth={2.5} />
-              Not interested
-            </button>
-          </form>
-          <Link
-            href={paper.url}
-            target="_blank"
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white"
-          >
-            <ExternalLink aria-hidden="true" size={18} strokeWidth={2.5} />
-            Read online
-          </Link>
-        </div>
+        <PaperDetailActions
+          feedbackActionPath={`/papers/${paper.id}/feedback`}
+          isFavorite={isFavorite}
+          isSaved={isSaved}
+          paperId={paper.id}
+          paperUrl={paper.url}
+          sourcePath={`/papers/${paper.id}`}
+        />
 
         <section className="mt-8 border-t border-slate-200 pt-6">
           <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
