@@ -76,6 +76,7 @@ const paperSelect = `
   citation_count,
   is_classic,
   access,
+  triage_summary,
   paper_authors(name, position),
   paper_topics(taxonomy_topics(id, slug, label, parent_id, arxiv_category, depth, sort_order))
 `;
