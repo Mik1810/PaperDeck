@@ -220,7 +220,7 @@ async function callGemini(
   config: SummaryConfig,
   messages: Array<{ role: string; content: string }>,
   maxTokens: number,
-  retries = 3,
+  retries = 5,
 ): Promise<string> {
   const systemMsg = messages.find((m) => m.role === "system");
   const userMsg = messages.find((m) => m.role === "user");
@@ -300,7 +300,7 @@ async function summarizeChunk(
   );
 
   try {
-    return JSON.parse(extractJson(raw)) as TriageSummary;
+    return JSON.parse(raw) as TriageSummary;
   } catch {
     console.error(`  JSON parse failed, raw: ${raw.slice(0, 200)}`);
     throw new Error("Gemini did not return valid JSON");
