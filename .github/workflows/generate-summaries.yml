@@ -45,8 +45,8 @@ jobs:
       LLM_LIMIT: ${{ github.event.inputs.limit || vars.LLM_LIMIT || '3' }}
       LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '10000' }}
       LLM_RETRIES: ${{ vars.LLM_RETRIES || '5' }}
-      LLM_SOURCE_TEXT_CHARS: ${{ vars.LLM_SOURCE_TEXT_CHARS || '30000' }}
-      LLM_MAX_OUTPUT_TOKENS: ${{ vars.LLM_MAX_OUTPUT_TOKENS || '3200' }}
+      LLM_SOURCE_TEXT_CHARS: ${{ vars.LLM_SOURCE_TEXT_CHARS || '8000' }}
+      LLM_MAX_OUTPUT_TOKENS: ${{ vars.LLM_MAX_OUTPUT_TOKENS || '1600' }}
       LLM_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID || '' }}

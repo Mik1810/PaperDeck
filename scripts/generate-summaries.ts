@@ -163,7 +163,7 @@ function parseArgs(): SummaryConfig {
     sourceTextChars: Number(
       argValue("source-text-chars") ??
         process.env.LLM_SOURCE_TEXT_CHARS ??
-        30000,
+        8000,
     ),
     maxInputChars: Number(
       argValue("max-input-chars") ??
@@ -173,7 +173,7 @@ function parseArgs(): SummaryConfig {
     maxOutputTokens: Number(
       argValue("max-output-tokens") ??
         process.env.LLM_MAX_OUTPUT_TOKENS ??
-        3200,
+        1600,
     ),
     retries: Number(process.env.LLM_RETRIES ?? 5),
   };
