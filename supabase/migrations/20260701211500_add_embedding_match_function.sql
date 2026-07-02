@@ -1,7 +1,7 @@
 create or replace function match_papers_by_embedding(
   query_embedding vector(384),
   match_count integer default 100,
-  embedding_model_filter text default 'BAAI/bge-small-en-v1.5'
+  embedding_model_filter text default 'sentence-transformers/all-MiniLM-L6-v2'
 )
 returns table (
   paper_id uuid,
