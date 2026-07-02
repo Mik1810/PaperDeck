@@ -115,6 +115,14 @@ Added full playlist CRUD:
 - Read later default playlist protected from rename/delete
 - Playlist type extended with isDefault field
 
+## Issue #6 — Collapse feed Supabase round trips
+
+Merged `getSelectedTopicIds` + `getUserPaperState` into `getFeedState`:
+- Single Supabase client with 4 queries in Promise.all
+- Feed: 2 parallel calls instead of 3
+- Interaction limit: 500 → 200 rows
+- Also applied to getSettingsPageData and getOnboardingData
+
 ## Issue #27 — Drag-and-Drop Playlist Ordering
 
 Added drag-and-drop reordering with @dnd-kit:
