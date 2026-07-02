@@ -5,6 +5,7 @@ import { PaperListItem } from "@/components/paper-list-item";
 import { PlaylistSidebar } from "@/components/playlist-sidebar";
 import { requireOwnerId } from "@/lib/auth/session";
 import { getLibraryPageData } from "@/lib/repositories/user-data";
+import { getPapersByIds } from "@/lib/repositories/catalog";
 import type { Paper } from "@/types/paper";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,9 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
     ? playlists.find((p) => p.id === selectedPlaylistId)
     : null;
 
-  const selectedPapers: Paper[] = [];
+  const selectedPapers: Paper[] = selectedPlaylist?.paperIds.length
+    ? await getPapersByIds(selectedPlaylist.paperIds)
+    : [];
 
   return (
     <AppShell
