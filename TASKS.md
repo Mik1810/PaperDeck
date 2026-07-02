@@ -285,12 +285,13 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
   - Fallback: if profile is missing and generation fails, feed falls back to non-semantic ranking (same as before, no regression).
   - Stale profile cleanup: handled by existing `input_signature` hash comparison in `refreshUserProfileEmbedding`.
 
-- [ ] Add observability for semantic retrieval decisions.
+- [x] Add observability for semantic retrieval decisions.
   - Keep user-facing UI clean, but log enough server-side context to debug:
     - whether semantic retrieval was used;
     - number of semantic candidates;
     - model name;
     - fallback reason.
+  - Done 2026-07-02: `feed_timing` now logs structured semantic diagnostics with requested count, RPC attempt, match count, loaded candidate count, model, profile refresh status/reason, and fallback reason.
 
 - [ ] Execute the offline benchmark plan in `docs/embeddings.md`.
   - Compare:
@@ -317,16 +318,18 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
   - Service role still used for admin/ingestion/embedding workers; RLS-enforced client available for user-scoped operations.
   - Success condition met: RLS policies can be enforced with Clerk-authenticated Supabase requests.
 
-- [ ] Audit service-role usage.
+- [x] Audit service-role usage.
   - Confirm `SUPABASE_SERVICE_ROLE_KEY` is never imported by client components.
   - Confirm server-only repositories remain protected by `server-only`.
+  - Done 2026-07-02: added `npm run audit:service-role`, verified service-role key references stay out of client modules, and documented the audit in `docs/database.md`.
 
-- [ ] Add a documented secret rotation checklist.
+- [x] Add a documented secret rotation checklist.
   - Include:
     - Clerk keys;
     - Supabase service-role key;
     - Google OAuth client secret;
     - GitHub Actions secrets.
+  - Done 2026-07-02: added `docs/security.md` with emergency and routine rotation checklists, linked it from deployment docs and README, and covered Clerk, Supabase, Google OAuth, and GitHub Actions secrets.
 
 ## P2 - Product Features
 
@@ -363,12 +366,13 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
     - settings;
     - sign-in/sign-up.
 
-- [ ] Add a lightweight Playwright smoke test suite.
+- [x] Add a lightweight Playwright smoke test suite.
   - Suggested checks:
     - unauthenticated `/feed` redirects to sign-in;
     - sign-in page renders;
     - onboarding page is protected;
     - core pages do not 500.
+  - Done 2026-07-02: added Playwright config and `npm run test:e2e`. Default smoke run uses `PAPERDECK_E2E_DEV_AUTH=true` to render `/feed`, `/onboarding`, `/library`, and `/settings` without Clerk, plus an opt-in Clerk redirect/sign-in suite for coherent Clerk development keys.
 
 - [ ] Add loading and empty states for feed/library.
   - Current behavior should be checked after larger ingestion and embeddings batches.

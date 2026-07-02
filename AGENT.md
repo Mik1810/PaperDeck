@@ -41,6 +41,7 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 ## Working Rules
 
 - Keep changes scoped and intentional.
+- Before starting implementation work on a GitHub issue, briefly describe the issue being addressed, why it matters, and the intended attack plan.
 - Update `ROADMAP.md` when product or architecture decisions change.
 - Update `CHANGELOG.md` for notable repository changes.
 - Add or update a session file when a session produces meaningful decisions or implementation work.

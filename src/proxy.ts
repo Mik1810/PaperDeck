@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 
 const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(",")
@@ -13,15 +14,19 @@ const isProtectedRoute = createRouteMatcher([
   "/settings(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, request) => {
-  if (isDevAuthEnabled()) {
-    return;
-  }
-
+const clerkProtectedRoutes = clerkMiddleware(async (auth, request) => {
   if (isProtectedRoute(request)) {
     await auth.protect();
   }
 }, authorizedParties?.length ? { authorizedParties } : undefined);
+
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (isDevAuthEnabled()) {
+    return NextResponse.next();
+  }
+
+  return clerkProtectedRoutes(request, event);
+}
 
 export const config = {
   matcher: [

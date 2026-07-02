@@ -316,10 +316,21 @@ src/lib/repositories/semantic-retrieval.ts
   -> loads latest user_profile_embeddings row
   -> calls match_papers_by_embedding
   -> loads matched Paper rows
-  -> returns semantic scores to the existing reranker
+  -> returns semantic scores and retrieval diagnostics to the existing reranker
 ```
 
 If no user profile embedding exists, or if the semantic candidate set is empty after filtering seen papers, PaperDeck falls back to the topic/feedback ranking over the shared catalog.
+
+`/feed` logs a structured `feed_timing` event with semantic retrieval diagnostics:
+
+- whether semantic retrieval was used;
+- requested match count;
+- whether the pgvector RPC was attempted;
+- RPC match count;
+- loaded candidate paper count;
+- embedding model name;
+- fallback reason, including profile-missing, refresh failure, no matches, missing paper rows, or reranker filtering all candidates;
+- profile refresh status/reason when the feed lazily tries to build a missing user profile vector.
 
 The final displayed score should be a hybrid score:
 

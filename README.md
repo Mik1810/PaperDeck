@@ -85,6 +85,17 @@ SUPABASE_SERVICE_ROLE_KEY=replace_me
 
 Use Clerk development keys (`pk_test_...` / `sk_test_...`) for local authentication testing. For UI latency debugging without Clerk, set `PAPERDECK_DEV_AUTH=true`; this bypass only works outside production.
 
+## Testing
+
+Run lint and the default Playwright smoke suite:
+
+```bash
+npm run lint
+npm run test:e2e
+```
+
+The default Playwright run starts Next.js with `PAPERDECK_E2E_DEV_AUTH=true`, renders the core authenticated pages through the local dev-auth bypass, and skips Clerk redirect checks. To smoke-test real Clerk redirects and the sign-in page, run with coherent Clerk development keys and set `PAPERDECK_E2E_DEV_AUTH=false`.
+
 ## Database
 
 The initial database plan lives in [docs/database.md](./docs/database.md). The SQL schema draft is in [supabase/schema.sql](./supabase/schema.sql).
@@ -134,7 +145,7 @@ python3 scripts/embed_papers.py --dry-run --limit 3 --table-limit 20
 
 ## Deployment
 
-Deployment notes live in [docs/deployment.md](./docs/deployment.md). The current public URL is <https://paperdeck.michaelpiccirilli.it/>.
+Deployment notes live in [docs/deployment.md](./docs/deployment.md). Security operations and secret rotation checklists live in [docs/security.md](./docs/security.md). The current public URL is <https://paperdeck.michaelpiccirilli.it/>.
 
 Protected routes require Clerk production keys on public deployments. Development keys are kept for local work.
 
@@ -149,7 +160,8 @@ Protected routes require Clerk production keys on public deployments. Developmen
 |   |-- database.md
 |   |-- embeddings.md
 |   |-- ingestion.md
-|   `-- deployment.md
+|   |-- deployment.md
+|   `-- security.md
 |-- README.md
 |-- ROADMAP.md
 |-- package.json

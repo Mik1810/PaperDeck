@@ -38,6 +38,13 @@ Current implementation:
 
 The service-role key remains server-only and must never be imported into client components.
 
+Service-role audit:
+
+- `npm run audit:service-role` checks that `SUPABASE_SERVICE_ROLE_KEY` is referenced only by `src/lib/supabase/server.ts` under `src/`.
+- The same audit requires `import "server-only"` in `src/lib/supabase/server.ts`, `src/lib/auth/session.ts`, and every file under `src/lib/repositories/`.
+- It also walks runtime imports from `"use client"` files and fails if a client component reaches `server-only` code, while treating `"use server"` action files as a valid boundary.
+- Current audit result on 2026-07-02: passed.
+
 Future hardening:
 
 1. Configure Clerk JWT templates for Supabase.

@@ -272,7 +272,7 @@ export async function getFeedPageData(ownerId: string) {
     "semantic_retrieval",
     getSemanticPaperCandidates(ownerId),
   );
-  const papers = semanticCandidates?.papers.length
+  const papers = semanticCandidates.papers.length
     ? semanticCandidates.papers
     : await measureAsync(timings, "paper_loading", getAllPapers());
 
@@ -282,11 +282,14 @@ export async function getFeedPageData(ownerId: string) {
       topics,
       selectedTopicIds,
       state,
-      semanticCandidates?.semanticScores,
+      semanticCandidates.semanticScores,
     ),
   );
 
-  if (!rankedPapers.length && semanticCandidates) {
+  let semanticFallbackReason = semanticCandidates.diagnostics.fallbackReason;
+
+  if (!rankedPapers.length && semanticCandidates.papers.length) {
+    semanticFallbackReason = "ranker_filtered_all";
     const fallbackPapers = await measureAsync(
       timings,
       "fallback_paper_loading",
@@ -302,7 +305,20 @@ export async function getFeedPageData(ownerId: string) {
       event: "feed_timing",
       totalMs: Math.round(performance.now() - startedAt),
       timings,
-      semanticUsed: Boolean(semanticCandidates?.papers.length),
+      semantic: {
+        used: Boolean(semanticCandidates.papers.length && rankedPapers.length),
+        requestedCount: semanticCandidates.diagnostics.requestedCount,
+        rpcAttempted: semanticCandidates.diagnostics.rpcAttempted,
+        matchedCount: semanticCandidates.diagnostics.matchedCount,
+        candidateCount: semanticCandidates.diagnostics.candidateCount,
+        model: semanticCandidates.diagnostics.model,
+        fallbackReason: semanticFallbackReason,
+        profileRefreshStatus:
+          semanticCandidates.diagnostics.profileRefreshStatus,
+        profileRefreshReason:
+          semanticCandidates.diagnostics.profileRefreshReason,
+        profileRefreshError: semanticCandidates.diagnostics.profileRefreshError,
+      },
       rankedCount: rankedPapers.length,
     }),
   );

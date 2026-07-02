@@ -84,6 +84,8 @@ Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
 
 `CLERK_AUTHORIZED_PARTIES` is optional while developing, but should be set in production to the final app origin. Use a comma-separated list if more than one origin is intentionally allowed.
 
+Secret rotation procedures live in [`docs/security.md`](./security.md). Use that checklist before deleting old Clerk, Supabase, Google OAuth, or GitHub Actions credentials.
+
 ## Production Setup Checklist
 
 1. Use the existing `michaelpiccirilli.it` domain.
@@ -129,3 +131,4 @@ Expected result:
 - Clerk production deployment: <https://clerk.com/docs/guides/development/deployment/production>
 - Clerk Next.js middleware: <https://clerk.com/docs/reference/nextjs/clerk-middleware>
 - Vercel environment variables: <https://vercel.com/docs/environment-variables>
+- PaperDeck security operations: [`docs/security.md`](./security.md)
