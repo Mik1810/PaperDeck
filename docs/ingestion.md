@@ -100,7 +100,55 @@ Result: success
 Output: {"mode":"dry-run","categories":["cs.CC"],"fetched":1,"importable":1,"firstPaper":"2607.00315"}
 ```
 
-## arXiv API Limits
+Verified multi-category ingestion (local):
+
+```text
+Date: 2026-07-02
+Dry-run: 10 categories, max_results=2 per category
+Result: fetched=18, importable=14
+
+Write run: 10 categories, max_results=3 per category
+Result: imported=21, fetched=27
+Duplicate arxiv_id rows: 0
+Cursors: set for 9/10 categories (cs.SY had no recent papers)
+```
+
+## arXiv Backfill Mode
+
+The worker supports historical backfill via `--backfill`:
+
+```bash
+npm run ingest:arxiv -- --backfill --categories=cs.AI --max-results=25 --backfill-pages=5
+```
+
+Backfill behavior:
+
+- Paginates through older arXiv results using `start` offset, starting from `maxResults` (skipping the newest batch already handled by incremental ingestion).
+- Each page checks existing `arxiv_id` rows in Supabase via `getExistingArxivIds()`, so previously imported papers are never re-imported.
+- When all papers in a page already exist in the database, backfill stops for that category (overlap reached).
+- A separate backfill cursor (`arxiv_backfill:<category>`) stores the last `start` position, allowing interrupted backfills to resume.
+- The incremental cursor (`arxiv:<category>`) is never modified by backfill runs.
+- Rate limit (one request every three seconds) applies between pages and between categories.
+
+For a non-writing smoke test:
+
+```bash
+npm run ingest:arxiv -- --backfill --dry-run --categories=cs.CC --max-results=5 --backfill-pages=1
+```
+
+Verified backfill runs:
+
+```text
+Date: 2026-07-02
+Run 1: --backfill --categories=cs.CC --max-results=5 --backfill-pages=1
+Result: imported=4, fetched=5 (1 already existed)
+
+Run 2: --backfill --max-results=25 --backfill-pages=2 (all 10 default categories)
+Result: imported=418, fetched=450 (32 already existed)
+Duplicate arxiv_id rows: 0
+Total arxiv papers in DB after both runs: 447
+Cursors: all 10 backfill cursors created, incremental cursors untouched
+```
 
 The worker follows the official arXiv guidance:
 
@@ -126,16 +174,182 @@ Example:
 arxiv:cs.CC
 ```
 
-Each successful run updates the cursor to the newest `publishedAt` timestamp seen for that category. Subsequent runs import only papers newer than that cursor. This keeps the daily job idempotent for the newest slice. `ARXIV_MAX_RESULTS` is applied per category. Historical backfill still needs a separate strategy using `--start` or a future backfill mode.
+Each successful run updates the cursor to the newest `publishedAt` timestamp seen for that category. Subsequent runs import only papers newer than that cursor. This keeps the daily job idempotent for the newest slice. `ARXIV_MAX_RESULTS` is applied per category.
 
 References:
 
 - <https://info.arxiv.org/help/api/user-manual.html>
 - <https://info.arxiv.org/help/api/tou.html>
 
+## Semantic Scholar Enrichment
+
+The enrichment worker adds citation counts, venue corrections, DOIs, and external IDs from Semantic Scholar:
+
+```bash
+npm run enrich:semantic-scholar
+```
+
+It:
+
+- finds arXiv papers without a `semantic_scholar_id`;
+- looks them up via the S2 batch API (`/graph/v1/paper/batch`) using `ArXiv:<id>` identifiers;
+- automatically retries unfound papers on subsequent runs;
+- enriches `citation_count`, `semantic_scholar_id`, `venue`, `year`, `doi`, and `is_open_access`;
+- stores external IDs in `paper_external_ids` (provider: `semantic_scholar`, `doi`);
+- tracks progress in `ingestion_cursors` with key `semantic_scholar_enrich`;
+- supports an optional `SEMANTIC_SCHOLAR_API_KEY` for higher rate limits.
+
+Configuration:
+
+```env
+SEMANTIC_SCHOLAR_API_KEY=
+S2_BATCH_SIZE=100
+S2_LIMIT=500
+S2_REQUEST_DELAY_MS=1100
+```
+
+For a non-writing smoke test:
+
+```bash
+npm run enrich:semantic-scholar -- --dry-run --limit=5
+```
+
+Verified enrichment run:
+
+```text
+Date: 2026-07-02
+Command: enrich:semantic-scholar --limit=500
+Result: enriched=273, checked=443 (170 not on S2)
+Papers with S2 ID after run: 277/447
+DOIs filled: 32
+```
+
+## OpenAlex Enrichment
+
+The enrichment worker adds venues, open-access status, abstracts, and topics from OpenAlex:
+
+```bash
+npm run enrich:openalex
+```
+
+It:
+
+- finds arXiv papers that have a DOI but no `openalex_id`;
+- looks them up via the OpenAlex filter API using `filter=doi:val1|val2|...`;
+- enriches `openalex_id`, `venue` (publisher venue), `is_open_access`, `access` (mapped from `oa_status`), and `doi`;
+- reconstructs `abstract` from `abstract_inverted_index` when the paper has no existing abstract;
+- creates `taxonomy_topics` rows for OpenAlex topics and links them via `paper_topics` with confidence scores;
+- stores external IDs in `paper_external_ids` (provider: `openalex`);
+- tracks progress in `ingestion_cursors` with key `openalex_enrich`.
+
+No API key is required. Set `OPENALEX_EMAIL` for polite pool access with higher rate limits.
+
+Configuration:
+
+```env
+OPENALEX_BATCH_SIZE=25
+OPENALEX_LIMIT=500
+OPENALEX_REQUEST_DELAY_MS=200
+OPENALEX_EMAIL=
+```
+
+For a non-writing smoke test:
+
+```bash
+npm run enrich:openalex -- --dry-run --limit=5
+```
+
+Verified enrichment run:
+
+```text
+Date: 2026-07-02
+Command: enrich:openalex --limit=100
+Result: enriched=11, checked=29 (21 not found on OpenAlex)
+Papers with OpenAlex ID after run: 11
+OpenAlex taxonomy topics created: 28
+```
+
+## Unpaywall Enrichment
+
+The enrichment worker finds legal open-access URLs for DOI-backed papers:
+
+```bash
+npm run enrich:unpaywall
+```
+
+It:
+
+- finds papers with a DOI that haven't been looked up on Unpaywall yet;
+- queries the Unpaywall API one DOI at a time (no batch endpoint);
+- stores the best OA URL in `paper_external_ids` (provider: `unpaywall_oa`, external_id: DOI);
+- prefers `url_for_pdf` over `url_for_landing_page` for the stored URL;
+- sets `pdf_url` on papers that don't already have one;
+- confirms and stores `is_open_access` when Unpaywall reports OA status;
+- tracks progress in `ingestion_cursors` with key `unpaywall_enrich`.
+
+**Unpaywall requires a real email address** for API access. Set `UNPAYWALL_EMAIL` in your environment.
+
+Configuration:
+
+```env
+UNPAYWALL_LIMIT=500
+UNPAYWALL_REQUEST_DELAY_MS=500
+UNPAYWALL_EMAIL=your@email.com
+```
+
+For a non-writing smoke test:
+
+```bash
+UNPAYWALL_EMAIL=your@email.com npm run enrich:unpaywall -- --dry-run --limit=5
+```
+
+Verified enrichment run:
+
+```text
+Date: 2026-07-02
+Command: UNPAYWALL_EMAIL=... enrich:unpaywall --limit=100
+Result: 21 OA links found from 29 DOI-backed papers
+OA URLs stored in paper_external_ids (provider: unpaywall_oa)
+```
+
+## LLM Triage Summaries
+
+The summary worker generates structured triage summaries for papers using an OpenAI-compatible LLM:
+
+```bash
+npm run generate:summaries
+```
+
+It:
+
+- finds papers with an abstract but no existing `triage_summary`;
+- sends the title and abstract to an LLM with a structured output prompt;
+- generates four sections: `why_it_matters`, `main_contribution`, `prerequisites`, `read_if_you_care_about`;
+- stores the result as JSONB in `papers.triage_summary` with model and generation timestamp metadata;
+- the paper detail page reads pre-stored summaries — no LLM call on page load;
+- tracks progress in `ingestion_cursors` with key `triage_summary_enrich`.
+
+Uses the OpenAI chat completions API format, compatible with OpenAI, OpenRouter, Groq, DeepSeek, and local models via Ollama/llama.cpp.
+
+Configuration:
+
+```env
+LLM_API_KEY=sk_replace_me
+LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_BATCH_SIZE=5
+LLM_LIMIT=50
+LLM_REQUEST_DELAY_MS=2000
+```
+
+For a non-writing dry-run:
+
+```bash
+npm run generate:summaries -- --dry-run --limit=5
+```
+
+Dry-runs report the number of papers needing summaries without calling the LLM API.
+
 ## Next Ingestion Work
 
-- Add Semantic Scholar enrichment for citations and external URLs.
-- Add OpenAlex enrichment for DOI, venue, open-access status, and topics.
 - Run the first real BGE-small embedding batch outside Vercel, following [`docs/embeddings.md`](./embeddings.md).
-- Add historical backfill mode for older arXiv pages.

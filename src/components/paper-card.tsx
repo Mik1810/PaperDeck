@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MathContent } from "@/components/math-content";
 import {
   Bookmark,
   ChevronDown,
@@ -80,10 +81,10 @@ export function PaperCard({
           </p>
         ) : null}
 
-        <div className="mt-6 space-y-3 text-[15px] leading-7 text-slate-700">
-          <p className={isExpanded ? "" : "line-clamp-[10]"}>
-            {paper.abstract}
-          </p>
+        <div className={`mt-6 space-y-3 text-[15px] leading-7 text-slate-700`}>
+          <div className={isExpanded ? "" : "line-clamp-[10]"}>
+            <MathContent text={paper.abstract} />
+          </div>
           <button
             className="inline-flex items-center gap-1 text-sm font-black text-teal-700"
             type="button"

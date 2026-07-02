@@ -10,7 +10,7 @@ PaperDeck is a planned web app for discovering computer science papers through a
 
 ## Project Status
 
-PaperDeck is currently at `0.1.3`: an early MVP foundation with production auth, Supabase-backed user data, arXiv ingestion, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently at `0.1.4`: an early MVP foundation with production auth, Supabase-backed user data, multi-category arXiv ingestion with historical backfill, enrichment from Semantic Scholar/OpenAlex/Unpaywall, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
 
 ## MVP Scope
 
@@ -107,6 +107,20 @@ Run a local dry-run:
 
 ```bash
 npm run ingest:arxiv -- --dry-run --categories=cs.CC --max-results=1
+```
+
+Historical backfill:
+
+```bash
+npm run ingest:arxiv -- --backfill --max-results=25 --backfill-pages=5
+```
+
+Enrichment workers:
+
+```bash
+npm run enrich:semantic-scholar -- --dry-run --limit=5
+npm run enrich:openalex -- --dry-run --limit=5
+npm run enrich:unpaywall -- --dry-run --limit=5
 ```
 
 The embedding worker is documented in [docs/embeddings.md](./docs/embeddings.md). It runs outside Vercel through GitHub Actions or locally, writes vectors to Supabase/pgvector, and lets Vercel perform lightweight retrieval and reranking.

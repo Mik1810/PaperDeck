@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 This project follows Semantic Versioning.
 
+## [0.1.4] - 2026-07-02
+
+### Added
+
+- Multi-category arXiv ingestion verified across all 10 default CS categories (447 papers, 0 duplicates).
+- Historical arXiv backfill mode with `--backfill` and `--backfill-pages` flags.
+- Separate backfill cursors (`arxiv_backfill:<category>`) for resume support.
+- Semantic Scholar enrichment script (`scripts/enrich-semantic-scholar.ts`): citation counts, venue corrections, DOIs, and S2 IDs for 277 papers.
+- OpenAlex enrichment script (`scripts/enrich-openalex.ts`): venue, open access status, topics, and abstracts for 11 DOI-backed papers.
+- Unpaywall enrichment script (`scripts/enrich-unpaywall.ts`): legal OA URLs stored for 21 papers.
+- New npm scripts: `enrich:semantic-scholar`, `enrich:openalex`, `enrich:unpaywall`.
+- New environment variables for enrichment workers in `.env.example`.
+- OpenAlex taxonomy topics (28 created) linked via `paper_topics` with confidence scores.
+
+### Changed
+
+- ROADMAP.md implementation status updated to reflect completed ingestion and enrichment pipeline.
+- docs/ingestion.md expanded with backfill mode and all three enrichment worker sections.
+- TASKS.md #10-#14 marked as completed.
+
 ## [0.1.3] - 2026-07-01
 
 ### Added

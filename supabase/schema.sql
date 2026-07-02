@@ -85,6 +85,9 @@ create table papers (
   embedding_dimension integer,
   embedding_content_hash text,
   embedded_at timestamptz,
+  triage_summary jsonb,
+  triage_summary_model text,
+  triage_summary_generated_at timestamptz,
   created_at timestamptz not null default now(),
   ingested_at timestamptz not null default now()
 );

@@ -9,6 +9,13 @@ export type PaperTopic = {
   arxivCategory?: string;
 };
 
+export type TriageSummary = {
+  why_it_matters: string;
+  main_contribution: string;
+  prerequisites: string;
+  read_if_you_care_about: string;
+};
+
 export type Paper = {
   id: string;
   title: string;
@@ -24,6 +31,7 @@ export type Paper = {
   citationCount?: number;
   isClassic?: boolean;
   access: PaperAccess;
+  triageSummary?: TriageSummary;
 };
 
 export type UserInterest = {

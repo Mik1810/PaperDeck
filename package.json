@@ -1,11 +1,15 @@
 {
   "name": "paperdeck",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "ingest:arxiv": "tsx scripts/ingest-arxiv.ts",
+    "enrich:semantic-scholar": "tsx scripts/enrich-semantic-scholar.ts",
+    "enrich:openalex": "tsx scripts/enrich-openalex.ts",
+    "enrich:unpaywall": "tsx scripts/enrich-unpaywall.ts",
+    "generate:summaries": "tsx scripts/generate-summaries.ts",
     "seed:catalog": "tsx scripts/seed-catalog.ts",
     "start": "next start",
     "lint": "eslint"

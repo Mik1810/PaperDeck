@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PaperDetailActions } from "@/components/paper-detail-actions";
+import { MathContent } from "@/components/math-content";
 import { requireOwnerId } from "@/lib/auth/session";
 import { getPaperDetailData } from "@/lib/repositories/user-data";
 
@@ -13,6 +14,19 @@ type PaperDetailPageProps = {
 };
 
 export const dynamic = "force-dynamic";
+
+function SummaryRow({ label, text }: { label: string; text: string }) {
+  return (
+    <div>
+      <span className="text-xs font-black uppercase tracking-normal text-slate-400">
+        {label}
+      </span>
+      <div className="mt-0.5 text-sm leading-6 text-slate-600">
+        <MathContent text={text} />
+      </div>
+    </div>
+  );
+}
 
 export default async function PaperDetailPage({ params }: PaperDetailPageProps) {
   const { paperId } = await params;
@@ -75,13 +89,30 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
           sourcePath={`/papers/${paper.id}`}
         />
 
+        {paper.triageSummary ? (
+          <section className="mt-8 border-t border-slate-200 pt-6">
+            <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
+              Triage summary
+            </h2>
+            <div className="mt-4 space-y-3">
+              <SummaryRow label="Why it matters" text={paper.triageSummary.why_it_matters} />
+              <SummaryRow label="Main contribution" text={paper.triageSummary.main_contribution} />
+              <SummaryRow label="Prerequisites" text={paper.triageSummary.prerequisites} />
+              <SummaryRow
+                label="Read if you care about"
+                text={paper.triageSummary.read_if_you_care_about}
+              />
+            </div>
+          </section>
+        ) : null}
+
         <section className="mt-8 border-t border-slate-200 pt-6">
           <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
             Abstract
           </h2>
-          <p className="mt-4 text-base leading-8 text-slate-700">
-            {paper.abstract}
-          </p>
+          <div className="mt-4 text-base leading-8 text-slate-700">
+            <MathContent text={paper.abstract} />
+          </div>
         </section>
       </article>
     </AppShell>

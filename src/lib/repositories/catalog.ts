@@ -26,6 +26,7 @@ type PaperRow = {
   citation_count: number | null;
   is_classic: boolean | null;
   access: string;
+  triage_summary: unknown;
   paper_authors?: Array<{
     name: string;
     position: number;
@@ -141,6 +142,7 @@ export function paperFromRow(row: PaperRow): Paper {
     citationCount: row.citation_count ?? undefined,
     isClassic: row.is_classic ?? false,
     access: row.access as PaperAccess,
+    triageSummary: (row.triage_summary ?? undefined) as Paper["triageSummary"],
   };
 }
 

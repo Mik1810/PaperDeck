@@ -1,6 +1,6 @@
 # PaperDeck ROADMAP
 
-Ultimo aggiornamento: 2026-07-01
+Ultimo aggiornamento: 2026-07-02
 
 ## Visione
 
@@ -45,7 +45,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 
 ## Stato implementazione
 
-Aggiornato al 2026-07-01:
+Aggiornato al 2026-07-02:
 
 - Repository, scaffold Next.js, UI skeleton e Clerk auth: completati.
 - Supabase schema iniziale con pgvector, RLS preparata e tabelle MVP: applicato.
@@ -61,14 +61,19 @@ Aggiornato al 2026-07-01:
   - Il feed usa un primo ranking MVP con interessi selezionati, feedback recente e penalita' per paper gia' aperti/letti.
   - `Read later` supporta aggiunta e rimozione da feed, dettaglio e library.
   - Il dettaglio paper registra i segnali `already_read` e `not_interested`.
-- Ingestion arXiv MVP: implementata.
-  - Script `scripts/ingest-arxiv.ts`.
+- Ingestion arXiv MVP: completata e ampliata.
+  - Script `scripts/ingest-arxiv.ts` con 10 categorie CS di default.
   - Workflow GitHub Actions giornaliero/manuale.
+  - Modalita' backfill storico con `--backfill` e `--backfill-pages`.
   - Import di metadati, abstract, autori, categorie, link arXiv/PDF e DOI quando presente.
   - Rispetto del rate limit arXiv: una richiesta ogni tre secondi, una connessione.
-  - Cursori incrementali per categoria in `ingestion_cursors` e deduplica per `arxiv_id`.
-- Semantic Scholar/OpenAlex enrichment e worker embeddings: non ancora implementati.
-- Workflow embeddings/ranked retrieval: specificato in `docs/embeddings.md`; implementazione non ancora iniziata.
+  - Cursori incrementali per categoria e cursori separati per backfill.
+  - 447 paper arXiv nel database, 0 duplicati `arxiv_id`.
+- Enrichment esterno: implementato.
+  - Semantic Scholar: 277 paper arricchiti con citation count, venue corretta, DOI, S2 ID.
+  - OpenAlex: 11 paper arricchiti con venue publisher, open access status, topic, abstract.
+  - Unpaywall: 21 URL open access legali salvati per paper con DOI.
+- Worker embeddings: specificato in `docs/embeddings.md`; primo smoke batch completato.
 - Clerk JWT per applicare RLS direttamente dal browser: non ancora configurato; l'MVP usa server actions con service role solo lato server.
 
 ## Principio sui contenuti

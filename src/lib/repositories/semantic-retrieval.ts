@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPapersByIds } from "@/lib/repositories/catalog";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import type { Paper } from "@/types/paper";
 
 type UserProfileEmbeddingRow = {
@@ -42,6 +43,7 @@ export async function getSemanticPaperCandidates(
   assertNoError(profileError, "Load user profile embedding");
 
   if (!profileEmbedding) {
+    await refreshUserProfileEmbedding(ownerId).catch(() => null);
     return null;
   }
 

@@ -10,6 +10,8 @@ import {
   toggleReadLater,
   toggleFavorite,
 } from "@/lib/repositories/user-data";
+import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
+import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
 
 function requirePaperId(formData: FormData) {
   const paperId = formData.get("paperId");
@@ -50,6 +52,7 @@ export async function saveOnboardingInterestsAction(formData: FormData) {
     .filter((topicId): topicId is string => typeof topicId === "string");
 
   await saveSelectedTopics(user.ownerId, topicIds);
+  await refreshUserProfileEmbedding(user.ownerId);
 
   revalidatePath("/feed");
   revalidatePath("/onboarding");
@@ -90,4 +93,18 @@ export async function toggleReadLaterAction(formData: FormData) {
   await toggleReadLater(ownerId, paperId);
 
   revalidatePath(sourcePathFrom(formData, "/feed"));
+}
+
+export async function verifyClerkRlsAction() {
+  const supabase = await createClerkAuthenticatedClient();
+
+  const { count, error } = await supabase
+    .from("user_interests")
+    .select("*", { count: "exact", head: true });
+
+  if (error) {
+    throw new Error(`RLS verification failed: ${error.message}`);
+  }
+
+  return { count: count ?? 0 };
 }

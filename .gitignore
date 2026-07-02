@@ -50,3 +50,6 @@ client_secret_google.json
 
 # Network investigation files
 har/
+
+#Python cache
+__pycache__/

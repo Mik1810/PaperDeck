@@ -34,6 +34,8 @@ type IngestionConfig = {
   maxResults: number;
   start: number;
   dryRun: boolean;
+  backfill: boolean;
+  backfillPages: number;
   requestDelayMs: number;
   userAgent: string;
 };
@@ -117,6 +119,10 @@ function parseArgs(): IngestionConfig {
     ),
     start: Number(argValue("start") ?? process.env.ARXIV_START ?? 0),
     dryRun: args.includes("--dry-run") || process.env.ARXIV_DRY_RUN === "true",
+    backfill: args.includes("--backfill") || process.env.ARXIV_BACKFILL === "true",
+    backfillPages: Number(
+      argValue("backfill-pages") ?? process.env.ARXIV_BACKFILL_PAGES ?? 10,
+    ),
     requestDelayMs: Number(process.env.ARXIV_REQUEST_DELAY_MS ?? 3100),
     userAgent:
       process.env.ARXIV_USER_AGENT ??
@@ -277,6 +283,82 @@ async function fetchArxivPapersForCategory(
 
 function cursorKey(category: string) {
   return `arxiv:${category}`;
+}
+
+function backfillCursorKey(category: string) {
+  return `arxiv_backfill:${category}`;
+}
+
+async function getExistingArxivIds(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  arxivIds: string[],
+) {
+  if (!arxivIds.length) {
+    return new Set<string>();
+  }
+
+  const { data, error } = await supabase
+    .from("papers")
+    .select("arxiv_id")
+    .in("arxiv_id", arxivIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return new Set((data ?? []).map((row) => row.arxiv_id as string));
+}
+
+async function getBackfillCursor(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  category: string,
+) {
+  const { data, error } = await supabase
+    .from("ingestion_cursors")
+    .select("cursor_value, last_seen_published_at")
+    .eq("source", "arxiv")
+    .eq("cursor_key", backfillCursorKey(category))
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as IngestionCursor | null;
+}
+
+async function updateBackfillCursor(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  category: string,
+  start: number,
+  papers: ArxivPaper[],
+  importedCount: number,
+  runId: string | null,
+) {
+  const oldestPaper = papers
+    .filter((paper) => paper.publishedAt)
+    .sort(
+      (a, b) =>
+        new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime(),
+    )[0];
+
+  const { error } = await supabase.from("ingestion_cursors").upsert(
+    {
+      source: "arxiv",
+      cursor_key: backfillCursorKey(category),
+      cursor_value: String(start),
+      last_seen_published_at: oldestPaper?.publishedAt ?? null,
+      last_seen_external_id: oldestPaper?.arxivId ?? null,
+      last_successful_run_id: runId,
+      imported_count: importedCount,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "source,cursor_key" },
+  );
+
+  if (error) {
+    throw error;
+  }
 }
 
 async function getCategoryCursor(
@@ -581,23 +663,81 @@ async function main() {
   try {
     const fetchedByCategory = [];
 
-    for (const [index, category] of config.categories.entries()) {
-      if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
+    if (config.backfill) {
+      for (const [index, category] of config.categories.entries()) {
+        if (index > 0) {
+          await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
+        }
+
+        const backfillCursor = await getBackfillCursor(supabase, category);
+        const startOffset = backfillCursor?.cursor_value
+          ? Number(backfillCursor.cursor_value)
+          : config.maxResults;
+
+        let currentStart = startOffset;
+        const importablePapers: ArxivPaper[] = [];
+        const allFetchedPapers: ArxivPaper[] = [];
+
+        for (let page = 0; page < config.backfillPages; page++) {
+          if (page > 0) {
+            await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
+          }
+
+          const fetchedPapers = await fetchArxivPapersForCategory(
+            { ...config, start: currentStart },
+            category,
+          );
+
+          if (!fetchedPapers.length) {
+            break;
+          }
+
+          allFetchedPapers.push(...fetchedPapers);
+
+          const existingIds = await getExistingArxivIds(
+            supabase,
+            fetchedPapers.map((paper) => paper.arxivId),
+          );
+
+          const newPapers = fetchedPapers.filter(
+            (paper) => !existingIds.has(paper.arxivId),
+          );
+
+          if (newPapers.length === 0) {
+            break;
+          }
+
+          importablePapers.push(...newPapers);
+          currentStart += config.maxResults;
+        }
+
+        fetchedByCategory.push({
+          category,
+          cursor: null,
+          fetchedPapers: allFetchedPapers,
+          importablePapers,
+          backfillStart: currentStart,
+        });
       }
+    } else {
+      for (const [index, category] of config.categories.entries()) {
+        if (index > 0) {
+          await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
+        }
 
-      const cursor = await getCategoryCursor(supabase, category);
-      const fetchedPapers = await fetchArxivPapersForCategory(config, category);
-      const importablePapers = fetchedPapers.filter((paper) =>
-        isAfterCursor(paper, cursor),
-      );
+        const cursor = await getCategoryCursor(supabase, category);
+        const fetchedPapers = await fetchArxivPapersForCategory(config, category);
+        const importablePapers = fetchedPapers.filter((paper) =>
+          isAfterCursor(paper, cursor),
+        );
 
-      fetchedByCategory.push({
-        category,
-        cursor,
-        fetchedPapers,
-        importablePapers,
-      });
+        fetchedByCategory.push({
+          category,
+          cursor,
+          fetchedPapers,
+          importablePapers,
+        });
+      }
     }
 
     const papers = uniquePapersByArxivId(
@@ -607,7 +747,7 @@ async function main() {
     if (config.dryRun) {
       console.log(
         JSON.stringify({
-          mode: "dry-run",
+          mode: config.backfill ? "dry-run-backfill" : "dry-run",
           categories: config.categories,
           fetched: fetchedByCategory.reduce(
             (total, item) => total + item.fetchedPapers.length,
@@ -629,14 +769,29 @@ async function main() {
       await upsertPaper(supabase, paper, topicIdsByCategory);
     }
 
-    for (const item of fetchedByCategory) {
-      await updateCategoryCursor(
-        supabase,
-        item.category,
-        item.fetchedPapers,
-        item.importablePapers.length,
-        runId,
-      );
+    if (config.backfill) {
+      for (const item of fetchedByCategory) {
+        if (item.backfillStart !== undefined) {
+          await updateBackfillCursor(
+            supabase,
+            item.category,
+            item.backfillStart,
+            item.fetchedPapers,
+            item.importablePapers.length,
+            runId,
+          );
+        }
+      }
+    } else {
+      for (const item of fetchedByCategory) {
+        await updateCategoryCursor(
+          supabase,
+          item.category,
+          item.fetchedPapers,
+          item.importablePapers.length,
+          runId,
+        );
+      }
     }
 
     const cursorSummary = JSON.stringify(
@@ -657,7 +812,7 @@ async function main() {
     );
     console.log(
       JSON.stringify({
-        mode: "write",
+        mode: config.backfill ? "write-backfill" : "write",
         categories: config.categories,
         imported: papers.length,
         fetched: fetchedByCategory.reduce(
