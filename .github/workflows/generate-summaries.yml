@@ -14,11 +14,11 @@ on:
       limit:
         description: "Maximum papers to process"
         required: false
-        default: "3"
+        default: "50"
       batch_size:
         description: "Papers per API batch"
         required: false
-        default: "1"
+        default: "3"
       dry_run:
         description: "Count papers needing summaries without calling LLM"
         required: false
@@ -41,9 +41,9 @@ jobs:
       LLM_PROVIDER: ${{ github.event.inputs.provider || vars.LLM_PROVIDER || 'github' }}
       LLM_MODEL: ${{ github.event.inputs.model || vars.LLM_MODEL || 'openai/gpt-4o-mini' }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY || '' }}
-      LLM_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.LLM_BATCH_SIZE || '1' }}
-      LLM_LIMIT: ${{ github.event.inputs.limit || vars.LLM_LIMIT || '3' }}
-      LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '10000' }}
+      LLM_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.LLM_BATCH_SIZE || '3' }}
+      LLM_LIMIT: ${{ github.event.inputs.limit || vars.LLM_LIMIT || '50' }}
+      LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '3000' }}
       LLM_RETRIES: ${{ vars.LLM_RETRIES || '5' }}
       LLM_SOURCE_TEXT_CHARS: ${{ vars.LLM_SOURCE_TEXT_CHARS || '8000' }}
       LLM_MAX_OUTPUT_TOKENS: ${{ vars.LLM_MAX_OUTPUT_TOKENS || '1600' }}
