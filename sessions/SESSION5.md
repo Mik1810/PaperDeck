@@ -186,36 +186,38 @@ triage summaries:          6
 
 ## Part 8 — LLM Provider Saga
 
-### OpenRouter + Nemotron (#15 initial)
-- Model: `nvidia/nemotron-3-nano-30b-a3b:free`
-- Issues: all free models 429 globally — OpenRouter free tier saturated
+### Model timeline
 
-### Groq
-- Model: `llama-3.1-8b-instant`
-- Issues: 413 Payload Too Large (chunks too big), then 429 rate limiting even with retry
-- Fix: chunk size 15K chars, then reduced to send only first 15K chars (user rejected)
+| Order | Provider | Model | Why tried | Why abandoned |
+|---|---|---|---|---|
+| 1 | OpenRouter | `nousresearch/deephermes-3-llama-3-8b:free` | Scelto dall'utente, free su OpenRouter | Non disponibile sulla free tier |
+| 2 | OpenRouter | `google/gemma-4-31b-it:free` | Buon bilanciamento velocità/qualità, 262K ctx | 429 rate-limited |
+| 3 | OpenRouter | `nvidia/nemotron-3-nano-30b-a3b:free` | 256K ctx, costantemente disponibile | Funzionava ma output JSON rotto (reasoning text contaminava il content). Poi 429 globale |
+| 4 | OpenRouter | Vari (`meta-llama/llama-3.3-70b`, `qwen/qwen3-coder`, `nousresearch/hermes-3-405b`) | Provati come alternative | Tutti 429 o 503 — free tier OpenRouter satura |
+| 5 | OpenRouter | `nvidia/nemotron-nano-9b-v2:free` | Non-reasoning, output pulito | Content null, reasoning-only. 429 globale |
+| 6 | OpenRouter | `openai/gpt-oss-20b:free` | OpenAI-compatibile | Content null, reasoning-only. 429 globale |
+| 7 | Groq | `llama-3.1-8b-instant` | Free tier più generoso, OpenAI-compatibile, 128K ctx | 413 Payload Too Large (chunk > limite Groq free). Poi 429 rate-limiting anche con retry e delay 15-30s |
+| 8 | Google Gemini | `gemini-2.0-flash` (OpenAI endpoint) | 1M ctx, nessun chunking, 15 RPM free | Limit: 0 sul free tier (richiede piano a pagamento) |
+| 9 | Google Gemini | `gemini-1.5-flash`, `gemini-1.5-pro`, `gemma-3-27b-it` (OpenAI endpoint) | Modelli free classici | 404 — non disponibili su questa API key |
+| 10 | Google Gemini | `gemini-2.0-flash-lite` (OpenAI endpoint) | Versione light, dovrebbe essere free | Limit: 0 — stesso problema del flash normale |
+| 11 | Google Gemini | **`gemini-flash-latest` (API nativa)** | Disponibile, risponde 200, 1M ctx, `responseMimeType: application/json` per JSON garantito | ✅ Corrente. 503 intermittenti (picchi di domanda Google) ma retry a 5 tentativi mitiga |
 
-### Google Gemini
-- Model: `gemini-2.0-flash` → rejected (limit: 0 on free tier)
-- Model: `gemini-1.5-flash` → 404 (not available on this API key)
-- Model: `gemini-flash-latest` → current, native API
-- API: native Gemini REST API (not OpenAI-compatible)
-- `responseMimeType: "application/json"` for guaranteed JSON output
-- `system_instruction` for prompt instead of messages
-- API key passed as URL parameter instead of Authorization header
-- Retry logic: handles 429 + 503 with 5 attempts, backoff 15s/30s/45s/60s/75s
+### Perché siamo passati all'API nativa Gemini
 
-### Current LLM config
-```env
-LLM_API_KEY=AQ...      (from aistudio.google.com/apikey)
-LLM_MODEL=gemini-flash-latest
-```
-`LLM_BASE_URL` removed — native Gemini API uses fixed endpoint.
+L'endpoint OpenAI-compatibile di Gemini (`generativelanguage.googleapis.com/v1beta/openai/chat/completions`) ha problemi:
+- Modelli free tier non disponibili (404 o limit: 0)
+- Instabile (503 frequenti)
+- `response_format: json_object` non sempre rispettato
 
-### Remaining issue
-- Gemini `gemini-flash-latest` returns intermittent 503 (model overloaded).
-- Some papers succeed, some exhaust all 5 retries.
-- Recommended: run with `limit: 2-3`, `batch_size: 1` to reduce concurrent demand.
+L'API nativa (`generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`) invece:
+- `responseMimeType: "application/json"` garantisce JSON pulito
+- `system_instruction` separato dal contenuto utente
+- API key nel URL (più semplice, nessun header Authorization)
+- Disponibilità migliore dei modelli free
+
+### Problema corrente
+
+Gemini `gemini-flash-latest` restituisce 503 intermittenti ("model experiencing high demand"). Il retry a 5 tentativi con backoff 15-30-45-60-75s mitiga ma non risolve completamente. Raccomandato: `limit: 2-3`, `batch_size: 1`.
 
 ---
 
