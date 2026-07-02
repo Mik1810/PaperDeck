@@ -255,13 +255,13 @@ async function callGemini(
       return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     }
 
-    if (response.status === 429 && attempt < retries) {
+    if ((response.status === 429 || response.status === 503) && attempt < retries) {
       const retryAfter = response.headers.get("Retry-After");
       const delay = retryAfter
         ? Number(retryAfter) * 1000
-        : (attempt + 1) * 10000;
+        : (attempt + 1) * 15000;
       console.error(
-        `  Rate limited, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
+        `  ${response.status} error, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
       continue;
