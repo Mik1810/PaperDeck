@@ -16,7 +16,7 @@ function extractJson(text: string) {
   return content.slice(start, end + 1);
 }
 
-type LlmProvider = "cloudflare" | "gemini";
+type LlmProvider = "cloudflare" | "gemini" | "github";
 type LlmMessage = { role: "system" | "user"; content: string };
 
 type SummaryConfig = {
@@ -25,11 +25,13 @@ type SummaryConfig = {
   apiKey: string;
   cloudflareAccountId: string;
   cloudflareApiToken: string;
+  githubToken: string;
   jinaApiKey: string | null;
   batchSize: number;
   limit: number;
   dryRun: boolean;
   requestDelayMs: number;
+  sourceTextChars: number;
   maxInputChars: number;
   maxOutputTokens: number;
   retries: number;
@@ -54,6 +56,7 @@ type TriageSummary = {
 const CURSOR_KEY = "triage_summary_enrich";
 const DEFAULT_CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash";
 const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
+const DEFAULT_GITHUB_MODEL = "openai/gpt-4o-mini";
 const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given the text of a paper (which may contain PDF artifacts, garbled symbols, or LaTeX fragments), ignore formatting noise and extract the semantic meaning. Produce a structured JSON summary with exactly these four fields. Each field must be around 100 words. Do NOT repeat or paraphrase the abstract — synthesize new, original insights.
 
 - "why_it_matters": What specific problem or gap does this paper address? Explain the real-world stakes, the limitation of prior work, or the concrete scenario that motivated this research.
@@ -146,6 +149,7 @@ function parseArgs(): SummaryConfig {
       process.env.CLOUDFLARE_API_TOKEN ??
       process.env.CLOUDFLARE_AUTH_TOKEN ??
       "",
+    githubToken: process.env.GITHUB_MODELS_TOKEN ?? process.env.GITHUB_TOKEN ?? "",
     jinaApiKey: process.env.JINA_API_KEY ?? null,
     batchSize: Number(
       argValue("batch-size") ?? process.env.LLM_BATCH_SIZE ?? 5,
@@ -155,6 +159,11 @@ function parseArgs(): SummaryConfig {
       args.includes("--dry-run") || process.env.LLM_DRY_RUN === "true",
     requestDelayMs: Number(
       process.env.LLM_REQUEST_DELAY_MS ?? 5000,
+    ),
+    sourceTextChars: Number(
+      argValue("source-text-chars") ??
+        process.env.LLM_SOURCE_TEXT_CHARS ??
+        30000,
     ),
     maxInputChars: Number(
       argValue("max-input-chars") ??
@@ -176,6 +185,10 @@ function parseProvider(value: string | undefined, model: string | undefined): Ll
       return "gemini";
     }
 
+    if (!value && model?.includes("/") && !model.startsWith("@cf/")) {
+      return "github";
+    }
+
     return "cloudflare";
   }
 
@@ -183,20 +196,34 @@ function parseProvider(value: string | undefined, model: string | undefined): Ll
     return value;
   }
 
+  if (value === "github") {
+    return value;
+  }
+
   throw new Error(
-    `Unsupported LLM_PROVIDER "${value}". Expected "cloudflare" or "gemini".`,
+    `Unsupported LLM_PROVIDER "${value}". Expected "cloudflare", "gemini", or "github".`,
   );
 }
 
 function defaultModelFor(provider: LlmProvider) {
-  return provider === "cloudflare"
-    ? DEFAULT_CLOUDFLARE_MODEL
-    : DEFAULT_GEMINI_MODEL;
+  if (provider === "cloudflare") {
+    return DEFAULT_CLOUDFLARE_MODEL;
+  }
+
+  if (provider === "github") {
+    return DEFAULT_GITHUB_MODEL;
+  }
+
+  return DEFAULT_GEMINI_MODEL;
 }
 
 function isLikelyProviderModel(provider: LlmProvider, model: string) {
   if (provider === "cloudflare") {
     return model.startsWith("@cf/");
+  }
+
+  if (provider === "github") {
+    return model.includes("/") && !model.startsWith("@cf/");
   }
 
   return model.startsWith("gemini");
@@ -230,6 +257,14 @@ function requireLlmConfig(config: SummaryConfig) {
 
     if (!config.cloudflareApiToken) {
       throw new Error("Missing CLOUDFLARE_API_TOKEN (required for Cloudflare Workers AI)");
+    }
+
+    return;
+  }
+
+  if (config.provider === "github") {
+    if (!config.githubToken) {
+      throw new Error("Missing GITHUB_TOKEN or GITHUB_MODELS_TOKEN (required for GitHub Models)");
     }
 
     return;
@@ -430,7 +465,7 @@ function getRetryDelayMs(response: Response, attempt: number) {
 }
 
 function shouldRetryLlmStatus(status: number) {
-  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
 function cloudflareErrorMessage(data: CloudflareAiEnvelope | null, fallback: string) {
@@ -549,6 +584,111 @@ async function callCloudflareWorkersAi(
   throw new Error("Cloudflare Workers AI error: max retries exceeded");
 }
 
+type GitHubModelsResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string | Record<string, unknown>;
+    };
+    text?: string;
+  }>;
+  error?: {
+    message?: string;
+    code?: string | number;
+  };
+  message?: string;
+};
+
+function githubModelsResponseToText(data: GitHubModelsResponse): string | null {
+  const firstChoice = data.choices?.[0];
+  const content = firstChoice?.message?.content ?? firstChoice?.text;
+
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (content && typeof content === "object") {
+    return JSON.stringify(content);
+  }
+
+  return null;
+}
+
+function githubModelsErrorMessage(data: GitHubModelsResponse | null, fallback: string) {
+  if (data?.error?.message) {
+    return [data.error.code, data.error.message].filter(Boolean).join(": ");
+  }
+
+  return data?.message ?? fallback.slice(0, 300);
+}
+
+async function callGitHubModels(
+  config: SummaryConfig,
+  messages: LlmMessage[],
+  maxTokens: number,
+  retries = config.retries,
+): Promise<string> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch(
+      "https://models.github.ai/inference/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2026-03-10",
+          Authorization: `Bearer ${config.githubToken}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          temperature: 0.2,
+          max_tokens: maxTokens,
+          response_format: {
+            type: "json_schema",
+            json_schema: TRIAGE_SUMMARY_JSON_SCHEMA,
+          },
+        }),
+      },
+    );
+
+    const responseText = await response.text();
+    let data: GitHubModelsResponse | null = null;
+
+    try {
+      data = JSON.parse(responseText) as GitHubModelsResponse;
+    } catch {
+      data = null;
+    }
+
+    if (response.ok && data) {
+      const content = githubModelsResponseToText(data);
+
+      if (content) {
+        return content;
+      }
+
+      throw new Error(
+        `GitHub Models returned no text content: ${responseText.slice(0, 300)}`,
+      );
+    }
+
+    if (shouldRetryLlmStatus(response.status) && attempt < retries) {
+      const delay = getRetryDelayMs(response, attempt);
+      console.error(
+        `  ${response.status} error, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      continue;
+    }
+
+    throw new Error(
+      `GitHub Models error (${response.status}): ${githubModelsErrorMessage(data, responseText)}`,
+    );
+  }
+
+  throw new Error("GitHub Models error: max retries exceeded");
+}
+
 async function callLlm(
   config: SummaryConfig,
   messages: LlmMessage[],
@@ -556,6 +696,10 @@ async function callLlm(
 ) {
   if (config.provider === "cloudflare") {
     return callCloudflareWorkersAi(config, messages, maxTokens);
+  }
+
+  if (config.provider === "github") {
+    return callGitHubModels(config, messages, maxTokens);
   }
 
   return callGemini(config, messages, maxTokens);
@@ -610,8 +754,14 @@ async function generateSummary(
     try {
       const fullText = await fetchPaperContent(paper.arxiv_id, config.jinaApiKey);
       if (fullText && fullText.length > 200) {
-        content = cleanText(fullText);
-        console.error(`  Jina: fetched ${fullText.length} chars for ${paper.arxiv_id}`);
+        const cleaned = cleanText(fullText);
+        content =
+          config.sourceTextChars > 0
+            ? cleaned.slice(0, config.sourceTextChars)
+            : cleaned;
+        console.error(
+          `  Jina: fetched ${fullText.length} chars for ${paper.arxiv_id}, using ${content.length}`,
+        );
       }
     } catch (error) {
       console.error(
