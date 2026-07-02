@@ -2,10 +2,14 @@
 
 import { useState } from "react";
 import { Bookmark, CheckCircle2, ExternalLink, Heart, X } from "lucide-react";
-import {
-  toggleFavoriteAction,
-  toggleReadLaterAction,
-} from "@/app/actions";
+
+async function deckAction(action: string, paperId: string) {
+  await fetch("/api/deck", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, paperId }),
+  });
+}
 
 type PaperDetailActionsProps = {
   feedbackActionPath: string;
@@ -29,12 +33,6 @@ export function PaperDetailActions({
 
   return (
     <div className="mt-7 flex flex-wrap gap-2">
-      <form
-        action={toggleFavoriteAction}
-        onSubmit={() => setOptimisticFavorite((current) => !current)}
-      >
-        <input name="paperId" type="hidden" value={paperId} />
-        <input name="sourcePath" type="hidden" value={sourcePath} />
         <button
           aria-pressed={optimisticFavorite}
           className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
@@ -42,6 +40,11 @@ export function PaperDetailActions({
               ? "border-pink-300 bg-pink-50 text-pink-700"
               : "border-pink-200 bg-white text-pink-700"
           }`}
+          onClick={() => {
+            setOptimisticFavorite((current) => !current);
+            void deckAction("favorite", paperId);
+          }}
+          type="button"
         >
           <Heart
             aria-hidden="true"
@@ -51,14 +54,7 @@ export function PaperDetailActions({
           />
           {optimisticFavorite ? "Favorited" : "Favorite"}
         </button>
-      </form>
 
-      <form
-        action={toggleReadLaterAction}
-        onSubmit={() => setOptimisticSaved((current) => !current)}
-      >
-        <input name="paperId" type="hidden" value={paperId} />
-        <input name="sourcePath" type="hidden" value={sourcePath} />
         <button
           aria-pressed={optimisticSaved}
           className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
@@ -66,6 +62,11 @@ export function PaperDetailActions({
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
               : "border-emerald-200 bg-white text-emerald-700"
           }`}
+          onClick={() => {
+            setOptimisticSaved((current) => !current);
+            void deckAction("read_later", paperId);
+          }}
+          type="button"
         >
           <Bookmark
             aria-hidden="true"
@@ -75,7 +76,6 @@ export function PaperDetailActions({
           />
           {optimisticSaved ? "Saved" : "Read later"}
         </button>
-      </form>
 
       <form action={feedbackActionPath} method="post">
         <input name="action" type="hidden" value="already_read" />

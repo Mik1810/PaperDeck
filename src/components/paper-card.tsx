@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { MathContent } from "@/components/math-content";
 import {
   Bookmark,
@@ -12,12 +12,17 @@ import {
   X,
 } from "lucide-react";
 import {
-  dismissPaperAction,
   openPaperAction,
-  toggleReadLaterAction,
-  toggleFavoriteAction,
 } from "@/app/actions";
 import type { Paper } from "@/types/paper";
+
+async function deckAction(action: string, paperId: string) {
+  await fetch("/api/deck", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, paperId }),
+  });
+}
 
 type PaperCardProps = {
   paper: Paper;
@@ -101,16 +106,16 @@ export function PaperCard({
       </div>
 
       <div className="grid grid-cols-5 gap-2 border-t border-slate-100 bg-slate-50 p-3">
-        <form
-          action={dismissPaperAction}
-          onSubmit={() => onDismissSubmit?.(paper.id)}
+        <button
+          className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700"
+          onClick={() => {
+            onDismissSubmit?.(paper.id);
+            void deckAction("dismiss", paper.id);
+          }}
+          type="button"
         >
-          <input name="paperId" type="hidden" value={paper.id} />
-          <input name="sourcePath" type="hidden" value={sourcePath} />
-          <button className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700">
-            <X aria-label="Dismiss paper" size={19} strokeWidth={2.5} />
-          </button>
-        </form>
+          <X aria-label="Dismiss paper" size={19} strokeWidth={2.5} />
+        </button>
         <form action={openPaperAction} className="col-span-2">
           <input name="paperId" type="hidden" value={paper.id} />
           <input name="sourcePath" type="hidden" value={sourcePath} />
@@ -119,44 +124,39 @@ export function PaperCard({
             Open
           </button>
         </form>
-        <form
-          action={toggleFavoriteAction}
-          onSubmit={() => setOptimisticFavorite((current) => !current)}
+        <button
+          className={`grid h-12 w-full place-items-center rounded-lg border ${
+            optimisticFavorite
+              ? "border-pink-300 bg-pink-50 text-pink-700"
+              : "border-pink-200 bg-white text-pink-700"
+          }`}
+          onClick={() => {
+            setOptimisticFavorite((current) => !current);
+            void deckAction("favorite", paper.id);
+          }}
+          type="button"
         >
-          <input name="paperId" type="hidden" value={paper.id} />
-          <input name="sourcePath" type="hidden" value={sourcePath} />
-          <button
-            aria-pressed={optimisticFavorite}
-            className={`grid h-12 w-full place-items-center rounded-lg border ${
-              optimisticFavorite
-                ? "border-pink-300 bg-pink-50 text-pink-700"
-                : "border-pink-200 bg-white text-pink-700"
-            }`}
-          >
-            <Heart
-              aria-label={
-                optimisticFavorite ? "Remove favorite" : "Favorite paper"
-              }
-              fill={optimisticFavorite ? "currentColor" : "none"}
-              size={19}
-              strokeWidth={2.5}
-            />
-          </button>
-        </form>
-        <form
-          action={toggleReadLaterAction}
-          onSubmit={() => setOptimisticSaved((current) => !current)}
+          <Heart
+            aria-label={
+              optimisticFavorite ? "Remove favorite" : "Favorite paper"
+            }
+            fill={optimisticFavorite ? "currentColor" : "none"}
+            size={19}
+            strokeWidth={2.5}
+          />
+        </button>
+        <button
+          className={`grid h-12 w-full place-items-center rounded-lg border ${
+            optimisticSaved
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-emerald-200 bg-white text-emerald-700"
+          }`}
+          onClick={() => {
+            setOptimisticSaved((current) => !current);
+            void deckAction("read_later", paper.id);
+          }}
+          type="button"
         >
-          <input name="paperId" type="hidden" value={paper.id} />
-          <input name="sourcePath" type="hidden" value={sourcePath} />
-          <button
-            aria-pressed={optimisticSaved}
-            className={`grid h-12 w-full place-items-center rounded-lg border ${
-              optimisticSaved
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                : "border-emerald-200 bg-white text-emerald-700"
-            }`}
-          >
             <Bookmark
               aria-label={
                 optimisticSaved ? "Saved to Read later" : "Save to Read later"
@@ -166,7 +166,6 @@ export function PaperCard({
               strokeWidth={2.5}
             />
           </button>
-        </form>
       </div>
 
       <a

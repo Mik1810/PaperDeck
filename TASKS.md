@@ -111,9 +111,13 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
   - Detail favorite/read-later buttons now use optimistic client state, detail page state reads no longer load the full 500-row interaction set, and common mutations no longer upsert the profile on every click unless a profile foreign-key miss requires a retry.
   - Verification 2026-07-02: `npm run lint` and `npm run build` passed. Focused local repository timing for the detail feedback insert path was 600ms cold, then 148ms and 80ms warm. A production HAR retest after deployment should confirm the new `/papers/[paperId]/feedback` POST separately from the following `/feed` navigation.
 
-- [ ] Consider route-handler mutations for deck actions if latency regresses.
-  - Current Server Action/RSC path is acceptable after the latest production HAR, but it still returns an RSC payload for simple favorite/read-later/dismiss mutations.
-  - Success condition: only pursue this if production feed action latency climbs above the current sub-1s range or the UI needs even faster reconciliation.
+- [x] Consider route-handler mutations for deck actions if latency regresses.
+  - Done 2026-07-02: replaced server actions with API route handler for deck mutations.
+  - New `POST /api/deck` route returns lightweight JSON `{ ok: true }` instead of RSC payloads.
+  - Handles dismiss, favorite, read_later actions with proper error handling.
+  - PaperCard and PaperDetailActions now use fetch + onClick instead of form actions.
+  - Form-based actions (openPaperAction, feedback) retained where navigation or redirect is needed.
+  - Success condition: feed actions return JSON instead of RSC streams, reducing response payload.
 
 - [x] Add lightweight server timing logs for feed.
   - Log phases:
