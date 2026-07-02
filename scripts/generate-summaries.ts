@@ -229,7 +229,7 @@ async function summarizeChunk(
         { role: "user", content: userContent },
       ],
       temperature: 0.3,
-      max_tokens: 600,
+      max_tokens: 1200,
     }),
   });
 
@@ -342,7 +342,7 @@ async function mergeChunkSummaries(
         { role: "user", content: userContent },
       ],
       temperature: 0.3,
-      max_tokens: 600,
+      max_tokens: 1200,
     }),
   });
 
