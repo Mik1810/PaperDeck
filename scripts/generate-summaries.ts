@@ -104,7 +104,7 @@ function parseArgs(): SummaryConfig {
     dryRun:
       args.includes("--dry-run") || process.env.LLM_DRY_RUN === "true",
     requestDelayMs: Number(
-      process.env.LLM_REQUEST_DELAY_MS ?? 5000,
+      process.env.LLM_REQUEST_DELAY_MS ?? 15000,
     ),
   };
 }
@@ -200,6 +200,47 @@ function chunkText(text: string, maxChars: number) {
   return chunks;
 }
 
+async function callLLM(
+  config: SummaryConfig,
+  body: Record<string, unknown>,
+  retries = 3,
+): Promise<{ choices: Array<{ message: { content: string | null; reasoning?: string } }> }> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+        "HTTP-Referer": "https://paperdeck.michaelpiccirilli.it",
+        "X-Title": "PaperDeck",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      return response.json();
+    }
+
+    if (response.status === 429 && attempt < retries) {
+      const retryAfter = response.headers.get("Retry-After");
+      const delay = retryAfter
+        ? Number(retryAfter) * 1000
+        : (attempt + 1) * 15000;
+      console.error(
+        `  Rate limited, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      continue;
+    }
+
+    throw new Error(
+      `LLM API error: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  throw new Error("LLM API error: max retries exceeded");
+}
+
 async function summarizeChunk(
   config: SummaryConfig,
   title: string,
@@ -214,36 +255,15 @@ async function summarizeChunk(
 
   const userContent = `Paper title: ${title}\n\n${prefix}${chunk}`;
 
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-      "HTTP-Referer": "https://paperdeck.michaelpiccirilli.it",
-      "X-Title": "PaperDeck",
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      temperature: 0.3,
-      max_tokens: 1600,
-    }),
+  const data = await callLLM(config, {
+    model: config.model,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userContent },
+    ],
+    temperature: 0.3,
+    max_tokens: 1600,
   });
-
-  if (!response.ok) {
-    throw new Error(
-      `LLM API error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    choices: Array<{
-      message: { content: string | null; reasoning?: string };
-    }>;
-  };
 
   const message = data.choices?.[0]?.message;
   const raw = (message?.content ?? "") || (message?.reasoning ?? "");
@@ -327,34 +347,15 @@ async function mergeChunkSummaries(
   const userContent =
     `Paper title: ${title}\n\nCombine these partial summaries into a single final summary:\n\n${parts}`;
 
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-      "HTTP-Referer": "https://paperdeck.michaelpiccirilli.it",
-      "X-Title": "PaperDeck",
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      temperature: 0.3,
-      max_tokens: 1600,
-    }),
+  const data = await callLLM(config, {
+    model: config.model,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userContent },
+    ],
+    temperature: 0.3,
+    max_tokens: 1600,
   });
-
-  if (!response.ok) {
-    return summaries[0];
-  }
-
-  const data = (await response.json()) as {
-    choices: Array<{
-      message: { content: string | null; reasoning?: string };
-    }>;
-  };
 
   const message = data.choices?.[0]?.message;
   const raw = (message?.content ?? "") || (message?.reasoning ?? "");
