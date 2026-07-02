@@ -53,7 +53,7 @@ const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. G
 
 Write in English. Output ONLY the JSON object, no other text.`;
 
-const MAX_CHARS = 80000;
+const MAX_CHARS = 15000;
 const JINA_BASE = "https://r.jina.ai";
 
 function loadLocalEnv() {
