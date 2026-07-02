@@ -167,3 +167,134 @@ triage summaries:          6
 #8 — Update ROADMAP.md status (partially done)
 #9 — Normalize SESSION2.md
 ```
+
+---
+
+## Part 7 — Paper Detail UI Refinements
+
+### Changes requested
+- Summary moved **below** abstract (not above)
+- Card widened to `max-w-4xl` (full-page with classic padding)
+- Abstract font: `text-sm italic text-slate-600` (smaller, italic)
+- Summary prompt improved: ~100 words per field, no abstract paraphrasing
+
+### Implementation
+- `src/app/papers/[paperId]/page.tsx`: reordered sections, widened card, italic abstract
+- `scripts/generate-summaries.ts`: prompt rewritten for specificity, `max_tokens` increased to 1600
+
+---
+
+## Part 8 — LLM Provider Saga
+
+### OpenRouter + Nemotron (#15 initial)
+- Model: `nvidia/nemotron-3-nano-30b-a3b:free`
+- Issues: all free models 429 globally — OpenRouter free tier saturated
+
+### Groq
+- Model: `llama-3.1-8b-instant`
+- Issues: 413 Payload Too Large (chunks too big), then 429 rate limiting even with retry
+- Fix: chunk size 15K chars, then reduced to send only first 15K chars (user rejected)
+
+### Google Gemini
+- Model: `gemini-2.0-flash` → rejected (limit: 0 on free tier)
+- Model: `gemini-1.5-flash` → 404 (not available on this API key)
+- Model: `gemini-flash-latest` → current, native API
+- API: native Gemini REST API (not OpenAI-compatible)
+- `responseMimeType: "application/json"` for guaranteed JSON output
+- `system_instruction` for prompt instead of messages
+- API key passed as URL parameter instead of Authorization header
+- Retry logic: handles 429 + 503 with 5 attempts, backoff 15s/30s/45s/60s/75s
+
+### Current LLM config
+```env
+LLM_API_KEY=AQ...      (from aistudio.google.com/apikey)
+LLM_MODEL=gemini-flash-latest
+```
+`LLM_BASE_URL` removed — native Gemini API uses fixed endpoint.
+
+### Remaining issue
+- Gemini `gemini-flash-latest` returns intermittent 503 (model overloaded).
+- Some papers succeed, some exhaust all 5 retries.
+- Recommended: run with `limit: 2-3`, `batch_size: 1` to reduce concurrent demand.
+
+---
+
+## Part 9 — Summary Pipeline Architecture
+
+### Flow
+```
+GitHub Actions workflow (manual or cron daily)
+  → Jina AI Reader fetches PDF text from arxiv.org/pdf/{id}
+  → cleanText() strips garbled LaTeX/Unicode artifacts
+  → chunkText() splits at 500K chars (Gemini has 1M context, so rarely chunks)
+  → callGemini() sends to native Gemini API with system_instruction + responseMimeType
+  → JSON.parse() validates 4-field summary
+  → upsertPaper() stores triage_summary JSONB + model + timestamp in papers table
+  → updateCursor() tracks progress in ingestion_cursors
+```
+
+### Paper detail page flow
+```
+Server component fetches paper via catalog.ts (paperSelect includes triage_summary)
+  → If triageSummary exists: renders 4-section summary below abstract
+  → If missing: only abstract shown (no loading, no LLM call on page load)
+  → MathJax 3 renders LaTeX in both abstract and summary
+```
+
+---
+
+## Part 10 — Commit History (abbreviated)
+
+```
+eea8569 feat: complete P1 pipeline — ingestion, enrichment, summaries, embeddings, RLS
+1858e4c feat: add GitHub Actions workflow for summary generation
+0e5c593 fix: add triage_summary to paperSelect query
+296c143 fix: improve paper detail layout and summary prompt
+567b5eb fix: increase max_tokens to 1200
+42411ac feat: 100-word summaries, no abstract repetition
+1d4b294 fix: add retry logic for 429 rate limits
+98fd8ca fix: increase workflow delay to 30s
+094c170 fix: reduce chunk size to 15K for Groq
+61b475f fix: handle monolithic text from Jina when chunking
+e74336e fix: use first 15K chars only
+96725a8 fix: restore full-text chunking with 3s delay
+40ac743 fix: increase workflow timeout to 60min
+f4decdc fix: clean Jina PDF artifacts, improve prompt resilience
+8b9e072 feat: switch to Gemini 2.0 Flash
+d6db34b fix: add 5s delay between papers within batch
+f2ac8b7 feat: use native Gemini API (gemini-flash-latest)
+9964264 fix: retry on 503 as well as 429
+5ff4dc6 fix: 5 retries, raw JSON parse
+```
+
+---
+
+## Current State (end of session)
+
+### Database
+```
+papers (source=arxiv):     447
+papers with S2 ID:         277
+papers with OA ID:         11
+papers with embeddings:    449
+topic_embeddings:          64
+triage summaries:          0 (cleared for regeneration with new prompt)
+```
+
+### Issues closed this session
+```
+#10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #23
+```
+
+### Issues in progress
+```
+#15 — Summary generation pipeline working, but Gemini 503 intermittent
+#38 — Created for summary storage review (future scaling concern)
+```
+
+### Next steps
+1. Stabilize summary generation (reduce batch size, wait for Gemini to cool down)
+2. #21 — Semantic retrieval observability
+3. #22 — Embedding benchmark plan
+4. #24/#25 — Security audit and rotation checklist
+
