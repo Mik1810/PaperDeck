@@ -1,16 +1,12 @@
 import { AppShell } from "@/components/app-shell";
-import { requireUserContext } from "@/lib/auth/session";
-import {
-  ensureUserProfile,
-  getSettingsPageData,
-} from "@/lib/repositories/user-data";
+import { requireOwnerId } from "@/lib/auth/session";
+import { getSettingsPageData } from "@/lib/repositories/user-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
-  const { interests, readLaterCount } = await getSettingsPageData(user.ownerId);
+  const ownerId = await requireOwnerId();
+  const { interests, readLaterCount } = await getSettingsPageData(ownerId);
 
   return (
     <AppShell

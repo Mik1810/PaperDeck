@@ -40,6 +40,27 @@ Clerk's production deployment guide also requires production OAuth credentials f
 
 Clerk's production guide assumes a domain you own and DNS access. PaperDeck uses `paperdeck.michaelpiccirilli.it` as a secondary application under the `michaelpiccirilli.it` domain.
 
+## Local Clerk Development
+
+Local development should use Clerk development keys:
+
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+PAPERDECK_DEV_AUTH=false
+```
+
+Production keys (`pk_live_...` / `sk_live_...`) are tied to the production custom domain and are not valid for `localhost`.
+
+For UI and latency debugging without Clerk, PaperDeck also supports a local-only bypass:
+
+```env
+PAPERDECK_DEV_AUTH=true
+PAPERDECK_DEV_OWNER_ID=local-dev-user
+```
+
+The bypass is ignored in production because it only activates when `NODE_ENV !== "production"`. Use it to isolate application/UI latency from Clerk latency; use Clerk development keys when a local test should resemble the production authentication flow.
+
 ## Vercel Environment Variables
 
 Production and Preview should have these values configured in Vercel:
@@ -52,6 +73,7 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
 CLERK_AUTHORIZED_PARTIES=https://paperdeck.michaelpiccirilli.it
+PAPERDECK_DEV_AUTH=false
 
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me

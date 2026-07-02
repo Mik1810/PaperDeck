@@ -273,8 +273,6 @@ export async function ensureSeedCatalog() {
 }
 
 export async function getTopics() {
-  await ensureSeedCatalog();
-
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("taxonomy_topics")
@@ -294,8 +292,6 @@ export async function getPapersByIds(paperIds: string[]) {
     return [];
   }
 
-  await ensureSeedCatalog();
-
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("papers")
@@ -312,8 +308,6 @@ export async function getPapersByIds(paperIds: string[]) {
 }
 
 export async function getAllPapers() {
-  await ensureSeedCatalog();
-
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("papers")
@@ -326,8 +320,6 @@ export async function getAllPapers() {
 }
 
 export async function getPaperById(paperId: string) {
-  await ensureSeedCatalog();
-
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("papers")

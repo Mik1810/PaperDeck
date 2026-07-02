@@ -22,14 +22,20 @@ type PaperCardProps = {
   paper: Paper;
   isFavorite?: boolean;
   isSaved?: boolean;
+  onDismissSubmit?: (paperId: string) => void;
+  sourcePath?: string;
 };
 
 export function PaperCard({
   paper,
   isFavorite = false,
   isSaved = false,
+  onDismissSubmit,
+  sourcePath = "/feed",
 }: PaperCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
+  const [optimisticSaved, setOptimisticSaved] = useState(isSaved);
 
   return (
     <article className="flex h-[min(760px,calc(100vh-150px))] min-h-[560px] w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)]">
@@ -94,50 +100,67 @@ export function PaperCard({
       </div>
 
       <div className="grid grid-cols-5 gap-2 border-t border-slate-100 bg-slate-50 p-3">
-        <form action={dismissPaperAction}>
+        <form
+          action={dismissPaperAction}
+          onSubmit={() => onDismissSubmit?.(paper.id)}
+        >
           <input name="paperId" type="hidden" value={paper.id} />
+          <input name="sourcePath" type="hidden" value={sourcePath} />
           <button className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700">
             <X aria-label="Dismiss paper" size={19} strokeWidth={2.5} />
           </button>
         </form>
         <form action={openPaperAction} className="col-span-2">
           <input name="paperId" type="hidden" value={paper.id} />
+          <input name="sourcePath" type="hidden" value={sourcePath} />
           <button className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white">
             <MoveRight aria-hidden="true" size={18} strokeWidth={2.5} />
             Open
           </button>
         </form>
-        <form action={toggleFavoriteAction}>
+        <form
+          action={toggleFavoriteAction}
+          onSubmit={() => setOptimisticFavorite((current) => !current)}
+        >
           <input name="paperId" type="hidden" value={paper.id} />
+          <input name="sourcePath" type="hidden" value={sourcePath} />
           <button
+            aria-pressed={optimisticFavorite}
             className={`grid h-12 w-full place-items-center rounded-lg border ${
-              isFavorite
+              optimisticFavorite
                 ? "border-pink-300 bg-pink-50 text-pink-700"
                 : "border-pink-200 bg-white text-pink-700"
             }`}
           >
             <Heart
-              aria-label={isFavorite ? "Remove favorite" : "Favorite paper"}
-              fill={isFavorite ? "currentColor" : "none"}
+              aria-label={
+                optimisticFavorite ? "Remove favorite" : "Favorite paper"
+              }
+              fill={optimisticFavorite ? "currentColor" : "none"}
               size={19}
               strokeWidth={2.5}
             />
           </button>
         </form>
-        <form action={toggleReadLaterAction}>
+        <form
+          action={toggleReadLaterAction}
+          onSubmit={() => setOptimisticSaved((current) => !current)}
+        >
           <input name="paperId" type="hidden" value={paper.id} />
+          <input name="sourcePath" type="hidden" value={sourcePath} />
           <button
+            aria-pressed={optimisticSaved}
             className={`grid h-12 w-full place-items-center rounded-lg border ${
-              isSaved
+              optimisticSaved
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                 : "border-emerald-200 bg-white text-emerald-700"
             }`}
           >
             <Bookmark
               aria-label={
-                isSaved ? "Saved to Read later" : "Save to Read later"
+                optimisticSaved ? "Saved to Read later" : "Save to Read later"
               }
-              fill={isSaved ? "currentColor" : "none"}
+              fill={optimisticSaved ? "currentColor" : "none"}
               size={19}
               strokeWidth={2.5}
             />

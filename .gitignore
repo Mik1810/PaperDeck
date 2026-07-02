@@ -47,3 +47,6 @@ oauth_client_*.json
 
 # Google OAuth local download
 client_secret_google.json
+
+# Network investigation files
+har/

@@ -73,6 +73,8 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
 CLERK_AUTHORIZED_PARTIES=http://localhost:3000,https://paperdeck.example.com
+PAPERDECK_DEV_AUTH=false
+PAPERDECK_DEV_OWNER_ID=local-dev-user
 
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
@@ -81,6 +83,8 @@ SUPABASE_SERVICE_ROLE_KEY=replace_me
 
 `.env.local` is intentionally ignored by Git.
 
+Use Clerk development keys (`pk_test_...` / `sk_test_...`) for local authentication testing. For UI latency debugging without Clerk, set `PAPERDECK_DEV_AUTH=true`; this bypass only works outside production.
+
 ## Database
 
 The initial database plan lives in [docs/database.md](./docs/database.md). The SQL schema draft is in [supabase/schema.sql](./supabase/schema.sql).
@@ -88,6 +92,12 @@ The initial database plan lives in [docs/database.md](./docs/database.md). The S
 The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data through trusted server code. RLS policies are included for the future Clerk JWT integration path.
 
 Current server-side persistence covers profiles, onboarding interests, favorites, the default `Read later` playlist, playlist items, paper interactions, and a seeded starter catalog. The feed ranking is computed server-side in `src/lib/ranking/feed-ranking.ts`.
+
+Seed the starter catalog explicitly:
+
+```bash
+npm run seed:catalog
+```
 
 ## Ingestion
 

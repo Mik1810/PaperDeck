@@ -1,6 +1,12 @@
 import { SignUp } from "@clerk/nextjs";
+import { redirect } from "next/navigation";
+import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 
 export default function SignUpPage() {
+  if (isDevAuthEnabled()) {
+    redirect("/feed");
+  }
+
   return (
     <main className="grid min-h-screen place-items-center bg-[#f6f7fb] px-4 py-10">
       <section className="w-full max-w-md">

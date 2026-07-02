@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireUserContext } from "@/lib/auth/session";
+import { requireOwnerId, requireUserContext } from "@/lib/auth/session";
 import {
+  ensureUserProfileForOwner,
   ensureUserProfile,
   recordPaperInteraction,
   saveSelectedTopics,
@@ -19,6 +20,26 @@ function requirePaperId(formData: FormData) {
   }
 
   return paperId;
+}
+
+function sourcePathFrom(formData: FormData, fallback: string) {
+  const sourcePath = formData.get("sourcePath");
+
+  if (typeof sourcePath !== "string") {
+    return fallback;
+  }
+
+  if (
+    sourcePath === "/feed" ||
+    sourcePath === "/library" ||
+    sourcePath === "/onboarding" ||
+    sourcePath === "/settings" ||
+    /^\/papers\/[0-9a-f-]+$/i.test(sourcePath)
+  ) {
+    return sourcePath;
+  }
+
+  return fallback;
 }
 
 export async function saveOnboardingInterestsAction(formData: FormData) {
@@ -38,68 +59,62 @@ export async function saveOnboardingInterestsAction(formData: FormData) {
 }
 
 export async function dismissPaperAction(formData: FormData) {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
-  await recordPaperInteraction(user.ownerId, requirePaperId(formData), "dismiss");
+  const ownerId = await requireOwnerId();
+  await ensureUserProfileForOwner(ownerId);
+  await recordPaperInteraction(ownerId, requirePaperId(formData), "dismiss");
 
-  revalidatePath("/feed");
+  revalidatePath(sourcePathFrom(formData, "/feed"));
 }
 
 export async function openPaperAction(formData: FormData) {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
+  await ensureUserProfileForOwner(ownerId);
   const paperId = requirePaperId(formData);
 
-  await recordPaperInteraction(user.ownerId, paperId, "open_detail");
+  await recordPaperInteraction(ownerId, paperId, "open_detail");
 
-  revalidatePath("/feed");
+  revalidatePath(sourcePathFrom(formData, "/feed"));
   redirect(`/papers/${paperId}`);
 }
 
 export async function toggleFavoriteAction(formData: FormData) {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
+  await ensureUserProfileForOwner(ownerId);
   const paperId = requirePaperId(formData);
 
-  await toggleFavorite(user.ownerId, paperId);
+  await toggleFavorite(ownerId, paperId);
 
-  revalidatePath("/feed");
-  revalidatePath("/library");
-  revalidatePath(`/papers/${paperId}`);
+  revalidatePath(sourcePathFrom(formData, "/feed"));
 }
 
 export async function toggleReadLaterAction(formData: FormData) {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
+  await ensureUserProfileForOwner(ownerId);
   const paperId = requirePaperId(formData);
 
-  await toggleReadLater(user.ownerId, paperId);
+  await toggleReadLater(ownerId, paperId);
 
-  revalidatePath("/feed");
-  revalidatePath("/library");
-  revalidatePath(`/papers/${paperId}`);
+  revalidatePath(sourcePathFrom(formData, "/feed"));
 }
 
 export async function markAlreadyReadAction(formData: FormData) {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
+  await ensureUserProfileForOwner(ownerId);
   const paperId = requirePaperId(formData);
 
-  await recordPaperInteraction(user.ownerId, paperId, "already_read", "detail");
+  await recordPaperInteraction(ownerId, paperId, "already_read", "detail");
 
   revalidatePath("/feed");
-  revalidatePath(`/papers/${paperId}`);
   redirect("/feed");
 }
 
 export async function notInterestedAction(formData: FormData) {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
+  await ensureUserProfileForOwner(ownerId);
   const paperId = requirePaperId(formData);
 
-  await recordPaperInteraction(user.ownerId, paperId, "not_interested", "detail");
+  await recordPaperInteraction(ownerId, paperId, "not_interested", "detail");
 
   revalidatePath("/feed");
-  revalidatePath(`/papers/${paperId}`);
   redirect("/feed");
 }

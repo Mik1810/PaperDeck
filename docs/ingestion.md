@@ -60,6 +60,16 @@ The workflow is:
 
 It runs daily and can also be started manually with `workflow_dispatch`.
 
+Manual dispatch supports:
+
+```text
+categories
+max_results
+dry_run
+```
+
+When `dry_run=true`, the workflow passes `--dry-run` to `npm run ingest:arxiv`.
+
 Required GitHub repository secrets:
 
 ```text
@@ -67,7 +77,7 @@ NEXT_PUBLIC_SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 ```
 
-The workflow has not been run from GitHub yet. It is ready once those secrets are configured in the repository.
+These secrets are configured in the GitHub repository as of 2026-07-02.
 
 Optional GitHub repository variables:
 
@@ -75,6 +85,19 @@ Optional GitHub repository variables:
 ARXIV_CATEGORIES
 ARXIV_MAX_RESULTS
 ARXIV_USER_AGENT
+```
+
+These variables are configured in the GitHub repository as of 2026-07-02.
+
+Verified GitHub-hosted dry-run:
+
+```text
+Date: 2026-07-02
+Run: 28576306513
+Commit: e001b6d
+Inputs: categories=cs.CC, max_results=1, dry_run=true
+Result: success
+Output: {"mode":"dry-run","categories":["cs.CC"],"fetched":1,"importable":1,"firstPaper":"2607.00315"}
 ```
 
 ## arXiv API Limits

@@ -15,11 +15,8 @@ import {
   toggleReadLaterAction,
 } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
-import { requireUserContext } from "@/lib/auth/session";
-import {
-  ensureUserProfile,
-  getPaperDetailData,
-} from "@/lib/repositories/user-data";
+import { requireOwnerId } from "@/lib/auth/session";
+import { getPaperDetailData } from "@/lib/repositories/user-data";
 
 type PaperDetailPageProps = {
   params: Promise<{
@@ -31,10 +28,9 @@ export const dynamic = "force-dynamic";
 
 export default async function PaperDetailPage({ params }: PaperDetailPageProps) {
   const { paperId } = await params;
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
   const { paper, isFavorite, isSaved, readLaterCount } = await getPaperDetailData(
-    user.ownerId,
+    ownerId,
     paperId,
   );
 
@@ -85,6 +81,11 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
         <div className="mt-7 flex flex-wrap gap-2">
           <form action={toggleFavoriteAction}>
             <input name="paperId" type="hidden" value={paper.id} />
+            <input
+              name="sourcePath"
+              type="hidden"
+              value={`/papers/${paper.id}`}
+            />
             <button
               className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
                 isFavorite
@@ -103,6 +104,11 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
           </form>
           <form action={toggleReadLaterAction}>
             <input name="paperId" type="hidden" value={paper.id} />
+            <input
+              name="sourcePath"
+              type="hidden"
+              value={`/papers/${paper.id}`}
+            />
             <button
               className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
                 isSaved
@@ -121,6 +127,11 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
           </form>
           <form action={markAlreadyReadAction}>
             <input name="paperId" type="hidden" value={paper.id} />
+            <input
+              name="sourcePath"
+              type="hidden"
+              value={`/papers/${paper.id}`}
+            />
             <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-sm font-black text-indigo-700">
               <CheckCircle2 aria-hidden="true" size={18} strokeWidth={2.5} />
               Already read
@@ -128,6 +139,11 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
           </form>
           <form action={notInterestedAction}>
             <input name="paperId" type="hidden" value={paper.id} />
+            <input
+              name="sourcePath"
+              type="hidden"
+              value={`/papers/${paper.id}`}
+            />
             <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 text-sm font-black text-rose-700">
               <X aria-hidden="true" size={18} strokeWidth={2.5} />
               Not interested

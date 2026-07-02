@@ -87,9 +87,9 @@ Current status:
 - `src/lib/repositories/semantic-retrieval.ts` loads the current user profile vector and calls the pgvector RPC;
 - `src/lib/repositories/user-profile-embeddings.ts` can refresh a user vector from stored topic/paper embeddings without loading any model;
 - `/feed` uses semantic candidates when a user profile embedding exists and falls back to the current topic/feedback ranking otherwise;
-- `/feed` attempts to refresh the stored user profile embedding before semantic retrieval;
+- `/feed` does not refresh the stored user profile embedding on the normal read path; profile refresh should move to refresh-on-write or a background worker;
 - a first real local BGE-small smoke batch has written 2 topic vectors and 1 paper vector to Supabase;
-- GitHub Actions workflow is ready but has not been run from GitHub yet.
+- GitHub Actions has been verified with both dry-run and tiny write-mode batches.
 
 ## Paper Embedding Input
 
@@ -460,6 +460,23 @@ papers.embedding: 1 row for BAAI/bge-small-en-v1.5, dimension 384
 match_papers_by_embedding: returns the embedded paper with semantic_score 1.0 when queried with its own vector
 ```
 
+Verified GitHub-hosted runs:
+
+```text
+2026-07-02 dry-run
+Run: 28576016191
+Inputs: dry_run=true, topic_limit=10, limit=3, batch_size=8
+Result: success
+Output: 10 topic candidates, 3 paper candidates, no vector writes
+
+2026-07-02 tiny write batch
+Run: 28576129575
+Inputs: dry_run=false, topic_limit=2, limit=1, batch_size=2
+Result: success
+Output: 2 topic vectors written, 1 paper vector written
+RPC check: querying `match_papers_by_embedding` with the embedded paper vector returned the same paper first with semantic_score 1
+```
+
 For public repositories, standard GitHub-hosted runners are free. Do not use larger/GPU runners unless we explicitly accept paid usage.
 
 ## Implementation Steps
@@ -480,7 +497,9 @@ For public repositories, standard GitHub-hosted runners are free. Do not use lar
 11. Done: add topic embedding generation so cold-start users can get semantic profile vectors from selected interests.
 12. Done: run a tiny real embedding batch from a local Python environment with `sentence-transformers` managed by `uv`.
 13. Done: update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
-14. Next: run broader topic and paper embedding batches through GitHub Actions or local `uv`.
+14. Done: verify GitHub Actions dry-run and tiny write-mode batches.
+15. Next: run broader topic and paper embedding batches through GitHub Actions or local `uv`.
+16. Next: move user profile embedding refresh to refresh-on-write or a background worker.
 
 ## Non-Goals For MVP
 

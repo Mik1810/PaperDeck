@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
+import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,13 +25,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const content = isDevAuthEnabled() ? children : <ClerkProvider>{children}</ClerkProvider>;
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <ClerkProvider>{children}</ClerkProvider>
+        {content}
       </body>
     </html>
   );

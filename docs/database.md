@@ -30,7 +30,8 @@ Current implementation:
 
 - `src/lib/supabase/server.ts` creates a service-role Supabase client for server-only code.
 - `src/lib/auth/session.ts` converts the Clerk session into the PaperDeck `owner_id`.
-- `src/lib/repositories/catalog.ts` seeds the initial mock catalog into Supabase and reads shared paper/topic data.
+- `scripts/seed-catalog.ts` seeds the initial mock catalog into Supabase through `npm run seed:catalog`.
+- `src/lib/repositories/catalog.ts` reads shared paper/topic data without running seed writes during user requests.
 - `src/lib/repositories/user-data.ts` persists profiles, interests, favorites, default `Read later`, playlist items, Read later toggles, and user-paper interactions.
 - `src/lib/ranking/feed-ranking.ts` computes the current MVP feed ranking from selected topics, recent user feedback, and seen-paper penalties.
 - `src/app/actions.ts` exposes server actions for onboarding and paper interactions.

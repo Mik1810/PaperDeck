@@ -2,19 +2,15 @@ import { BookmarkX } from "lucide-react";
 import { toggleReadLaterAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { PaperListItem } from "@/components/paper-list-item";
-import { requireUserContext } from "@/lib/auth/session";
-import {
-  ensureUserProfile,
-  getLibraryPageData,
-} from "@/lib/repositories/user-data";
+import { requireOwnerId } from "@/lib/auth/session";
+import { getLibraryPageData } from "@/lib/repositories/user-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function LibraryPage() {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
   const { playlists, favoritePapers, readLaterPapers, readLaterCount } =
-    await getLibraryPageData(user.ownerId);
+    await getLibraryPageData(ownerId);
 
   return (
     <AppShell
@@ -67,6 +63,7 @@ export default async function LibraryPage() {
                     action={
                       <form action={toggleReadLaterAction}>
                         <input name="paperId" type="hidden" value={paper.id} />
+                        <input name="sourcePath" type="hidden" value="/library" />
                         <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-black text-emerald-700">
                           <BookmarkX
                             aria-hidden="true"
