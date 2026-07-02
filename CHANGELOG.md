@@ -12,6 +12,7 @@ This project follows Semantic Versioning.
 - Repeatable service-role audit command to verify server-only Supabase access boundaries.
 - Lightweight Playwright smoke test suite for core authenticated routes under local dev auth.
 - Structured feed logs for semantic retrieval decisions, candidate counts, model name, and fallback reason.
+- Architecture diagrams covering runtime flow, batch workers, data model, security boundaries, and ranking inputs.
 - Multi-category arXiv ingestion verified across all 10 default CS categories (447 papers, 0 duplicates).
 - Historical arXiv backfill mode with `--backfill` and `--backfill-pages` flags.
 - Separate backfill cursors (`arxiv_backfill:<category>`) for resume support.

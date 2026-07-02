@@ -145,7 +145,7 @@ python3 scripts/embed_papers.py --dry-run --limit 3 --table-limit 20
 
 ## Deployment
 
-Deployment notes live in [docs/deployment.md](./docs/deployment.md). Security operations and secret rotation checklists live in [docs/security.md](./docs/security.md). The current public URL is <https://paperdeck.michaelpiccirilli.it/>.
+Architecture diagrams live in [docs/architecture.md](./docs/architecture.md). Deployment notes live in [docs/deployment.md](./docs/deployment.md). Security operations and secret rotation checklists live in [docs/security.md](./docs/security.md). The current public URL is <https://paperdeck.michaelpiccirilli.it/>.
 
 Protected routes require Clerk production keys on public deployments. Development keys are kept for local work.
 
@@ -157,6 +157,7 @@ Protected routes require Clerk production keys on public deployments. Developmen
 |-- AGENT.md
 |-- CHANGELOG.md
 |-- docs/
+|   |-- architecture.md
 |   |-- database.md
 |   |-- embeddings.md
 |   |-- ingestion.md
