@@ -17,7 +17,7 @@
       <stop stop-color="#FFFFFF"/>
       <stop offset="1" stop-color="#EEF2FF"/>
     </linearGradient>
-    <filter id="softShadow" x="0" y="0" width="340" height="300" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feFlood flood-opacity="0" result="BackgroundImageFix"/>
       <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
       <feOffset dy="14"/>
@@ -29,7 +29,7 @@
     </filter>
   </defs>
   <rect x="0" y="0" width="300" height="300" rx="60" fill="url(#iconBg)"/>
-  <g filter="url(#softShadow)" transform="translate(54, 28)">
+  <g filter="url(#softShadow)" transform="translate(9, -14)">
     <rect x="108" y="36" width="158" height="202" rx="24" transform="rotate(11 108 36)" fill="url(#cardBack)"/>
     <rect x="78" y="56" width="158" height="202" rx="24" transform="rotate(-8 78 56)" fill="url(#cardMid)"/>
     <rect x="52" y="68" width="178" height="204" rx="26" fill="url(#cardFront)" stroke="#CBD5E1" stroke-width="2"/>
