@@ -90,8 +90,8 @@ Aggiornato al 2026-07-02:
 ## Prossimi passi
 
 - Benchmark offline modelli embedding (BGE-small vs E5-small-v2 vs MiniLM).
-- Rivedere strategia storage summary JSONB prima di scalare oltre 10K paper.
 - Feature P2: playlist custom, digest in-app, metadati paper detail migliorati.
+- Rivedere strategia storage summary JSONB prima di scalare oltre 10K paper (rivisto in Session 8 — decision document in `docs/summaries.md`).
 
 ## Principio sui contenuti
 

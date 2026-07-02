@@ -1,0 +1,43 @@
+<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="iconTitle">
+  <title id="iconTitle">PaperDeck app icon</title>
+  <defs>
+    <linearGradient id="iconBg" x1="0" y1="0" x2="300" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6EE7D8"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="cardBack" x1="142" y1="36" x2="288" y2="230" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6EE7D8"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="cardMid" x1="96" y1="62" x2="254" y2="246" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCA5A5"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <linearGradient id="cardFront" x1="58" y1="62" x2="238" y2="255" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EEF2FF"/>
+    </linearGradient>
+    <filter id="softShadow" x="0" y="0" width="340" height="300" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="14"/>
+      <feGaussianBlur stdDeviation="18"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.05 0 0 0 0 0.07 0 0 0 0 0.12 0 0 0 0.22 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1" result="shape"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="300" height="300" rx="60" fill="url(#iconBg)"/>
+  <g filter="url(#softShadow)" transform="translate(54, 28)">
+    <rect x="108" y="36" width="158" height="202" rx="24" transform="rotate(11 108 36)" fill="url(#cardBack)"/>
+    <rect x="78" y="56" width="158" height="202" rx="24" transform="rotate(-8 78 56)" fill="url(#cardMid)"/>
+    <rect x="52" y="68" width="178" height="204" rx="26" fill="url(#cardFront)" stroke="#CBD5E1" stroke-width="2"/>
+    <path d="M88 114H181" stroke="#111827" stroke-width="10" stroke-linecap="round"/>
+    <path d="M88 148H194" stroke="#64748B" stroke-width="8" stroke-linecap="round"/>
+    <path d="M88 178H166" stroke="#64748B" stroke-width="8" stroke-linecap="round"/>
+    <path d="M88 208H202" stroke="#64748B" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="206" cy="110" r="15" fill="#14B8A6"/>
+    <path d="M201 110L205 114L213 105" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

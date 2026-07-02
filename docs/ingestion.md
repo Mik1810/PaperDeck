@@ -405,3 +405,7 @@ LLM_API_KEY        # only for Gemini fallback
 ## Next Ingestion Work
 
 - Run the first real BGE-small embedding batch outside Vercel, following [`docs/embeddings.md`](./embeddings.md).
+
+## See also
+
+- [Summaries storage strategy](./summaries.md) — JSONB inline vs separate table, scaling triggers, and migration plan.

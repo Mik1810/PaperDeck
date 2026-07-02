@@ -64,7 +64,7 @@ const paperIdentities: Record<
   "paper-004": { column: "arxiv_id", value: "paperdeck-seed-004" },
 };
 
-const paperSelect = `
+const paperSelectSimple = `
   id,
   title,
   abstract,
@@ -76,9 +76,13 @@ const paperSelect = `
   citation_count,
   is_classic,
   access,
-  triage_summary,
   paper_authors(name, position),
   paper_topics(taxonomy_topics(id, slug, label, parent_id, arxiv_category, depth, sort_order))
+`;
+
+const paperSelectWithSummary = `
+  ${paperSelectSimple.trim()},
+  triage_summary
 `;
 
 const uuidPattern =
@@ -288,24 +292,29 @@ export async function getTopics() {
   return (data ?? []) as TopicRow[];
 }
 
-export async function getPapersByIds(paperIds: string[]) {
+export async function getPapersByIds(
+  paperIds: string[],
+  opts?: { includeSummary?: boolean },
+) {
   const validPaperIds = paperIds.filter((paperId) => uuidPattern.test(paperId));
 
   if (!validPaperIds.length) {
     return [];
   }
 
+  const select = opts?.includeSummary ? paperSelectWithSummary : paperSelectSimple;
+
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("papers")
-    .select(paperSelect)
+    .select(select)
     .in("id", validPaperIds);
 
   assertNoError(error, "Load papers by ID");
 
   const order = new Map(validPaperIds.map((paperId, index) => [paperId, index]));
 
-  return ((data ?? []) as PaperRow[])
+  return ((data ?? []) as unknown as PaperRow[])
     .map(paperFromRow)
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }
@@ -314,23 +323,23 @@ export async function getAllPapers() {
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("papers")
-    .select(paperSelect)
+    .select(paperSelectSimple)
     .order("year", { ascending: false });
 
   assertNoError(error, "Load papers");
 
-  return ((data ?? []) as PaperRow[]).map(paperFromRow);
+  return ((data ?? []) as unknown as PaperRow[]).map(paperFromRow);
 }
 
 export async function getPaperById(paperId: string) {
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("papers")
-    .select(paperSelect)
+    .select(paperSelectWithSummary)
     .eq("id", paperId)
     .maybeSingle();
 
   assertNoError(error, "Load paper");
 
-  return data ? paperFromRow(data as PaperRow) : null;
+  return data ? paperFromRow(data as unknown as PaperRow) : null;
 }
