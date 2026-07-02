@@ -1,0 +1,60 @@
+name: Generate paper summaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Maximum papers to process"
+        required: false
+        default: "10"
+      batch_size:
+        description: "Papers per API batch"
+        required: false
+        default: "5"
+      dry_run:
+        description: "Count papers needing summaries without calling LLM"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "37 5 * * *"
+
+jobs:
+  generate-summaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_MODEL: ${{ vars.LLM_MODEL || 'nvidia/nemotron-3-nano-30b-a3b:free' }}
+      LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://openrouter.ai/api/v1' }}
+      LLM_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.LLM_BATCH_SIZE || '5' }}
+      LLM_LIMIT: ${{ github.event.inputs.limit || vars.LLM_LIMIT || '10' }}
+      LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '5000' }}
+      LLM_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      JINA_API_KEY: ${{ secrets.JINA_API_KEY || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate summaries
+        shell: bash
+        run: |
+          cmd=(npm run generate:summaries)
+
+          if [ "$LLM_DRY_RUN" = "true" ]; then
+            cmd+=(-- --dry-run)
+          fi
+
+          "${cmd[@]}"
