@@ -8,6 +8,9 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Custom private playlists with create, rename, delete, and add/remove paper support.
+- Drag-and-drop playlist paper ordering via @dnd-kit with optimistic reorder.
+- API route `POST /api/deck` for lightweight deck mutations (dismiss, favorite, read_later).
 - Secret rotation checklist for Clerk, Supabase service-role credentials, Google OAuth, and GitHub Actions secrets.
 - Repeatable service-role audit command to verify server-only Supabase access boundaries.
 - Lightweight Playwright smoke test suite for core authenticated routes under local dev auth.

@@ -21,7 +21,7 @@ PaperDeck is currently at `0.1.4`: an early MVP foundation with production auth,
 - Swipe left to dismiss a paper.
 - Swipe right to open the paper detail view.
 - Heart button for favorites.
-- Bookmark button to add/remove papers from the default `Read later` playlist.
+- Bookmark button to add/remove papers from private playlists.
 - Detail actions for `Already read` and `Not interested` signals.
 - External links to arXiv, DOI, publisher pages, or legal PDFs when available.
 - In-app digest.
@@ -49,7 +49,7 @@ PaperDeck will use a hybrid ranking strategy:
 
 The current live ranking uses selected topics, topic hierarchy, recent explicit feedback, citation/year metadata, seen-paper penalties, and semantic candidates when a stored user profile vector exists. The embedding workflow is specified in [docs/embeddings.md](./docs/embeddings.md).
 
-The first embedding model planned for the MVP is `BAAI/bge-small-en-v1.5`, with later comparison against `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2`. The schema, pgvector match RPC, GitHub Actions worker, topic/paper embedding dry-runs, first real embedding smoke batch, and server-side user profile aggregation are already in place.
+The embedding model is `sentence-transformers/all-MiniLM-L6-v2` (selected via offline benchmark as +17% better than BGE-small), with 384-dimensional vectors stored in pgvector.
 
 ## Planned Architecture
 

@@ -103,33 +103,37 @@ Replaced BGE-small with MiniLM everywhere:
 
 All P0-P1 issues are now CLOSED. Only #38 (post-MVP/scaling) remains open.
 
----
+## P2 Issues Completed
 
-## Issue #26 — Custom Private Playlists
-
-Added full playlist CRUD:
-- Repository: createPlaylist, renamePlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist
-- Server actions: create/rename/delete/add/remove with revalidatePath
-- PlaylistSidebar client component: inline create, rename edit, delete (hover visibility)
-- Library page supports ?playlist= searchParam
+### #26 — Custom Private Playlists
+- createPlaylist, renamePlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist
+- PlaylistSidebar with inline create/rename/delete (hover-visible icons)
 - Read later default playlist protected from rename/delete
-- Playlist type extended with isDefault field
+- Library page supports ?playlist= searchParam
 
-## Issue #6 — Collapse feed Supabase round trips
+### #27 — Drag-and-Drop Playlist Ordering
+- @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities
+- SortablePlaylistPaper with GripVertical drag handle
+- PlaylistPapers component in main content area with DndContext
+- Optimistic arrayMove on drop + reorderPlaylistAction for persistence
+- addToPlaylist assigns position = max+1 (new papers at bottom)
+- Mounted check avoids dnd-kit SSR hydration mismatch
 
-Merged `getSelectedTopicIds` + `getUserPaperState` into `getFeedState`:
+### #6 — Collapse Feed Supabase Round Trips
+- Merged getSelectedTopicIds + getUserPaperState into getFeedState
 - Single Supabase client with 4 queries in Promise.all
-- Feed: 2 parallel calls instead of 3
+- Feed page: 2 parallel calls instead of 3
 - Interaction limit: 500 → 200 rows
 - Also applied to getSettingsPageData and getOnboardingData
 
-## Issue #27 — Drag-and-Drop Playlist Ordering
+### #7 — Route-Handler Mutations for Deck Actions
+- New POST /api/deck route returning { ok: true } JSON
+- Handles dismiss, favorite, read_later via lightweight API route
+- PaperCard: buttons with onClick + fetch instead of form actions  
+- PaperDetailActions: same pattern for favorite/read-later
+- Form actions kept for openPaperAction (needs redirect) and feedback
 
-Added drag-and-drop reordering with @dnd-kit:
-- Installed @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities
-- SortablePlaylistPaper component with GripVertical drag handle
-- DndContext + SortableContext in PlaylistSidebar with verticalListSortingStrategy
-- Optimistic arrayMove on drop, form submit via reorderPlaylistAction
-- 5px drag activation threshold (prevents accidental drags on click)
-- addToPlaylist assigns position = max+1 (new papers at bottom)
-- reorderPlaylistItems updates position for all paper IDs in new order
+## Issues Closed This Session
+```
+#8, #9, #22, #26, #27, #6, #7
+```

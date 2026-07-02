@@ -13,7 +13,7 @@ PaperDeck is a Next.js application backed by Clerk, Supabase Postgres, pgvector,
 | Database | Supabase Postgres | Paper catalog, user state, ingestion cursors, summary JSON |
 | Vector search | pgvector | Top-K paper retrieval with `match_papers_by_embedding` |
 | Batch workers | GitHub Actions, local scripts | arXiv ingestion, metadata enrichment, embeddings, summaries |
-| Embedding model | `BAAI/bge-small-en-v1.5` | 384-dimensional paper/topic vectors |
+| Embedding model | `sentence-transformers/all-MiniLM-L6-v2` | 384-dimensional paper/topic vectors |
 | Planned benchmark models | `intfloat/e5-small-v2`, `sentence-transformers/all-MiniLM-L6-v2` | Offline retrieval quality comparison |
 | Summary model | GitHub Models `openai/gpt-4o-mini` | Structured paper triage summaries |
 | Summary fallbacks | Cloudflare Workers AI, Gemini | Optional fallback providers |
