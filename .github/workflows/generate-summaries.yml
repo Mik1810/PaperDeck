@@ -22,7 +22,7 @@ on:
 jobs:
   generate-summaries:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -31,7 +31,7 @@ jobs:
       LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://openrouter.ai/api/v1' }}
       LLM_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.LLM_BATCH_SIZE || '5' }}
       LLM_LIMIT: ${{ github.event.inputs.limit || vars.LLM_LIMIT || '10' }}
-      LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '30000' }}
+      LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '15000' }}
       LLM_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
       JINA_API_KEY: ${{ secrets.JINA_API_KEY || '' }}
 
