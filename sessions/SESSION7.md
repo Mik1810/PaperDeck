@@ -102,3 +102,26 @@ Replaced BGE-small with MiniLM everywhere:
 ```
 
 All P0-P1 issues are now CLOSED. Only #38 (post-MVP/scaling) remains open.
+
+---
+
+## Issue #26 — Custom Private Playlists
+
+Added full playlist CRUD:
+- Repository: createPlaylist, renamePlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist
+- Server actions: create/rename/delete/add/remove with revalidatePath
+- PlaylistSidebar client component: inline create, rename edit, delete (hover visibility)
+- Library page supports ?playlist= searchParam
+- Read later default playlist protected from rename/delete
+- Playlist type extended with isDefault field
+
+## Issue #27 — Drag-and-Drop Playlist Ordering
+
+Added drag-and-drop reordering with @dnd-kit:
+- Installed @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities
+- SortablePlaylistPaper component with GripVertical drag handle
+- DndContext + SortableContext in PlaylistSidebar with verticalListSortingStrategy
+- Optimistic arrayMove on drop, form submit via reorderPlaylistAction
+- 5px drag activation threshold (prevents accidental drags on click)
+- addToPlaylist assigns position = max+1 (new papers at bottom)
+- reorderPlaylistItems updates position for all paper IDs in new order

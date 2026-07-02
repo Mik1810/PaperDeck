@@ -335,9 +335,13 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
   - "Read later" default playlist is protected from rename/deletion (is_default flag).
   - Playlist type extended with isDefault field.
 
-- [ ] Add manual playlist ordering.
-  - Persist `playlist_items.position`.
-  - Keep mobile interaction simple.
+- [x] Add manual playlist ordering.
+  - Done 2026-07-02: implemented drag-and-drop reordering with @dnd-kit.
+  - SortablePlaylistPaper component with grip vertical drag handle (GripVertical icon).
+  - DndContext + SortableContext in PlaylistSidebar with vertical list strategy and 5px activation threshold.
+  - Optimistic arrayMove on drop, then form submit via reorderPlaylistAction to persist positions.
+  - addToPlaylist now assigns position = max+1 so new papers appear at the bottom.
+  - reorderPlaylistItems updates position column for all paper IDs in the new order.
 
 - [ ] Add settings flow to edit academic interests after onboarding.
   - Success condition: changing selected topics refreshes ranking/profile behavior.
