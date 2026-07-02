@@ -75,14 +75,23 @@ export function FeedDeck({
             paper={visibleActivePaper}
             sourcePath="/feed"
           />
-        ) : (
-          <div className="w-full rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm lg:max-w-2xl">
+        ) : activePaper === null && nextPapers.length === 0 ? (
+          <div className="w-full max-w-md rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">
             <h2 className="text-lg font-black text-slate-950">
-              No papers left in this seed deck
+              No papers yet
             </h2>
             <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
               Adjust your interests or wait for the ingestion worker to add more
               papers.
+            </p>
+          </div>
+        ) : (
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">
+            <h2 className="text-lg font-black text-slate-950">
+              No papers left in this deck
+            </h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+              Adjust your interests or renew the recommendations.
             </p>
           </div>
         )}

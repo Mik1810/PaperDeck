@@ -65,9 +65,15 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
                       <PaperListItem key={paper.id} paper={paper} />
                     ))
                   ) : (
-                    <p className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm font-semibold text-slate-500">
-                      Favorite papers from the deck to keep them here.
-                    </p>
+                    <div className="rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center">
+                      <div className="mx-auto h-8 w-8 rounded-full bg-rose-50" />
+                      <h3 className="mt-3 text-sm font-black text-slate-950">
+                        No favorites yet
+                      </h3>
+                      <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-500">
+                        Favorite papers from the deck to keep them here.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -99,9 +105,15 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
                       />
                     ))
                   ) : (
-                    <p className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm font-semibold text-slate-500">
-                      Save papers to the default Read later playlist from the deck.
-                    </p>
+                    <div className="rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center">
+                      <div className="mx-auto h-8 w-8 rounded-full bg-emerald-50" />
+                      <h3 className="mt-3 text-sm font-black text-slate-950">
+                        Read later is empty
+                      </h3>
+                      <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-500">
+                        Save papers to the default Read later playlist from the deck.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>

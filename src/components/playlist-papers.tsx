@@ -14,6 +14,7 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
+import { Layers } from "lucide-react";
 import { reorderPlaylistAction } from "@/app/actions";
 import { SortablePlaylistPaper } from "@/components/sortable-playlist-paper";
 import type { Paper } from "@/types/paper";
@@ -60,6 +61,25 @@ export function PlaylistPapers({ playlistId, papers }: Props) {
     }
 
     reorderPlaylistAction(formData);
+  }
+
+  if (!papers.length) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center">
+        <Layers
+          aria-hidden="true"
+          size={28}
+          strokeWidth={1.5}
+          className="mx-auto text-slate-300"
+        />
+        <h3 className="mt-3 text-sm font-black text-slate-950">
+          This playlist is empty
+        </h3>
+        <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-500">
+          Save papers from the deck and drag to reorder.
+        </p>
+      </div>
+    );
   }
 
   if (!mounted) {
