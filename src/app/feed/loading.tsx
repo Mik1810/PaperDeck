@@ -4,7 +4,7 @@ import { SkeletonCard } from "@/components/skeleton-card";
 export default function FeedLoading() {
   return (
     <AppShell title="Feed" subtitle="Your personalized paper deck">
-      <div className="flex flex-col items-center justify-center">
+      <div>
         <SkeletonCard />
       </div>
     </AppShell>
