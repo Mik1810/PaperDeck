@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 import { PwaProvider } from "@/components/pwa-provider";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 const geistSans = Geist({
