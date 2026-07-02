@@ -29,7 +29,7 @@
     </filter>
   </defs>
   <rect x="0" y="0" width="300" height="300" rx="60" fill="url(#iconBg)"/>
-  <g filter="url(#softShadow)" transform="translate(9, -14)">
+  <g filter="url(#softShadow)" transform="translate(5, -14)">
     <rect x="108" y="36" width="158" height="202" rx="24" transform="rotate(11 108 36)" fill="url(#cardBack)"/>
     <rect x="78" y="56" width="158" height="202" rx="24" transform="rotate(-8 78 56)" fill="url(#cardMid)"/>
     <rect x="52" y="68" width="178" height="204" rx="26" fill="url(#cardFront)" stroke="#CBD5E1" stroke-width="2"/>
