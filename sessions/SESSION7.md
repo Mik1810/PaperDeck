@@ -83,6 +83,14 @@ Switch default from BGE-small to **all-MiniLM-L6-v2**:
 
 Updated `docs/embeddings.md` with benchmark table.
 
+### Model switch implementation
+Replaced BGE-small with MiniLM everywhere:
+- `scripts/embedding_common.py`: DEFAULT_MODEL
+- `src/lib/repositories/user-profile-embeddings.ts`: EMBEDDING_MODEL constant
+- `.env.example`, `.github/workflows/embed-papers.yml`
+- `supabase/schema.sql`, migration: match_papers_by_embedding RPC default
+- Regenerated 64 topic + 449 paper embeddings with MiniLM
+
 ### Issues closed
 ```
 #8, #9, #22
