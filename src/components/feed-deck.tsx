@@ -76,7 +76,7 @@ export function FeedDeck({
             sourcePath="/feed"
           />
         ) : (
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm lg:max-w-2xl">
             <h2 className="text-lg font-black text-slate-950">
               No papers left in this seed deck
             </h2>
