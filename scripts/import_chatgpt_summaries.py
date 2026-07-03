@@ -124,7 +124,7 @@ def main() -> None:
             rows = supabase.request_json(
                 "papers",
                 {
-                    "select": "id",
+                    "select": "id,triage_summary",
                     "arxiv_id": f"eq.{arxiv_id}",
                 },
             )
@@ -132,6 +132,11 @@ def main() -> None:
             if not rows or not isinstance(rows, list) or len(rows) == 0:
                 print(f"  [{idx+1}/{len(items)}] {arxiv_id}... NOT FOUND in DB")
                 failed += 1
+                continue
+
+            if rows[0].get("triage_summary"):
+                print(f"  [{idx+1}/{len(items)}] {arxiv_id}... SKIPPED (already has summary)")
+                skipped += 1
                 continue
 
             paper_id = rows[0]["id"]

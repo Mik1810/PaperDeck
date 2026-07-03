@@ -1,6 +1,6 @@
 # PaperDeck ROADMAP
 
-Ultimo aggiornamento: 2026-07-02
+Ultimo aggiornamento: 2026-07-03
 
 ## Visione
 
@@ -33,7 +33,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Aprire il dettaglio e' un segnale positivo leggero per il ranking.
 - Segnalibro: salva prima in una playlist default tipo `Read later`.
 - Preview abstract: circa 10 righe su mobile, adattiva su desktop.
-- Embeddings MVP: modello open-source locale, con `BAAI/bge-small-en-v1.5` come default iniziale.
+- Embeddings MVP: modello open-source locale, con `sentence-transformers/all-MiniLM-L6-v2` come default corrente dopo benchmark offline; BGE-small resta baseline storica.
 - Worker batch online MVP: GitHub Actions giornaliero e avviabile manualmente.
 - Database online MVP: Supabase Postgres + pgvector.
 - Supabase region: preferire `eu-central-2` Zurich se disponibile, fallback `eu-central-1` Frankfurt.
@@ -45,7 +45,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 
 ## Stato implementazione
 
-Aggiornato al 2026-07-02:
+Aggiornato al 2026-07-03:
 
 - Repository, scaffold Next.js, UI skeleton e Clerk auth: completati.
 - Supabase schema iniziale con pgvector, RLS preparata e tabelle MVP: applicato.
@@ -70,10 +70,12 @@ Aggiornato al 2026-07-02:
   - Semantic Scholar: 277 paper con citation count, venue corretta, DOI, S2 ID.
   - OpenAlex: 11 paper con venue publisher, open access status, topic, abstract.
   - Unpaywall: 24 URL open access legali per paper con DOI.
-- Embedding batch: completati.
-  - 64 topic embeddings (BGE-small-en-v1.5) in `topic_embeddings`.
-  - 449 paper embeddings (BGE-small-en-v1.5) in `papers.embedding`.
-  - RPC `match_papers_by_embedding` per cosine similarity search attiva.
+- Embedding batch: completati sul percorso worker/RPC.
+  - Modello corrente: `sentence-transformers/all-MiniLM-L6-v2`, scelto dopo benchmark offline (+17.4% Rec@20 vs BGE-small).
+  - 571 paper embeddings MiniLM in `papers.embedding`.
+  - 66 topic embeddings MiniLM in `topic_embeddings`; le righe BGE-small restano baseline storica nelle tabelle multi-modello.
+  - 2 user profile embeddings MiniLM in `user_profile_embeddings`; il retrieval filtra i profili sul modello corrente.
+  - RPC `match_papers_by_embedding` per cosine similarity search attiva con default MiniLM.
 - Feed semantico: profilo utente collegato a onboarding e feed lazy generation.
 - LLM triage summary: implementato.
   - Worker `scripts/generate-summaries.ts` con Jina AI Reader + GitHub Models.
@@ -89,7 +91,7 @@ Aggiornato al 2026-07-02:
 
 ## Prossimi passi
 
-- Benchmark offline modelli embedding (BGE-small vs E5-small-v2 vs MiniLM).
+- Monitorare `feed_timing` dopo il backfill MiniLM e spostare il refresh profilo a refresh-on-write o background worker.
 - Feature P2: playlist custom, digest in-app, metadati paper detail migliorati.
 - Rivedere strategia storage summary JSONB prima di scalare oltre 10K paper (rivisto in Session 8 — decision document in `docs/summaries.md`).
 
@@ -584,11 +586,11 @@ Per nuovi utenti:
 
 ### Embeddings MVP
 
-Decisione iniziale: usare un modello embedding open-source locale, senza API cloud a consumo.
+Decisione corrente: usare un modello embedding open-source locale, senza API cloud a consumo.
 
-Modello consigliato per il primo prototipo:
+Modello corrente:
 
-- `BAAI/bge-small-en-v1.5`
+- `sentence-transformers/all-MiniLM-L6-v2`
 
 Motivi:
 
@@ -596,23 +598,24 @@ Motivi:
 - produce embedding a 384 dimensioni, quindi costa meno in storage e query pgvector;
 - e' adatto a retrieval semantico in inglese;
 - gira realisticamente su CPU per batch piccoli;
-- si integra facilmente con `sentence-transformers`.
+- si integra facilmente con `sentence-transformers`;
+- nel benchmark offline del 2026-07-02 ha migliorato Rec@20 del 17.4% rispetto a BGE-small ed e' risultato piu' veloce.
 
-Baseline da confrontare:
+Baseline storiche confrontate:
 
+- `BAAI/bge-small-en-v1.5`, default iniziale e baseline del primo smoke test;
 - `intfloat/e5-small-v2`, perche' e' una famiglia che hai gia' provato in contesto Information Retrieval;
-- `sentence-transformers/all-MiniLM-L6-v2`, come baseline molto leggera e comune.
+- `sentence-transformers/all-MiniLM-L6-v2`, ora modello corrente.
 
 Strategia:
 
-1. Partire con `BAAI/bge-small-en-v1.5`.
+1. Usare `sentence-transformers/all-MiniLM-L6-v2` come default nei worker, nella RPC e nei profili utente.
 2. Salvare `embeddingModel`, `embeddingDimension` e `embeddedAt` per ogni paper.
 3. Eseguire il modello fuori da Vercel, inizialmente su GitHub Actions o localmente.
 4. Salvare gli embedding in Supabase/pgvector e usare Vercel solo per retrieval leggero e reranking.
-5. Non bloccare lo scaffold sul benchmark.
-6. Dopo il primo feed funzionante, preparare un piccolo benchmark interno con interessi reali e 50-100 paper valutati manualmente.
-7. Confrontare BGE-small, E5-small-v2 e MiniLM prima di stabilizzare definitivamente il modello.
-8. Se BGE-small non basta, valutare un modello piu' grande solo dopo aver misurato qualita', tempo batch e costi.
+5. Considerare stale le righe con `embedding_model` diverso dal default corrente.
+6. Mantenere benchmark offline ripetibili con interessi reali e 50-100 paper valutati manualmente.
+7. Valutare un modello diverso solo dopo aver misurato qualita', tempo batch e costi.
 
 Specifica operativa: `docs/embeddings.md`.
 
@@ -972,4 +975,4 @@ Decisione proposta:
 ## Domande aperte
 
 1. Configurare e testare Clerk JWT per far rispettare le RLS policy direttamente da Supabase.
-2. Dopo il primo feed funzionante, benchmark BGE-small vs E5-small-v2 vs MiniLM su paper reali.
+2. Verificare in produzione il backfill MiniLM e monitorare `feed_timing` per eventuali fallback dovuti a profili o paper non ancora re-embedded.

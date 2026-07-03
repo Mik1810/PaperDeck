@@ -2,16 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { mockPapers, topicTree } from "../src/lib/mock-data";
-import type { PaperSource } from "../src/types/paper";
+import { paperSourceToDatabase } from "../src/lib/paper-sources";
 
 type TopicSeed = (typeof topicTree)[number];
-
-const sourceToDatabase = {
-  arXiv: "arxiv",
-  "Semantic Scholar": "semantic_scholar",
-  OpenAlex: "openalex",
-  DBLP: "dblp",
-} satisfies Record<PaperSource, string>;
 
 const paperIdentities: Record<
   string,
@@ -165,7 +158,7 @@ async function main() {
       title: paper.title,
       abstract: paper.abstract,
       year: paper.year,
-      source: sourceToDatabase[paper.source],
+      source: paperSourceToDatabase(paper.source),
       url: paper.url,
       pdf_url: paper.pdfUrl ?? null,
       venue: paper.venue ?? null,

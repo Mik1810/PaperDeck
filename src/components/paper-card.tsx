@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { MathContent } from "@/components/math-content";
+import { PaperSourceBadge } from "@/components/paper-source-badge";
 import {
   Bookmark,
   ChevronDown,
@@ -55,9 +56,7 @@ export function PaperCard({
             {paper.citationCount ? ` - ${paper.citationCount} citations` : ""}
           </p>
         </div>
-        <span className="shrink-0 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-700">
-          {paper.source}
-        </span>
+        <PaperSourceBadge source={paper.source} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5">

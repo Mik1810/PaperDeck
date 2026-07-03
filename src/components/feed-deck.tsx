@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { PaperCard } from "@/components/paper-card";
+import { PaperSourceBadge } from "@/components/paper-source-badge";
 import type { Paper } from "@/types/paper";
 
 type FeedDeckProps = {
@@ -134,9 +135,12 @@ export function FeedDeck({
                 <p className="text-sm font-black leading-5 text-slate-900">
                   {paper.title}
                 </p>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  {paper.source} - {paper.year}
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <PaperSourceBadge className="px-2 py-0.5" source={paper.source} />
+                  <span className="text-xs font-bold text-slate-500">
+                    {paper.year}
+                  </span>
+                </div>
               </div>
             ))}
           </div>

@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { BookmarkX, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createPlaylistAction,
   deletePlaylistAction,
   renamePlaylistAction,
 } from "@/app/actions";
-import type { Paper } from "@/types/paper";
 
 type PlaylistSummary = {
   id: string;
@@ -24,7 +23,6 @@ type Props = {
 export function PlaylistSidebar({ playlists, selectedId }: Props) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
 
   return (
     <aside className="space-y-3">
@@ -134,7 +132,6 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
                     className="invisible rounded p-1 text-slate-400 hover:bg-slate-100 group-hover:visible"
                     onClick={() => {
                       setEditingId(playlist.id);
-                      setEditName(playlist.name);
                       setIsCreating(false);
                     }}
                     type="button"

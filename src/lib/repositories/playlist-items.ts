@@ -1,45 +1,11 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
+
 type RepositoryError = {
   message: string;
 };
 
-type QueryResult<T = unknown> = {
-  data: T | null;
-  error: RepositoryError | null;
-};
-
-type MaybeSingleQuery<T> = {
-  select(columns: string): MaybeSingleQuery<T>;
-  eq(column: string, value: string): MaybeSingleQuery<T>;
-  order(
-    column: string,
-    options: { ascending: boolean },
-  ): MaybeSingleQuery<T>;
-  limit(count: number): MaybeSingleQuery<T>;
-  maybeSingle(): Promise<QueryResult<T>>;
-};
-
-type WriteQuery = PromiseLike<QueryResult> & {
-  eq(column: string, value: string): WriteQuery;
-};
-
-type PlaylistsTable = {
-  select(columns: string): MaybeSingleQuery<{ id: string }>;
-};
-
-type PlaylistItemsTable = {
-  select(columns: string): MaybeSingleQuery<{ position: number | null }>;
-  upsert(
-    row: { playlist_id: string; paper_id: string; position: number },
-    options: { onConflict: string },
-  ): PromiseLike<QueryResult>;
-  delete(): WriteQuery;
-  update(row: { position: number }): WriteQuery;
-};
-
-export type PlaylistItemMutationClient = {
-  from(table: "playlists"): PlaylistsTable;
-  from(table: "playlist_items"): PlaylistItemsTable;
-};
+export type PlaylistItemMutationClient = SupabaseClient<Database>;
 
 function assertNoError(error: RepositoryError | null, context: string) {
   if (error) {

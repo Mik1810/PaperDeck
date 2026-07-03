@@ -7,7 +7,6 @@ export function renderLatex(text: string): string {
 
   const parts: string[] = [];
   let remaining = text;
-  let mathDepth = 0;
 
   while (remaining.length > 0) {
     const dollarIdx = remaining.indexOf("$");

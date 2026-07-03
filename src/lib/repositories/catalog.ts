@@ -1,54 +1,40 @@
 import "server-only";
 
 import { mockPapers, topicTree } from "@/lib/mock-data";
+import {
+  paperSourceFromDatabase,
+  paperSourceToDatabase,
+} from "@/lib/paper-sources";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import type { Paper, PaperAccess, PaperSource, PaperTopic } from "@/types/paper";
+import type { Tables, TablesInsert } from "@/types/database";
+import type { Paper, PaperAccess, PaperTopic } from "@/types/paper";
 
-type TopicRow = {
-  id: string;
-  slug: string;
-  label: string;
-  parent_id: string | null;
-  arxiv_category: string | null;
-  depth: number;
-  sort_order: number;
-};
+type TopicRow = Pick<
+  Tables<"taxonomy_topics">,
+  "id" | "slug" | "label" | "parent_id" | "arxiv_category" | "depth" | "sort_order"
+>;
 
-type PaperRow = {
-  id: string;
-  title: string;
-  abstract: string | null;
-  year: number | null;
-  source: string;
-  url: string;
-  pdf_url: string | null;
-  venue: string | null;
-  citation_count: number | null;
-  is_classic: boolean | null;
-  access: string;
-  triage_summary: unknown;
-  paper_authors?: Array<{
-    name: string;
-    position: number;
-  }>;
+type PaperAuthorRow = Pick<Tables<"paper_authors">, "name" | "position">;
+
+type PaperRow = Pick<
+  Tables<"papers">,
+  | "id"
+  | "title"
+  | "abstract"
+  | "year"
+  | "source"
+  | "url"
+  | "pdf_url"
+  | "venue"
+  | "citation_count"
+  | "is_classic"
+  | "access"
+  | "triage_summary"
+> & {
+  paper_authors?: PaperAuthorRow[] | null;
   paper_topics?: Array<{
     taxonomy_topics: TopicRow | TopicRow[] | null;
-  }>;
-};
-
-const sourceToDatabase = {
-  arXiv: "arxiv",
-  "Semantic Scholar": "semantic_scholar",
-  OpenAlex: "openalex",
-  DBLP: "dblp",
-} satisfies Record<PaperSource, string>;
-
-const sourceToDisplay: Record<string, PaperSource> = {
-  arxiv: "arXiv",
-  semantic_scholar: "Semantic Scholar",
-  openalex: "OpenAlex",
-  dblp: "DBLP",
-  manual: "arXiv",
+  }> | null;
 };
 
 const paperIdentities: Record<
@@ -137,7 +123,7 @@ export function paperFromRow(row: PaperRow): Paper {
     title: row.title,
     authors,
     year: row.year ?? new Date().getFullYear(),
-    source: sourceToDisplay[row.source] ?? "arXiv",
+    source: paperSourceFromDatabase(row.source),
     venue: row.venue ?? undefined,
     abstract: row.abstract ?? "",
     topics,
@@ -203,11 +189,11 @@ export async function ensureSeedCatalog() {
       throw new Error(`Missing seed identity for ${paper.id}`);
     }
 
-    const paperPayload = {
+    const paperPayload: TablesInsert<"papers"> = {
       title: paper.title,
       abstract: paper.abstract,
       year: paper.year,
-      source: sourceToDatabase[paper.source],
+      source: paperSourceToDatabase(paper.source),
       url: paper.url,
       pdf_url: paper.pdfUrl ?? null,
       venue: paper.venue ?? null,
@@ -285,11 +271,12 @@ export async function getTopics() {
     .from("taxonomy_topics")
     .select("id, slug, label, parent_id, arxiv_category, depth, sort_order")
     .order("depth", { ascending: true })
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: true })
+    .returns<TopicRow[]>();
 
   assertNoError(error, "Load topics");
 
-  return (data ?? []) as TopicRow[];
+  return data ?? [];
 }
 
 export async function getPapersByIds(
@@ -308,13 +295,14 @@ export async function getPapersByIds(
   const { data, error } = await supabase
     .from("papers")
     .select(select)
-    .in("id", validPaperIds);
+    .in("id", validPaperIds)
+    .returns<PaperRow[]>();
 
   assertNoError(error, "Load papers by ID");
 
   const order = new Map(validPaperIds.map((paperId, index) => [paperId, index]));
 
-  return ((data ?? []) as unknown as PaperRow[])
+  return (data ?? [])
     .map(paperFromRow)
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }
@@ -324,11 +312,12 @@ export async function getAllPapers() {
   const { data, error } = await supabase
     .from("papers")
     .select(paperSelectSimple)
-    .order("year", { ascending: false });
+    .order("year", { ascending: false })
+    .returns<PaperRow[]>();
 
   assertNoError(error, "Load papers");
 
-  return ((data ?? []) as unknown as PaperRow[]).map(paperFromRow);
+  return (data ?? []).map(paperFromRow);
 }
 
 export async function getPaperById(paperId: string) {
@@ -337,9 +326,10 @@ export async function getPaperById(paperId: string) {
     .from("papers")
     .select(paperSelectWithSummary)
     .eq("id", paperId)
+    .returns<PaperRow[]>()
     .maybeSingle();
 
   assertNoError(error, "Load paper");
 
-  return data ? paperFromRow(data as unknown as PaperRow) : null;
+  return data ? paperFromRow(data) : null;
 }

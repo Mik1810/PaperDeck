@@ -10,14 +10,23 @@ import {
   addToOwnedPlaylist,
   removeFromOwnedPlaylist,
   reorderOwnedPlaylistItems,
-  type PlaylistItemMutationClient,
 } from "@/lib/repositories/playlist-items";
 import { getSemanticPaperCandidates } from "@/lib/repositories/semantic-retrieval";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import type { Tables } from "@/types/database";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
 import type { InteractionType, Playlist } from "@/types/paper";
 
 type TopicRow = Awaited<ReturnType<typeof getTopics>>[number];
+type ReadLaterPlaylistRow = Pick<Tables<"playlists">, "id"> & {
+  playlist_items: Array<Pick<Tables<"playlist_items">, "paper_id">> | null;
+};
+type PlaylistSummaryRow = Pick<
+  Tables<"playlists">,
+  "id" | "name" | "is_default"
+> & {
+  playlist_items: Array<Pick<Tables<"playlist_items">, "paper_id">> | null;
+};
 
 type UserPaperState = {
   favoriteIds: Set<string>;
@@ -128,7 +137,7 @@ async function findReadLaterPlaylistId(ownerId: string) {
 
   assertNoError(error, "Find Read later playlist");
 
-  return data?.id as string | undefined;
+  return data?.id;
 }
 
 export async function ensureReadLaterPlaylist(ownerId: string) {
@@ -163,7 +172,7 @@ export async function ensureReadLaterPlaylist(ownerId: string) {
     throw new Error("Create Read later playlist: missing saved row");
   }
 
-  return created.id as string;
+  return created.id;
 }
 
 export async function getSelectedTopicIds(ownerId: string) {
@@ -175,7 +184,7 @@ export async function getSelectedTopicIds(ownerId: string) {
 
   assertNoError(error, "Load selected topics");
 
-  return new Set((data ?? []).map((item) => item.topic_id as string));
+  return new Set((data ?? []).map((item) => item.topic_id));
 }
 
 export async function saveSelectedTopics(ownerId: string, topicIds: string[]) {
@@ -244,6 +253,7 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
       .select("id, playlist_items(paper_id)")
       .eq("owner_id", ownerId)
       .eq("name", "Read later")
+      .returns<ReadLaterPlaylistRow[]>()
       .maybeSingle(),
     supabase
       .from("user_paper_interactions")
@@ -258,25 +268,23 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
   assertNoError(readLaterPlaylistError, "Load Read later playlist");
   assertNoError(interactionsError, "Load interactions");
 
-  const playlistItems =
-    (readLaterPlaylist?.playlist_items as Array<{ paper_id: string }> | undefined) ??
-    [];
+  const playlistItems = readLaterPlaylist?.playlist_items ?? [];
 
   return {
     selectedTopicIds: new Set(
-      ((interests ?? []) as Array<{ topic_id: string }>).map((item) => item.topic_id),
+      (interests ?? []).map((item) => item.topic_id),
     ),
     userState: {
       favoriteIds: new Set(
-        (favorites ?? []).map((item) => item.paper_id as string),
+        (favorites ?? []).map((item) => item.paper_id),
       ),
       readLaterIds: new Set(playlistItems.map((item) => item.paper_id)),
       seenIds: new Set(
-        ((interactions ?? []) as RankingInteraction[])
+        (interactions ?? [])
           .filter((item) => isFeedHiddenAction(item.action))
           .map((item) => item.paper_id),
       ),
-      interactions: (interactions ?? []) as RankingInteraction[],
+      interactions: interactions ?? [],
     },
   };
 }
@@ -367,7 +375,8 @@ export async function getLibraryPageData(ownerId: string) {
       .from("playlists")
       .select("id, name, is_default, playlist_items(paper_id)")
       .eq("owner_id", ownerId)
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: true })
+      .returns<PlaylistSummaryRow[]>(),
     supabase.from("favorites").select("paper_id").eq("owner_id", ownerId),
   ]);
 
@@ -377,7 +386,7 @@ export async function getLibraryPageData(ownerId: string) {
   const readLaterPlaylist = (playlists ?? []).find(
     (playlist) => playlist.name === "Read later",
   );
-  const readLaterPlaylistId = readLaterPlaylist?.id as string | undefined;
+  const readLaterPlaylistId = readLaterPlaylist?.id;
   const { data: readLaterRows, error: readLaterError } = readLaterPlaylistId
     ? await supabase
         .from("playlist_items")
@@ -388,8 +397,8 @@ export async function getLibraryPageData(ownerId: string) {
 
   assertNoError(readLaterError, "Load library Read later");
 
-  const favoriteIds = (favoriteRows ?? []).map((row) => row.paper_id as string);
-  const readLaterIds = (readLaterRows ?? []).map((row) => row.paper_id as string);
+  const favoriteIds = (favoriteRows ?? []).map((row) => row.paper_id);
+  const readLaterIds = (readLaterRows ?? []).map((row) => row.paper_id);
 
   const [favoritePapers, readLaterPapers] = await Promise.all([
     getPapersByIds(favoriteIds),
@@ -397,12 +406,10 @@ export async function getLibraryPageData(ownerId: string) {
   ]);
 
   const playlistSummaries: Playlist[] = (playlists ?? []).map((playlist) => ({
-    id: playlist.id as string,
-    name: playlist.name as string,
-    paperIds: ((playlist.playlist_items ?? []) as Array<{ paper_id: string }>).map(
-      (item) => item.paper_id,
-    ),
-    isDefault: (playlist.is_default as boolean) ?? false,
+    id: playlist.id,
+    name: playlist.name,
+    paperIds: (playlist.playlist_items ?? []).map((item) => item.paper_id),
+    isDefault: playlist.is_default ?? false,
   }));
 
   return {
@@ -467,7 +474,7 @@ async function getPaperDetailState(ownerId: string, paperId: string) {
   assertNoError(favoriteError, "Load detail favorite state");
   assertNoError(readLaterPlaylistError, "Load detail Read later playlist");
 
-  const playlistId = readLaterPlaylist?.id as string | undefined;
+  const playlistId = readLaterPlaylist?.id;
 
   if (!playlistId) {
     return {
@@ -596,7 +603,7 @@ export async function createPlaylist(ownerId: string, name: string) {
     .single();
 
   assertNoError(error, "Create playlist");
-  return data as { id: string; name: string };
+  return data;
 }
 
 export async function renamePlaylist(
@@ -632,8 +639,7 @@ export async function addToPlaylist(
   playlistId: string,
   paperId: string,
 ) {
-  const supabase =
-    createServiceRoleClient() as unknown as PlaylistItemMutationClient;
+  const supabase = createServiceRoleClient();
   await addToOwnedPlaylist(supabase, ownerId, playlistId, paperId);
 }
 
@@ -642,8 +648,7 @@ export async function removeFromPlaylist(
   playlistId: string,
   paperId: string,
 ) {
-  const supabase =
-    createServiceRoleClient() as unknown as PlaylistItemMutationClient;
+  const supabase = createServiceRoleClient();
   await removeFromOwnedPlaylist(supabase, ownerId, playlistId, paperId);
 }
 
@@ -652,8 +657,7 @@ export async function reorderPlaylistItems(
   playlistId: string,
   orderedPaperIds: string[],
 ) {
-  const supabase =
-    createServiceRoleClient() as unknown as PlaylistItemMutationClient;
+  const supabase = createServiceRoleClient();
   await reorderOwnedPlaylistItems(
     supabase,
     ownerId,

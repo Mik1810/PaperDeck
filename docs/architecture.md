@@ -14,7 +14,7 @@ PaperDeck is a Next.js application backed by Clerk, Supabase Postgres, pgvector,
 | Vector search | pgvector | Top-K paper retrieval with `match_papers_by_embedding` |
 | Batch workers | GitHub Actions, local scripts | arXiv ingestion, metadata enrichment, embeddings, summaries |
 | Embedding model | `sentence-transformers/all-MiniLM-L6-v2` | 384-dimensional paper/topic vectors |
-| Planned benchmark models | `intfloat/e5-small-v2`, `sentence-transformers/all-MiniLM-L6-v2` | Offline retrieval quality comparison |
+| Historical benchmark models | `BAAI/bge-small-en-v1.5`, `intfloat/e5-small-v2` | Offline retrieval quality comparison |
 | Summary model | GitHub Models `openai/gpt-4o-mini` | Structured paper triage summaries |
 | Summary fallbacks | Cloudflare Workers AI, Gemini | Optional fallback providers |
 | Full-text reader | Jina AI Reader | Optional source text extraction for summary generation |
@@ -34,7 +34,7 @@ flowchart TB
   pgvector["pgvector RPC<br/>match_papers_by_embedding"]
   ghActions["GitHub Actions Workers"]
   ingestion["Ingestion + Enrichment<br/>arXiv, Semantic Scholar, OpenAlex, Unpaywall"]
-  embeddings["Embedding Workers<br/>BAAI/bge-small-en-v1.5"]
+  embeddings["Embedding Workers<br/>sentence-transformers/all-MiniLM-L6-v2"]
   summaries["Summary Worker<br/>GitHub Models openai/gpt-4o-mini"]
   gpt4oMini["GitHub Models<br/>openai/gpt-4o-mini"]
   fallbackModels["Fallback LLMs<br/>Cloudflare Workers AI / Gemini"]
@@ -130,7 +130,7 @@ flowchart LR
   end
 
   subgraph Models
-    bge["BAAI/bge-small-en-v1.5<br/>384-d embeddings"]
+    minilm["all-MiniLM-L6-v2<br/>384-d embeddings"]
     gpt4oMini["GitHub Models<br/>openai/gpt-4o-mini"]
     fallbackModels["Fallbacks<br/>Cloudflare Workers AI / Gemini"]
   end
@@ -143,8 +143,8 @@ flowchart LR
   unpaywall --> enrichUnpaywall --> db
   db --> embedTopics
   db --> embedPapers
-  embedTopics --> bge --> db
-  embedPapers --> bge --> db
+  embedTopics --> minilm --> db
+  embedPapers --> minilm --> db
   db --> summarize
   summarize --> jina
   summarize --> gpt4oMini

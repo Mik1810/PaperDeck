@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
+import { PaperSourceBadge } from "@/components/paper-source-badge";
 import type { ReactNode } from "react";
 import type { Paper } from "@/types/paper";
 
@@ -13,9 +14,12 @@ export function PaperListItem({ paper, action }: PaperListItemProps) {
     <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-normal text-teal-700">
-            {paper.source} - {paper.year}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PaperSourceBadge source={paper.source} />
+            <span className="text-xs font-black text-slate-500">
+              {paper.year}
+            </span>
+          </div>
           <h2 className="mt-2 text-base font-black leading-6 text-slate-950">
             {paper.title}
           </h2>

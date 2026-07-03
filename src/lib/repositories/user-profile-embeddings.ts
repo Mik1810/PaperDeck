@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { InteractionType } from "@/types/paper";
 
-const EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2";
+export const EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2";
 const EMBEDDING_DIMENSION = 384;
 const MAX_INTERACTIONS = 100;
 

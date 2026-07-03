@@ -1,6 +1,18 @@
-export type PaperSource = "arXiv" | "Semantic Scholar" | "OpenAlex" | "DBLP";
+import type { Enums } from "@/types/database";
 
-export type PaperAccess = "open" | "publisher" | "unknown";
+export type DatabasePaperSource = Enums<"paper_source">;
+
+export type KnownPaperSource =
+  | "arXiv"
+  | "Semantic Scholar"
+  | "OpenAlex"
+  | "DBLP"
+  | "Crossref"
+  | "Manual";
+
+export type PaperSource = KnownPaperSource | "Unknown";
+
+export type PaperAccess = Enums<"paper_access">;
 
 export type PaperTopic = {
   id: string;
@@ -48,12 +60,4 @@ export type Playlist = {
   isDefault?: boolean;
 };
 
-export type InteractionType =
-  | "open_detail"
-  | "dismiss"
-  | "favorite"
-  | "save_to_playlist"
-  | "read"
-  | "seen"
-  | "not_interested"
-  | "already_read";
+export type InteractionType = Enums<"interaction_type">;

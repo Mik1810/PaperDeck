@@ -253,7 +253,7 @@ create index recommendations_owner_score_idx on recommendations(owner_id, score 
 create index digests_owner_generated_idx on digests(owner_id, generated_at desc);
 create index ingestion_cursors_updated_idx on ingestion_cursors(updated_at desc);
 
--- Use cosine distance for BAAI/bge-small-en-v1.5 embeddings.
+-- Use cosine distance for the current 384-dimensional embedding model.
 create index papers_embedding_cosine_idx on papers using ivfflat (embedding vector_cosine_ops)
 with (lists = 100);
 

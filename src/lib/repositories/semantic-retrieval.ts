@@ -3,6 +3,7 @@ import "server-only";
 import { getPapersByIds } from "@/lib/repositories/catalog";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import {
+  EMBEDDING_MODEL,
   refreshUserProfileEmbedding,
   type ProfileEmbeddingRefreshResult,
 } from "@/lib/repositories/user-profile-embeddings";
@@ -80,6 +81,7 @@ export async function getSemanticPaperCandidates(
     .from("user_profile_embeddings")
     .select("embedding, embedding_model")
     .eq("owner_id", ownerId)
+    .eq("embedding_model", EMBEDDING_MODEL)
     .order("generated_at", { ascending: false })
     .limit(1)
     .maybeSingle();

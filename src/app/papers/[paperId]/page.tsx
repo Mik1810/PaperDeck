@@ -86,7 +86,6 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
           isSaved={isSaved}
           paperId={paper.id}
           paperUrl={paper.url}
-          sourcePath={`/papers/${paper.id}`}
         />
 
         <section className="mt-8 border-t border-slate-200 pt-6">

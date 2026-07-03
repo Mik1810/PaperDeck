@@ -404,7 +404,7 @@ LLM_API_KEY        # only for Gemini fallback
 
 ## Next Ingestion Work
 
-- Run the first real BGE-small embedding batch outside Vercel, following [`docs/embeddings.md`](./embeddings.md).
+- Keep the scheduled MiniLM embedding workflow healthy after ingestion, following [`docs/embeddings.md`](./embeddings.md).
 
 ## See also
 

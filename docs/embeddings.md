@@ -6,22 +6,24 @@ The goal is to keep Vercel lightweight: the web app should query already-compute
 
 ## Decision
 
-Initial embedding model:
+Current embedding model:
 
 ```text
-BAAI/bge-small-en-v1.5
-```
-
-Baseline models to benchmark later:
-
-```text
-intfloat/e5-small-v2
 sentence-transformers/all-MiniLM-L6-v2
 ```
 
-Reasons for starting with BGE-small:
+Historical benchmark baselines:
+
+```text
+BAAI/bge-small-en-v1.5
+intfloat/e5-small-v2
+```
+
+Reasons for using MiniLM now:
 
 - 384-dimensional output, matching the current `papers.embedding vector(384)` schema;
+- strongest offline result so far (+17.4% Rec@20 versus BGE-small on the 2026-07-02 benchmark);
+- faster paper encoding than the BGE-small baseline in the same benchmark;
 - reasonable quality for English retrieval;
 - feasible on CPU for small batches;
 - no paid API dependency;
@@ -37,7 +39,7 @@ Python embedding jobs run as batch jobs:
 GitHub Actions / local machine
   -> load Python dependencies
   -> restore model/cache when available
-  -> load BGE-small
+  -> load MiniLM
   -> read papers needing embeddings from Supabase
   -> compute vectors
   -> write vectors back to Supabase
@@ -86,9 +88,11 @@ Current status:
 - `match_papers_by_embedding` is installed in Supabase for pgvector top-K retrieval;
 - `src/lib/repositories/semantic-retrieval.ts` loads the current user profile vector and calls the pgvector RPC;
 - `src/lib/repositories/user-profile-embeddings.ts` can refresh a user vector from stored topic/paper embeddings without loading any model;
+- `sentence-transformers/all-MiniLM-L6-v2` is the default model in the Python workers, GitHub Actions workflow, profile aggregation repository, and pgvector RPC;
 - `/feed` uses semantic candidates when a user profile embedding exists and falls back to the current topic/feedback ranking otherwise;
 - `/feed` does not refresh the stored user profile embedding on the normal read path; profile refresh should move to refresh-on-write or a background worker;
-- a first real local BGE-small smoke batch has written 2 topic vectors and 1 paper vector to Supabase;
+- a first real local BGE-small smoke batch wrote 2 topic vectors and 1 paper vector before the MiniLM decision; those rows are historical baseline data, not the current default;
+- the 2026-07-03 MiniLM backfill verified 571 MiniLM paper rows, 66 MiniLM topic rows, and 2 MiniLM user profile rows in Supabase;
 - GitHub Actions has been verified with both dry-run and tiny write-mode batches.
 
 ## Paper Embedding Input
@@ -240,7 +244,7 @@ The embedding worker should process papers where:
 
 ```sql
 embedding is null
-or embedding_model != 'BAAI/bge-small-en-v1.5'
+or embedding_model != 'sentence-transformers/all-MiniLM-L6-v2'
 or embedding_content_hash != current_hash(title, abstract)
 ```
 
@@ -262,7 +266,7 @@ Daily flow:
 2. new/updated papers are upserted into Supabase
 3. those rows have embedding = null or stale hash
 4. embedding worker selects them
-5. BGE-small computes vectors
+5. MiniLM computes vectors
 6. worker writes embeddings to Supabase
 7. feed retrieval can use them
 ```
@@ -305,7 +309,7 @@ Implemented RPC:
 match_papers_by_embedding(
   query_embedding vector(384),
   match_count integer default 100,
-  embedding_model_filter text default 'BAAI/bge-small-en-v1.5'
+  embedding_model_filter text default 'sentence-transformers/all-MiniLM-L6-v2'
 )
 ```
 
@@ -349,7 +353,7 @@ These weights are starting defaults, not final product values. They should be be
 
 ## Benchmark Plan
 
-Baseline models:
+Historical benchmark models:
 
 ```text
 BAAI/bge-small-en-v1.5
@@ -389,7 +393,7 @@ storage          vector table size per model
 Decision rule:
 
 ```text
-Keep BGE-small unless another model improves NDCG@20 or Recall@20 by at least 10%
+Keep MiniLM unless another model improves NDCG@20 or Recall@20 by at least 10%
 without materially increasing storage, runtime complexity, or GitHub Actions duration.
 ```
 
@@ -451,11 +455,11 @@ Recommended cache paths:
 ~/.cache/pip
 ```
 
-Initial command:
+Current command:
 
 ```bash
-python scripts/embed_topics.py --model BAAI/bge-small-en-v1.5 --batch-size 64 --limit 256
-python scripts/embed_papers.py --model BAAI/bge-small-en-v1.5 --batch-size 64 --limit 256
+python scripts/embed_topics.py --model sentence-transformers/all-MiniLM-L6-v2 --batch-size 64 --limit 256
+python scripts/embed_papers.py --model sentence-transformers/all-MiniLM-L6-v2 --batch-size 64 --limit 256
 ```
 
 Local dry-run:
@@ -477,12 +481,21 @@ uv run --isolated --with-requirements requirements-embeddings.txt \
   python scripts/embed_papers.py --limit 1 --table-limit 20 --batch-size 1 --quiet
 ```
 
-Verified result on remote Supabase:
+Historical BGE-small smoke result on remote Supabase:
 
 ```text
 topic_embeddings: 2 rows for BAAI/bge-small-en-v1.5, dimension 384
 papers.embedding: 1 row for BAAI/bge-small-en-v1.5, dimension 384
 match_papers_by_embedding: returns the embedded paper with semantic_score 1.0 when queried with its own vector
+```
+
+Current MiniLM verification on remote Supabase (2026-07-03):
+
+```text
+papers.embedding: 571 rows for sentence-transformers/all-MiniLM-L6-v2
+topic_embeddings: 66 rows for sentence-transformers/all-MiniLM-L6-v2, plus 66 historical BGE-small rows
+user_profile_embeddings: 2 rows for sentence-transformers/all-MiniLM-L6-v2, plus 2 historical BGE-small rows
+dry-run candidate checks: 0 stale paper candidates across 1000 inspected rows, 0 stale topic candidates across 512 inspected rows
 ```
 
 Verified GitHub-hosted runs:
@@ -523,7 +536,7 @@ For public repositories, standard GitHub-hosted runners are free. Do not use lar
 12. Done: run a tiny real embedding batch from a local Python environment with `sentence-transformers` managed by `uv`.
 13. Done: update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
 14. Done: verify GitHub Actions dry-run and tiny write-mode batches.
-15. Next: run broader topic and paper embedding batches through GitHub Actions or local `uv`.
+15. Done: run broader MiniLM topic and paper embedding batches through local `uv`.
 16. Next: move user profile embedding refresh to refresh-on-write or a background worker.
 
 ## Non-Goals For MVP

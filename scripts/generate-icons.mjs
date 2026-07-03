@@ -38,8 +38,6 @@ const splashScreens = [
 ];
 
 async function generateSplashScreens() {
-  const icon512 = await sharp(iconSvg).resize(512, 512).png().toBuffer();
-
   for (const { width, height, device } of splashScreens) {
     const iconSize = Math.round(width * 0.22);
     const iconBuffer = await sharp(iconSvg)

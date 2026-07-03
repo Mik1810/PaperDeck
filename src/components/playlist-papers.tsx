@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -25,12 +25,7 @@ type Props = {
 };
 
 export function PlaylistPapers({ playlistId, papers }: Props) {
-  const [mounted, setMounted] = useState(false);
   const [orderedPapers, setOrderedPapers] = useState(papers);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -78,20 +73,6 @@ export function PlaylistPapers({ playlistId, papers }: Props) {
         <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-500">
           Save papers from the deck and drag to reorder.
         </p>
-      </div>
-    );
-  }
-
-  if (!mounted) {
-    return (
-      <div className="space-y-2">
-        {papers.map((paper) => (
-          <SortablePlaylistPaper
-            key={paper.id}
-            paper={paper}
-            playlistId={playlistId}
-          />
-        ))}
       </div>
     );
   }

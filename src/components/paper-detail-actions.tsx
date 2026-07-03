@@ -17,7 +17,6 @@ type PaperDetailActionsProps = {
   isSaved: boolean;
   paperId: string;
   paperUrl: string;
-  sourcePath: string;
 };
 
 export function PaperDetailActions({
@@ -26,56 +25,55 @@ export function PaperDetailActions({
   isSaved,
   paperId,
   paperUrl,
-  sourcePath,
 }: PaperDetailActionsProps) {
   const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
   const [optimisticSaved, setOptimisticSaved] = useState(isSaved);
 
   return (
     <div className="mt-7 flex flex-wrap gap-2">
-        <button
-          aria-pressed={optimisticFavorite}
-          className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
-            optimisticFavorite
-              ? "border-pink-300 bg-pink-50 text-pink-700"
-              : "border-pink-200 bg-white text-pink-700"
-          }`}
-          onClick={() => {
-            setOptimisticFavorite((current) => !current);
-            void deckAction("favorite", paperId);
-          }}
-          type="button"
-        >
-          <Heart
-            aria-hidden="true"
-            fill={optimisticFavorite ? "currentColor" : "none"}
-            size={18}
-            strokeWidth={2.5}
-          />
-          {optimisticFavorite ? "Favorited" : "Favorite"}
-        </button>
+      <button
+        aria-pressed={optimisticFavorite}
+        className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
+          optimisticFavorite
+            ? "border-pink-300 bg-pink-50 text-pink-700"
+            : "border-pink-200 bg-white text-pink-700"
+        }`}
+        onClick={() => {
+          setOptimisticFavorite((current) => !current);
+          void deckAction("favorite", paperId);
+        }}
+        type="button"
+      >
+        <Heart
+          aria-hidden="true"
+          fill={optimisticFavorite ? "currentColor" : "none"}
+          size={18}
+          strokeWidth={2.5}
+        />
+        {optimisticFavorite ? "Favorited" : "Favorite"}
+      </button>
 
-        <button
-          aria-pressed={optimisticSaved}
-          className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
-            optimisticSaved
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-emerald-200 bg-white text-emerald-700"
-          }`}
-          onClick={() => {
-            setOptimisticSaved((current) => !current);
-            void deckAction("read_later", paperId);
-          }}
-          type="button"
-        >
-          <Bookmark
-            aria-hidden="true"
-            fill={optimisticSaved ? "currentColor" : "none"}
-            size={18}
-            strokeWidth={2.5}
-          />
-          {optimisticSaved ? "Saved" : "Read later"}
-        </button>
+      <button
+        aria-pressed={optimisticSaved}
+        className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
+          optimisticSaved
+            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+            : "border-emerald-200 bg-white text-emerald-700"
+        }`}
+        onClick={() => {
+          setOptimisticSaved((current) => !current);
+          void deckAction("read_later", paperId);
+        }}
+        type="button"
+      >
+        <Bookmark
+          aria-hidden="true"
+          fill={optimisticSaved ? "currentColor" : "none"}
+          size={18}
+          strokeWidth={2.5}
+        />
+        {optimisticSaved ? "Saved" : "Read later"}
+      </button>
 
       <form action={feedbackActionPath} method="post">
         <input name="action" type="hidden" value="already_read" />

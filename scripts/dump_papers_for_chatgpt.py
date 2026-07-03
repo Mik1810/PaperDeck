@@ -51,8 +51,7 @@ def main() -> None:
     rows = supabase.request_json(  # type: ignore[no-any-return]
         "papers",
         {
-            "select": "id,arxiv_id,title,abstract,triage_summary,ingested_at",
-            "source": "eq.arxiv",
+            "select": "id,arxiv_id,source,url,title,abstract,triage_summary,ingested_at",
             "triage_summary": "is.null",
             "abstract": "not.is.null",
             "order": "ingested_at.desc",
@@ -86,9 +85,10 @@ def main() -> None:
     lines = []
     lines.append(SYSTEM_PROMPT)
     lines.append("")
-    lines.append(f"Below are {len(rows)} papers. For each paper, return a JSON object")
-    lines.append("with exactly these four fields: why_it_matters, main_contribution,")
-    lines.append("prerequisites, read_if_you_care_about (each ~100 words).")
+    lines.append(f"Below are {len(rows)} papers. For each paper, visit the URL, read the")
+    lines.append("full paper content, and produce a JSON object with exactly these four")
+    lines.append("fields: why_it_matters, main_contribution, prerequisites,")
+    lines.append("read_if_you_care_about (each ~100 words).")
     lines.append("")
     lines.append("Return the results as a JSON array with one object per paper,")
     lines.append("in the same order. Include the paper index and arxiv_id in each object")
@@ -100,10 +100,15 @@ def main() -> None:
     lines.append("")
 
     for i, row in enumerate(rows):
+        arxiv_id = row.get("arxiv_id")
+        url = row.get("url") or (f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else None)
+        url_text = url or "N/A"
+
         lines.append(f"--- Paper {i+1} ---")
-        lines.append(f"arXiv ID: {row.get('arxiv_id', 'N/A')}")
+        lines.append(f"arXiv ID: {arxiv_id or 'N/A'}")
+        lines.append(f"Source: {row.get('source', 'unknown')}")
         lines.append(f"Title: {row['title']}")
-        lines.append(f"Abstract: {row['abstract']}")
+        lines.append(f"URL: {url_text}")
         lines.append("")
 
     output_text = "\n".join(lines)
