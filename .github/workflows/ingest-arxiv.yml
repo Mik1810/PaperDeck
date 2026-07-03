@@ -35,19 +35,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Ingest arXiv papers
         shell: bash
         run: |
-          cmd=(node_modules/.bin/tsx scripts/ingest-arxiv.ts)
+          cmd=(npm run ingest:arxiv)
 
           if [ "$ARXIV_DRY_RUN" = "true" ]; then
-            cmd+=(--dry-run)
+            cmd+=(-- --dry-run)
           fi
 
           "${cmd[@]}"
