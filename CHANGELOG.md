@@ -27,6 +27,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Browser favicon generation now writes a real multi-size `.ico` file instead of a PNG payload renamed as `.ico`.
 - Root route `/` now redirects users into onboarding instead of `/feed`.
 - Onboarding route loading state now uses the same dark wizard shell, avoiding the old `Topics` app-shell flash.
 - `Not now` now defaults users into all broad non-micro CS interests, and settings prevents removing every active interest.

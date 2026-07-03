@@ -22,12 +22,46 @@ const pngSizes = [
   { width: 512, name: "icon-512.png" },
 ];
 
+const faviconSizes = [16, 32, 48];
+
 async function generateIconPngs() {
   for (const { width, name } of pngSizes) {
     const buffer = await sharp(iconSvg).resize(width, width).png().toBuffer();
     writeFileSync(resolve(publicDir, name), buffer);
     console.log(`  ${name} (${width}x${width})`);
   }
+}
+
+function buildIco(pngEntries) {
+  const headerSize = 6;
+  const directoryEntrySize = 16;
+  const directorySize = pngEntries.length * directoryEntrySize;
+  const imageBytes = pngEntries.reduce((total, entry) => total + entry.buffer.length, 0);
+  const icoBuffer = Buffer.alloc(headerSize + directorySize + imageBytes);
+
+  icoBuffer.writeUInt16LE(0, 0);
+  icoBuffer.writeUInt16LE(1, 2);
+  icoBuffer.writeUInt16LE(pngEntries.length, 4);
+
+  let imageOffset = headerSize + directorySize;
+
+  pngEntries.forEach(({ width, buffer }, index) => {
+    const entryOffset = headerSize + index * directoryEntrySize;
+
+    icoBuffer.writeUInt8(width >= 256 ? 0 : width, entryOffset);
+    icoBuffer.writeUInt8(width >= 256 ? 0 : width, entryOffset + 1);
+    icoBuffer.writeUInt8(0, entryOffset + 2);
+    icoBuffer.writeUInt8(0, entryOffset + 3);
+    icoBuffer.writeUInt16LE(1, entryOffset + 4);
+    icoBuffer.writeUInt16LE(32, entryOffset + 6);
+    icoBuffer.writeUInt32LE(buffer.length, entryOffset + 8);
+    icoBuffer.writeUInt32LE(imageOffset, entryOffset + 12);
+
+    buffer.copy(icoBuffer, imageOffset);
+    imageOffset += buffer.length;
+  });
+
+  return icoBuffer;
 }
 
 const splashScreens = [
@@ -77,9 +111,17 @@ async function generateSplashScreens() {
 }
 
 async function generateFavicon() {
-  const favicon32 = await sharp(iconSvg).resize(32, 32).png().toBuffer();
-  writeFileSync(resolve(rootDir, "src/app/favicon.ico"), favicon32);
-  console.log(`  favicon.ico (32x32)`);
+  const pngEntries = await Promise.all(
+    faviconSizes.map(async (width) => ({
+      width,
+      buffer: await sharp(iconSvg).resize(width, width).png().toBuffer(),
+    })),
+  );
+  const favicon = buildIco(pngEntries);
+  const faviconLabels = faviconSizes.map((size) => `${size}x${size}`).join(", ");
+
+  writeFileSync(resolve(rootDir, "src/app/favicon.ico"), favicon);
+  console.log(`  favicon.ico (${faviconLabels})`);
 }
 
 async function main() {
