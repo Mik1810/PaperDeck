@@ -1,12 +1,10 @@
 import "server-only";
 
-import { mockPapers, topicTree } from "@/lib/mock-data";
 import {
   paperSourceFromDatabase,
-  paperSourceToDatabase,
 } from "@/lib/paper-sources";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import type { Tables, TablesInsert } from "@/types/database";
+import type { Tables } from "@/types/database";
 import type { Paper, PaperAccess, PaperTopic } from "@/types/paper";
 
 type TopicRow = Pick<
@@ -37,19 +35,6 @@ type PaperRow = Pick<
   }> | null;
 };
 
-const paperIdentities: Record<
-  string,
-  { column: "arxiv_id" | "semantic_scholar_id" | "openalex_id"; value: string }
-> = {
-  "paper-001": { column: "arxiv_id", value: "paperdeck-seed-001" },
-  "paper-002": {
-    column: "semantic_scholar_id",
-    value: "paperdeck-seed-002",
-  },
-  "paper-003": { column: "openalex_id", value: "paperdeck-seed-003" },
-  "paper-004": { column: "arxiv_id", value: "paperdeck-seed-004" },
-};
-
 const paperSelectSimple = `
   id,
   title,
@@ -78,16 +63,6 @@ function assertNoError(error: { message: string } | null, context: string) {
   if (error) {
     throw new Error(`${context}: ${error.message}`);
   }
-}
-
-function topicDepth(slug: string): number {
-  const topic = topicTree.find((item) => item.id === slug);
-
-  if (!topic?.parentId) {
-    return 0;
-  }
-
-  return topicDepth(topic.parentId) + 1;
 }
 
 function topicFromRow(row: TopicRow): PaperTopic {
@@ -145,124 +120,6 @@ function buildRecommendationReason(topics: PaperTopic[]) {
   }
 
   return `Matches your ${topicLabels.join(" and ")} interests.`;
-}
-
-export async function ensureSeedCatalog() {
-  const supabase = createServiceRoleClient();
-  const sortedTopics = [...topicTree].sort(
-    (a, b) => topicDepth(a.id) - topicDepth(b.id),
-  );
-  const topicIdsBySlug = new Map<string, string>();
-
-  for (const [index, topic] of sortedTopics.entries()) {
-    const parentId = topic.parentId ? topicIdsBySlug.get(topic.parentId) : null;
-
-    const { data, error } = await supabase
-      .from("taxonomy_topics")
-      .upsert(
-        {
-          slug: topic.id,
-          label: topic.label,
-          parent_id: parentId ?? null,
-          source: "paperdeck_seed",
-          arxiv_category: topic.arxivCategory ?? null,
-          depth: topicDepth(topic.id),
-          sort_order: index,
-        },
-        { onConflict: "slug" },
-      )
-      .select("id, slug")
-      .single();
-
-    assertNoError(error, `Seed topic ${topic.id}`);
-    if (!data) {
-      throw new Error(`Seed topic ${topic.id}: missing saved row`);
-    }
-
-    topicIdsBySlug.set(data.slug, data.id);
-  }
-
-  for (const paper of mockPapers) {
-    const identity = paperIdentities[paper.id];
-
-    if (!identity) {
-      throw new Error(`Missing seed identity for ${paper.id}`);
-    }
-
-    const paperPayload: TablesInsert<"papers"> = {
-      title: paper.title,
-      abstract: paper.abstract,
-      year: paper.year,
-      source: paperSourceToDatabase(paper.source),
-      url: paper.url,
-      pdf_url: paper.pdfUrl ?? null,
-      venue: paper.venue ?? null,
-      citation_count: paper.citationCount ?? null,
-      is_open_access: paper.access === "open",
-      access: paper.access,
-      is_classic: paper.isClassic ?? false,
-      [identity.column]: identity.value,
-    };
-
-    const { data: existingPaper, error: lookupError } = await supabase
-      .from("papers")
-      .select("id")
-      .eq(identity.column, identity.value)
-      .maybeSingle();
-
-    assertNoError(lookupError, `Find seed paper ${paper.id}`);
-
-    const { data: savedPaper, error: saveError } = existingPaper
-      ? await supabase
-          .from("papers")
-          .update(paperPayload)
-          .eq("id", existingPaper.id)
-          .select("id")
-          .single()
-      : await supabase
-          .from("papers")
-          .insert(paperPayload)
-          .select("id")
-          .single();
-
-    assertNoError(saveError, `Save seed paper ${paper.id}`);
-    if (!savedPaper) {
-      throw new Error(`Save seed paper ${paper.id}: missing saved row`);
-    }
-
-    const authorRows = paper.authors.map((name, position) => ({
-      paper_id: savedPaper.id,
-      name,
-      position,
-    }));
-
-    const { error: authorError } = await supabase
-      .from("paper_authors")
-      .upsert(authorRows, { onConflict: "paper_id,position" });
-
-    assertNoError(authorError, `Seed authors for ${paper.id}`);
-
-    const paperTopicRows = paper.topics.map((topic) => {
-      const topicId = topicIdsBySlug.get(topic.id);
-
-      if (!topicId) {
-        throw new Error(`Missing seeded topic for ${topic.id}`);
-      }
-
-      return {
-        paper_id: savedPaper.id,
-        topic_id: topicId,
-        confidence: 1,
-        source: "paperdeck_seed",
-      };
-    });
-
-    const { error: paperTopicError } = await supabase
-      .from("paper_topics")
-      .upsert(paperTopicRows, { onConflict: "paper_id,topic_id" });
-
-    assertNoError(paperTopicError, `Seed topics for ${paper.id}`);
-  }
 }
 
 export async function getTopics() {

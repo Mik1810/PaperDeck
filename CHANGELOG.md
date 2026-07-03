@@ -8,6 +8,7 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- App CI workflow for service-role audit, lint, build, and Playwright smoke tests on pull requests and pushes to `main`.
 - Unit test script for focused repository regression tests.
 - Regression tests for playlist item add, remove, and reorder ownership checks.
 - Source display mapping and badges for Crossref, manual, and unknown paper sources.
@@ -18,6 +19,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Unit test command now resolves `server-only` repository imports through the React server condition.
 - Playlist item add, remove, and reorder mutations now verify playlist ownership before writing through the service-role Supabase client.
 - Manual paper records no longer display as arXiv sources.
 - Summary generation retry delay capped to 300s to prevent hours-long waits on 429 responses from GitHub Models.
