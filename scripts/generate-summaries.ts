@@ -430,8 +430,12 @@ async function callGemini(
       const delay = retryAfter
         ? Math.min(Number(retryAfter) * 1000, 300_000)
         : (attempt + 1) * 15000;
+      const errorText = await response.text();
       console.error(
-        `  ${response.status} error, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
+        `  ${response.status} error: ${errorText.slice(0, 300)}`,
+      );
+      console.error(
+        `  retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
       continue;
@@ -570,7 +574,10 @@ async function callCloudflareWorkersAi(
     if (shouldRetryLlmStatus(response.status) && attempt < retries) {
       const delay = getRetryDelayMs(response, attempt);
       console.error(
-        `  ${response.status} error, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
+        `  ${response.status} error: ${cloudflareErrorMessage(data, responseText)}`,
+      );
+      console.error(
+        `  retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
       continue;
@@ -678,7 +685,10 @@ async function callGitHubModels(
     if (shouldRetryLlmStatus(response.status) && attempt < retries) {
       const delay = getRetryDelayMs(response, attempt);
       console.error(
-        `  ${response.status} error, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
+        `  ${response.status} error: ${githubModelsErrorMessage(data, responseText)}`,
+      );
+      console.error(
+        `  retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
       continue;
