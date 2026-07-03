@@ -44,7 +44,7 @@ jobs:
       - name: Ingest arXiv papers
         shell: bash
         run: |
-          cmd=(bun scripts/ingest-arxiv.ts)
+          cmd=(node_modules/.bin/tsx scripts/ingest-arxiv.ts)
 
           if [ "$ARXIV_DRY_RUN" = "true" ]; then
             cmd+=(--dry-run)

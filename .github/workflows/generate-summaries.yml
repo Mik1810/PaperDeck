@@ -68,7 +68,7 @@ jobs:
       - name: Generate summaries
         shell: bash
         run: |
-          cmd=(bun scripts/generate-summaries.ts)
+          cmd=(node_modules/.bin/tsx scripts/generate-summaries.ts)
 
           if [ "$LLM_DRY_RUN" = "true" ]; then
             cmd+=(--dry-run)
