@@ -428,7 +428,7 @@ async function callGemini(
     if ((response.status === 429 || response.status === 503) && attempt < retries) {
       const retryAfter = response.headers.get("Retry-After");
       const delay = retryAfter
-        ? Number(retryAfter) * 1000
+        ? Math.min(Number(retryAfter) * 1000, 300_000)
         : (attempt + 1) * 15000;
       console.error(
         `  ${response.status} error, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries})`,
@@ -458,7 +458,7 @@ function getRetryDelayMs(response: Response, attempt: number) {
   const retryAfterSeconds = retryAfter ? Number(retryAfter) : NaN;
 
   if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
-    return retryAfterSeconds * 1000;
+    return Math.min(retryAfterSeconds * 1000, 300_000);
   }
 
   return (attempt + 1) * 15000;

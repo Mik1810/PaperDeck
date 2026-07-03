@@ -10,10 +10,14 @@ This project follows Semantic Versioning.
 
 - Unit test script for focused repository regression tests.
 - Regression tests for playlist item add, remove, and reorder ownership checks.
+- Source display mapping and badges for Crossref, manual, and unknown paper sources.
+- Unit tests for database-to-display paper source mapping.
 
 ### Fixed
 
 - Playlist item add, remove, and reorder mutations now verify playlist ownership before writing through the service-role Supabase client.
+- Manual paper records no longer display as arXiv sources.
+- Summary generation retry delay capped to 300s to prevent hours-long waits on 429 responses from GitHub Models.
 
 ## [0.1.4] - 2026-07-02
 
