@@ -25,7 +25,7 @@ DEFAULT_MODEL = "gemini-flash-latest"
 DEFAULT_BATCH_SIZE = 3
 DEFAULT_LIMIT = 50
 DEFAULT_SOURCE_TEXT_CHARS = 8000
-DEFAULT_MAX_OUTPUT_TOKENS = 4096
+DEFAULT_MAX_OUTPUT_TOKENS = 8192
 DEFAULT_RETRIES = 3
 DEFAULT_REQUEST_DELAY_MS = 5000
 DEFAULT_PAPER_DELAY_S = 5
@@ -87,6 +87,10 @@ class Summary:
     main_contribution: str
     prerequisites: str
     read_if_you_care_about: str
+
+
+class QuotaExceeded(RuntimeError):
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -321,13 +325,21 @@ def call_gemini(
             return parse_summary(raw, title)
 
         if response.status_code in (429, 503) and attempt < config.retries:
+            error_body = response.text[:300]
+
+            if "exceeded your current quota" in response.text or "quota" in response.text.lower():
+                raise QuotaExceeded(
+                    f"Gemini daily quota exceeded. "
+                    f"Wait for reset or use a different API key. "
+                    f"Error: {error_body}"
+                )
+
             retry_after = response.headers.get("Retry-After")
             sleep_ms = (
                 min(int(retry_after) * 1000, 300_000)
                 if retry_after and retry_after.isdigit()
                 else (attempt + 1) * 15000
             )
-            error_body = response.text[:300]
             print(
                 f"\n  {response.status_code} error: {error_body}",
                 file=sys.stderr,
@@ -467,6 +479,12 @@ def main() -> None:
                 supabase.update_summary(paper.id, summary, model_label)
                 total += 1
                 print(f"  [{global_idx}/{len(papers)}] {paper.title[:80]}... OK")
+            except QuotaExceeded:
+                print(
+                    f"Quota exceeded — stopping. {total}/{len(papers)} done so far.",
+                    file=sys.stderr,
+                )
+                return
             except Exception as exc:
                 print(f"  [{global_idx}/{len(papers)}] {paper.title[:80]}... FAILED: {exc}", file=sys.stderr)
 
