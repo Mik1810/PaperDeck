@@ -13,8 +13,11 @@ prerequisites, read_if_you_care_about (each ~100 words).
 
 Return the results as a JSON array with one object per paper,
 in the same order. Include the paper index and arxiv_id in each object
-(fields: 'index', 'arxiv_id'). Output ONLY the JSON array, no markdown.
-======================================================================
+(fields: 'index', 'arxiv_id').
+
+IMPORTANT: Do NOT print any text in the chat. Instead, write the JSON
+array to a downloadable file named `summaries.json` and provide the
+download link. Do not output anything else.
 
 --- Paper 1 ---
 arXiv ID: 2607.01953

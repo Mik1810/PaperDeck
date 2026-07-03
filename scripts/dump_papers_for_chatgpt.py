@@ -92,8 +92,11 @@ def main() -> None:
     lines.append("")
     lines.append("Return the results as a JSON array with one object per paper,")
     lines.append("in the same order. Include the paper index and arxiv_id in each object")
-    lines.append("(fields: 'index', 'arxiv_id'). Output ONLY the JSON array, no markdown.")
-    lines.append("=" * 70)
+    lines.append("(fields: 'index', 'arxiv_id').")
+    lines.append("")
+    lines.append("IMPORTANT: Do NOT print any text in the chat. Instead, write the JSON")
+    lines.append("array to a downloadable file named `summaries.json` and provide the")
+    lines.append("download link. Do not output anything else.")
     lines.append("")
 
     for i, row in enumerate(rows):
