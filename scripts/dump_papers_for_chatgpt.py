@@ -23,6 +23,27 @@ SYSTEM_PROMPT = """You are a research paper summarizer for CS researchers. Given
 Write in English. Output ONLY the JSON object, no other text."""
 
 
+def fetch_authors(supabase: SupabaseRestClient, paper_ids: list[str]) -> dict[str, list[str]]:
+    if not paper_ids:
+        return {}
+
+    authors_by_paper: dict[str, list[str]] = {}
+
+    for pid in paper_ids:
+        rows = supabase.request_json(
+            "paper_authors",
+            {
+                "select": "name",
+                "paper_id": f"eq.{pid}",
+                "order": "position.asc",
+            },
+        )
+        if rows:
+            authors_by_paper[pid] = [r["name"] for r in rows]
+
+    return authors_by_paper
+
+
 def main() -> None:
     load_local_env()
 
@@ -47,7 +68,7 @@ def main() -> None:
     parser.add_argument(
         "--id-field",
         default="id",
-        help="Which DB column to use as the paper identifier (default: id).",
+        help="Which JSON field ChatGPT should use as the paper identifier (default: id).",
     )
     args = parser.parse_args()
 
@@ -55,10 +76,10 @@ def main() -> None:
 
     supabase = SupabaseRestClient()
 
-    select = f"id,arxiv_id,source,url,title,abstract,triage_summary,ingested_at"
-
-    if id_field != "id" and id_field != "arxiv_id":
-        select = f"{select},{id_field}"
+    select = (
+        "id,arxiv_id,doi,url,pdf_url,openalex_id,semantic_scholar_id,"
+        "source,title,year,venue,abstract"
+    )
 
     rows = supabase.request_json(  # type: ignore[no-any-return]
         "papers",
@@ -75,16 +96,21 @@ def main() -> None:
         print("No papers to dump.", file=sys.stderr)
         return
 
+    paper_ids = [r["id"] for r in rows]
+    authors_by_paper = fetch_authors(supabase, paper_ids)
+
     if args.jsonl:
         for row in rows:
+            pid = row["id"]
             with open(args.jsonl, "a") as fh:
                 fh.write(
                     json.dumps(
                         {
-                            "id": row["id"],
+                            "id": pid,
                             "arxiv_id": row.get("arxiv_id"),
                             "title": row["title"],
                             "abstract": row["abstract"],
+                            "authors": authors_by_paper.get(pid, []),
                         },
                     )
                     + "\n",
@@ -110,16 +136,44 @@ def main() -> None:
     lines.append("")
 
     for i, row in enumerate(rows):
-        paper_id = row.get(id_field) or row.get("id")
+        pid = row["id"]
         arxiv_id = row.get("arxiv_id")
+        doi = row.get("doi")
         url = row.get("url") or (f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else None)
-        url_text = url or "N/A"
+        pdf_url = row.get("pdf_url")
+        oa_id = row.get("openalex_id")
+        ss_id = row.get("semantic_scholar_id")
+        source = row.get("source", "unknown")
+        year = row.get("year")
+        venue = row.get("venue")
+        authors = authors_by_paper.get(pid, [])
 
         lines.append(f"--- Paper {i+1} ---")
-        lines.append(f"ID: {paper_id}")
-        lines.append(f"Source: {row.get('source', 'unknown')}")
+        lines.append(f"ID: {pid}")
+        if arxiv_id:
+            lines.append(f"arXiv ID: {arxiv_id}")
+        if doi:
+            lines.append(f"DOI: {doi}")
+        if oa_id:
+            lines.append(f"OpenAlex ID: {oa_id}")
+        if ss_id:
+            lines.append(f"Semantic Scholar ID: {ss_id}")
+        if source:
+            lines.append(f"Source: {source}")
         lines.append(f"Title: {row['title']}")
-        lines.append(f"URL: {url_text}")
+        if authors:
+            lines.append(f"Authors: {', '.join(authors)}")
+        if year:
+            year_str = str(year)
+            if venue:
+                year_str = f"{year_str}, {venue}"
+            lines.append(f"Year: {year_str}")
+        elif venue:
+            lines.append(f"Venue: {venue}")
+        if url:
+            lines.append(f"URL: {url}")
+        if pdf_url:
+            lines.append(f"PDF: {pdf_url}")
         lines.append("")
 
     output_text = "\n".join(lines)
