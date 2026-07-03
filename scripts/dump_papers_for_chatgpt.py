@@ -84,15 +84,8 @@ def main() -> None:
         return
 
     lines = []
-    lines.append("=" * 70)
-    lines.append("COPY EVERYTHING BELOW AND PASTE INTO CHATGPT")
-    lines.append("=" * 70)
-    lines.append("")
-    lines.append("SYSTEM PROMPT (include this as a separate message or at the top):")
-    lines.append("")
     lines.append(SYSTEM_PROMPT)
     lines.append("")
-    lines.append("=" * 70)
     lines.append(f"Below are {len(rows)} papers. For each paper, return a JSON object")
     lines.append("with exactly these four fields: why_it_matters, main_contribution,")
     lines.append("prerequisites, read_if_you_care_about (each ~100 words).")
