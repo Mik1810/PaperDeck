@@ -27,6 +27,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Swipe left significa "non mi interessa questo paper", non "rimuovi questo topic dai miei interessi".
 - Gli interessi scelti in onboarding restano modificabili dalle impostazioni.
 - UX principale: social-like, con feed/deck swipe-style.
+- Onboarding interessi: wizard guidato separato dalla shell autenticata, minimale e scuro, con preferenze dominanti e controlli in una rail piu' stretta.
 - Feed deck: una card singola full-screen.
 - Swipe right apre la scheda dettaglio del paper.
 - Preferiti e swipe sono segnali diversi: cuore per preferiti, segnalibro per playlist.
@@ -77,7 +78,8 @@ Aggiornato al 2026-07-03:
   - 66 topic embeddings MiniLM in `topic_embeddings`; le righe BGE-small restano baseline storica nelle tabelle multi-modello.
   - 2 user profile embeddings MiniLM in `user_profile_embeddings`; il retrieval filtra i profili sul modello corrente.
   - RPC `match_papers_by_embedding` per cosine similarity search attiva con default MiniLM.
-- Feed semantico: profilo utente collegato a onboarding e feed lazy generation.
+- Feed semantico: profilo utente generato su write da onboarding/settings, con primo batch feed salvato in `recommendations` dopo il wizard.
+- Onboarding interessi: wizard full-screen scuro e guidato, senza navigazione libera tra step, con controlli separati a destra su desktop.
 - LLM triage summary: implementato.
   - Worker `scripts/generate-summaries.ts` con Jina AI Reader + GitHub Models.
   - Summary JSONB in `papers.triage_summary` con 4 sezioni strutturate.
@@ -92,7 +94,7 @@ Aggiornato al 2026-07-03:
 
 ## Prossimi passi
 
-- Monitorare `feed_timing` dopo il backfill MiniLM e spostare il refresh profilo a refresh-on-write o background worker.
+- Monitorare `feed_timing` dopo il preload iniziale del wizard e valutare un rinnovo batch/background worker per sessioni lunghe.
 - Feature P2: playlist custom, digest in-app, metadati paper detail migliorati.
 - Rivedere strategia storage summary JSONB prima di scalare oltre 10K paper (rivisto in Session 8 — decision document in `docs/summaries.md`).
 
@@ -854,6 +856,13 @@ Output:
 - Schermata interessi CS.
 - Salvataggio preferenze.
 - Prima rappresentazione vettoriale del profilo utente.
+
+Stato implementato:
+
+- Dopo il login, feed, library, settings e dettaglio paper richiedono `onboarding_completed_at`; se manca, la app reindirizza a `/onboarding`.
+- L'onboarding e le impostazioni dividono gli interessi in macroaree, categorie e microcategorie; `Not now` completa l'onboarding selezionando tutti gli interessi broad non-micro.
+- Le impostazioni impediscono di rimuovere tutti gli interessi attivi: almeno una macroarea e un topic devono restare selezionati.
+- Le categorie arXiv `cs.*` vengono mostrate con etichette leggibili, mantenendo il codice solo nei dati.
 
 ### Fase 3: ingestion paper
 

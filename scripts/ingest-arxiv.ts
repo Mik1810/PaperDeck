@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { XMLParser } from "fast-xml-parser";
+import { arxivCategoryLabels } from "../src/lib/arxiv-categories";
 
 type ArxivPaper = {
   arxivId: string;
@@ -52,25 +53,6 @@ const defaultCategories = [
   "cs.SE",
   "cs.SY",
 ];
-
-const categoryLabels: Record<string, string> = {
-  "cs.AI": "Artificial Intelligence",
-  "cs.CL": "Computation and Language",
-  "cs.CR": "Cryptography and Security",
-  "cs.CC": "Computational Complexity",
-  "cs.DS": "Data Structures and Algorithms",
-  "cs.LG": "Machine Learning",
-  "cs.LO": "Logic in Computer Science",
-  "cs.PL": "Programming Languages",
-  "cs.SE": "Software Engineering",
-  "cs.SY": "Systems and Control",
-  "cs.DB": "Databases",
-  "cs.DC": "Distributed and Parallel Computing",
-  "cs.IR": "Information Retrieval",
-  "cs.NE": "Neural and Evolutionary Computing",
-  "cs.OS": "Operating Systems",
-  "cs.RO": "Robotics",
-};
 
 function loadLocalEnv() {
   const envPath = path.join(process.cwd(), ".env.local");
@@ -448,7 +430,7 @@ async function ensureCategoryTopics(
 
     const { error: insertError } = await supabase.from("taxonomy_topics").insert({
       slug: slugForCategory(category),
-      label: categoryLabels[category] ?? category,
+      label: arxivCategoryLabels[category] ?? category,
       source: "arxiv",
       arxiv_category: category,
       depth: 0,

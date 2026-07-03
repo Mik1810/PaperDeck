@@ -5,7 +5,11 @@ import { AppShell } from "@/components/app-shell";
 import { PaperDetailActions } from "@/components/paper-detail-actions";
 import { MathContent } from "@/components/math-content";
 import { requireOwnerId } from "@/lib/auth/session";
-import { getPaperDetailData } from "@/lib/repositories/user-data";
+import {
+  getPaperDetailData,
+  hasCompletedOnboarding,
+} from "@/lib/repositories/user-data";
+import { redirect } from "next/navigation";
 
 type PaperDetailPageProps = {
   params: Promise<{
@@ -31,6 +35,11 @@ function SummaryRow({ label, text }: { label: string; text: string }) {
 export default async function PaperDetailPage({ params }: PaperDetailPageProps) {
   const { paperId } = await params;
   const ownerId = await requireOwnerId();
+
+  if (!(await hasCompletedOnboarding(ownerId))) {
+    redirect("/onboarding");
+  }
+
   const { paper, isFavorite, isSaved, readLaterCount } = await getPaperDetailData(
     ownerId,
     paperId,

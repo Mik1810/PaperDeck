@@ -4,10 +4,6 @@ import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { userProfileEmbeddings } from "@/db/schema";
 import { getPapersByIds } from "@/lib/repositories/catalog";
-import {
-  refreshUserProfileEmbedding,
-  type ProfileEmbeddingRefreshResult,
-} from "@/lib/repositories/user-profile-embeddings";
 import type { Paper } from "@/types/paper";
 
 type SemanticMatchRow = {
@@ -35,11 +31,8 @@ export type SemanticRetrievalDiagnostics = {
   candidateCount: number;
   model: string | null;
   fallbackReason: SemanticRetrievalFallbackReason | null;
-  profileRefreshStatus: ProfileEmbeddingRefreshResult["status"] | null;
-  profileRefreshReason: Extract<
-    ProfileEmbeddingRefreshResult,
-    { status: "skipped" }
-  >["reason"] | null;
+  profileRefreshStatus: "up_to_date" | "updated" | "skipped" | null;
+  profileRefreshReason: "no_weighted_vectors" | "zero_vector" | null;
   profileRefreshError: string | null;
 };
 
@@ -97,24 +90,10 @@ export async function getSemanticPaperCandidates(
     .limit(1);
 
   if (!profileRows.length) {
-    try {
-      const refreshResult = await refreshUserProfileEmbedding(ownerId);
-
-      return emptyResult({
-        requestedCount: matchCount,
-        fallbackReason: "profile_missing",
-        profileRefreshStatus: refreshResult.status,
-        profileRefreshReason:
-          refreshResult.status === "skipped" ? refreshResult.reason : null,
-      });
-    } catch (error) {
-      return emptyResult({
-        requestedCount: matchCount,
-        fallbackReason: "profile_refresh_failed",
-        profileRefreshError:
-          error instanceof Error ? error.message : "Unknown profile refresh error",
-      });
-    }
+    return emptyResult({
+      requestedCount: matchCount,
+      fallbackReason: "profile_missing",
+    });
   }
 
   const profileRow = profileRows[0];

@@ -9,7 +9,7 @@
 
 Smoke-test result:
 
-- `/` returns `307` and redirects to `/feed`.
+- `/` returns `307` and redirects to `/onboarding`.
 - `/sign-in` returns `200`.
 - `/sign-up` returns `200`.
 - `/feed` returns `307` to `/sign-in?redirect_url=...` for an unauthenticated browser request.
@@ -121,7 +121,7 @@ curl -sS -o /dev/null -w 'sign-up %{http_code}\n' https://paperdeck.michaelpicci
 
 Expected result:
 
-- `/` redirects to `/feed`.
+- `/` redirects to `/onboarding`.
 - `/feed` redirects unauthenticated users to `/sign-in`.
 - `/sign-in` and `/sign-up` return `200`.
 - Google sign-in redirects authenticated users to `/onboarding` on first sign-up.

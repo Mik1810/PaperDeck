@@ -87,10 +87,10 @@ Current status:
 - `--dry-run` lists stale/missing topic and paper embeddings without loading the model;
 - `match_papers_by_embedding` is installed in Supabase for pgvector top-K retrieval;
 - `src/lib/repositories/semantic-retrieval.ts` loads the current user profile vector and calls the pgvector RPC;
-- `src/lib/repositories/user-profile-embeddings.ts` can refresh a user vector from stored topic/paper embeddings without loading any model;
+- `src/lib/repositories/user-profile-embeddings.ts` can write a user vector from stored topic embeddings during onboarding/settings updates without loading any model;
 - `sentence-transformers/all-MiniLM-L6-v2` is the default model in the Python workers, GitHub Actions workflow, profile aggregation repository, and pgvector RPC;
-- `/feed` uses semantic candidates when a user profile embedding exists and falls back to the current topic/feedback ranking otherwise;
-- `/feed` does not refresh the stored user profile embedding on the normal read path; profile refresh should move to refresh-on-write or a background worker;
+- `/feed` uses a fresh preloaded `recommendations` batch after onboarding, then semantic candidates when a user profile embedding exists, and falls back to the current topic/feedback ranking otherwise;
+- `/feed` does not refresh the stored user profile embedding on the normal read path;
 - a first real local BGE-small smoke batch wrote 2 topic vectors and 1 paper vector before the MiniLM decision; those rows are historical baseline data, not the current default;
 - the 2026-07-03 MiniLM backfill verified 571 MiniLM paper rows, 66 MiniLM topic rows, and 2 MiniLM user profile rows in Supabase;
 - GitHub Actions has been verified with both dry-run and tiny write-mode batches.
@@ -227,16 +227,13 @@ Current implementation:
 
 ```text
 src/lib/repositories/user-profile-embeddings.ts
-  -> reads selected user_interests
-  -> reads topic_embeddings for selected topics
-  -> reads favorite, Read later, and recent interaction paper IDs
-  -> reads paper embeddings for those papers
-  -> computes a normalized weighted vector
-  -> upserts user_profile_embeddings when the input signature changes
+  -> reads topic_embeddings for selected onboarding/settings topics
+  -> computes a normalized weighted topic vector
+  -> upserts user_profile_embeddings during onboarding/settings writes
   -> clears stale user_profile_embeddings if no source vectors are available
 ```
 
-If no weighted source vectors exist yet, the refresh removes any stale stored vector and the feed keeps using the non-semantic fallback ranking.
+The older interaction-aware refresh path can still aggregate selected topics, favorites, Read later, and recent paper interactions for a future background refresh. If no weighted source vectors exist yet, the refresh removes any stale stored vector and the feed keeps using the non-semantic fallback ranking.
 
 ## Paper Batch Selection
 
@@ -278,17 +275,18 @@ If a paper is imported before its embedding exists, it can still appear through 
 When a user opens the feed:
 
 ```text
-1. Load or compute user profile embedding from stored vectors.
-2. Use pgvector to retrieve top-K candidate papers by cosine similarity.
-3. Exclude papers already opened, dismissed, marked not interested, read, or already read.
-4. Apply TypeScript reranking:
+1. Load a fresh post-wizard recommendations batch when available.
+2. Otherwise load the stored user profile embedding.
+3. Use pgvector to retrieve top-K candidate papers by cosine similarity.
+4. Exclude papers already opened, dismissed, marked not interested, read, or already read.
+5. Apply TypeScript reranking:
    - topic match;
    - explicit feedback;
    - freshness;
    - citations;
    - classic cap;
    - saved/favorite state.
-5. Return the first card and the next few candidates.
+6. Return the first card and the next few candidates.
 ```
 
 Target SQL shape:
@@ -324,6 +322,8 @@ src/lib/repositories/semantic-retrieval.ts
 ```
 
 If no user profile embedding exists, or if the semantic candidate set is empty after filtering seen papers, PaperDeck falls back to the topic/feedback ranking over the shared catalog.
+
+Wizard completion additionally persists the first ranked deck to `recommendations` with model version `paperdeck-initial-feed-v1`; `/feed` consumes that fresh batch before recomputing live candidates.
 
 `/feed` logs a structured `feed_timing` event with semantic retrieval diagnostics:
 
@@ -537,7 +537,8 @@ For public repositories, standard GitHub-hosted runners are free. Do not use lar
 13. Done: update benchmark plan for BGE-small vs E5-small-v2 vs MiniLM.
 14. Done: verify GitHub Actions dry-run and tiny write-mode batches.
 15. Done: run broader MiniLM topic and paper embedding batches through local `uv`.
-16. Next: move user profile embedding refresh to refresh-on-write or a background worker.
+16. Done: move onboarding/settings profile embedding generation to refresh-on-write and preload the first wizard feed batch into `recommendations`.
+17. Next: evaluate background refresh for interaction-aware profile updates after more feedback data exists.
 
 ## Non-Goals For MVP
 

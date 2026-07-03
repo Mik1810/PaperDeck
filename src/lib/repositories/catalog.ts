@@ -3,6 +3,7 @@ import "server-only";
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { papers, paperAuthors, paperTopics, taxonomyTopics } from "@/db/schema";
+import { topicDisplayLabel } from "@/lib/arxiv-categories";
 import { paperSourceFromDatabase } from "@/lib/paper-sources";
 import type { Paper, PaperAccess, PaperTopic } from "@/types/paper";
 
@@ -13,7 +14,10 @@ type TopicRow = typeof taxonomyTopics.$inferSelect;
 function topicFromRow(row: TopicRow): PaperTopic {
   return {
     id: row.id,
-    label: row.label,
+    label: topicDisplayLabel({
+      arxivCategory: row.arxivCategory,
+      label: row.label,
+    }),
     parentId: row.parentId ?? undefined,
     arxivCategory: row.arxivCategory ?? undefined,
   };

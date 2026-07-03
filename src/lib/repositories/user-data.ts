@@ -6,6 +6,7 @@ import {
   profiles,
   playlists,
   playlistItems,
+  recommendations,
   userInterests,
   favorites,
   userPaperInteractions,
@@ -13,17 +14,29 @@ import {
 import {
   isFeedHiddenAction,
   rankFeedPapers,
+  type RankedPaper,
   type RankingInteraction,
 } from "@/lib/ranking/feed-ranking";
 import { getAllPapers, getPapersByIds, getTopics } from "@/lib/repositories/catalog";
+import { topicDisplayLabel } from "@/lib/arxiv-categories";
+import { isDefaultOnboardingTopic } from "@/lib/topic-taxonomy";
+import {
+  INITIAL_FEED_RECOMMENDATION_COUNT,
+  INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+  isFreshRecommendationBatch,
+} from "@/lib/recommendation-batches";
 import {
   addToOwnedPlaylist,
   removeFromOwnedPlaylist,
   reorderOwnedPlaylistItems,
 } from "@/lib/repositories/playlist-items";
-import { getSemanticPaperCandidates } from "@/lib/repositories/semantic-retrieval";
+import {
+  getSemanticPaperCandidates,
+  type SemanticRetrievalDiagnostics,
+  type SemanticRetrievalFallbackReason,
+} from "@/lib/repositories/semantic-retrieval";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
-import type { InteractionType, Playlist } from "@/types/paper";
+import type { InteractionType, Paper, Playlist } from "@/types/paper";
 
 type TopicRow = Awaited<ReturnType<typeof getTopics>>[number];
 
@@ -131,14 +144,42 @@ export async function getSelectedTopicIds(ownerId: string) {
   return new Set(rows.map((r) => r.topicId));
 }
 
+export async function hasCompletedOnboarding(ownerId: string) {
+  const rows = await db
+    .select({ onboardingCompletedAt: profiles.onboardingCompletedAt })
+    .from(profiles)
+    .where(eq(profiles.ownerId, ownerId))
+    .limit(1);
+
+  return Boolean(rows[0]?.onboardingCompletedAt);
+}
+
+function userInterestFromTopic(topic: TopicRow, selectedTopicIds: Set<string>) {
+  return {
+    id: topic.id,
+    arxivCategory: topic.arxivCategory,
+    depth: topic.depth,
+    label: topicDisplayLabel({
+      arxivCategory: topic.arxivCategory,
+      label: topic.label,
+    }),
+    parentId: topic.parentId,
+    selected: selectedTopicIds.has(topic.id),
+    slug: topic.slug,
+    source: topic.source,
+  };
+}
+
 export async function saveSelectedTopics(ownerId: string, topicIds: string[]) {
+  const uniqueTopicIds = [...new Set(topicIds)];
+
   await db
     .delete(userInterests)
     .where(eq(userInterests.ownerId, ownerId));
 
-  if (topicIds.length) {
+  if (uniqueTopicIds.length) {
     await db.insert(userInterests).values(
-      topicIds.map((topicId) => ({
+      uniqueTopicIds.map((topicId) => ({
         ownerId,
         topicId,
         weight: 1,
@@ -157,6 +198,14 @@ export async function saveSelectedTopics(ownerId: string, topicIds: string[]) {
     .where(eq(profiles.ownerId, ownerId));
 }
 
+export async function getDefaultOnboardingTopicIds() {
+  const topics = await getTopics();
+
+  return topics
+    .filter((topic: TopicRow) => isDefaultOnboardingTopic(topic))
+    .map((topic: TopicRow) => topic.id);
+}
+
 export async function getOnboardingData(ownerId: string) {
   const [topics, feedState] = await Promise.all([
     getTopics(),
@@ -164,7 +213,9 @@ export async function getOnboardingData(ownerId: string) {
   ]);
 
   return {
-    topics,
+    topics: topics.map((topic: TopicRow) =>
+      userInterestFromTopic(topic, feedState.selectedTopicIds),
+    ),
     selectedTopicIds: feedState.selectedTopicIds,
   };
 }
@@ -172,6 +223,15 @@ export async function getOnboardingData(ownerId: string) {
 type FeedState = {
   selectedTopicIds: Set<string>;
   userState: UserPaperState;
+};
+
+type LiveRankedFeedResult = {
+  rankedPapers: RankedPaper[];
+  semanticDiagnostics: SemanticRetrievalDiagnostics;
+  semanticFallbackReason:
+    | SemanticRetrievalFallbackReason
+    | "ranker_filtered_all"
+    | null;
 };
 
 async function getFeedState(ownerId: string): Promise<FeedState> {
@@ -223,16 +283,14 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
   };
 }
 
-export async function getFeedPageData(ownerId: string) {
-  const startedAt = performance.now();
-  const timings: Record<string, number> = {};
-  const [topics, feedState] = await Promise.all([
-    measureAsync(timings, "topics", getTopics()),
-    measureAsync(timings, "feed_state", getFeedState(ownerId)),
-  ]);
+async function buildLiveRankedFeed(
+  ownerId: string,
+  topics: TopicRow[],
+  feedState: FeedState,
+  timings: Record<string, number>,
+): Promise<LiveRankedFeedResult> {
   const selectedTopicIds = feedState.selectedTopicIds;
   const state = feedState.userState;
-
   const semanticCandidates = await measureAsync(
     timings,
     "semantic_retrieval",
@@ -266,24 +324,204 @@ export async function getFeedPageData(ownerId: string) {
     );
   }
 
+  return {
+    rankedPapers,
+    semanticDiagnostics: semanticCandidates.diagnostics,
+    semanticFallbackReason,
+  };
+}
+
+async function getLatestInitialRecommendationBatch(
+  ownerId: string,
+  state: UserPaperState,
+  limit = INITIAL_FEED_RECOMMENDATION_COUNT,
+) {
+  const latest = await db
+    .select({ generatedAt: recommendations.generatedAt })
+    .from(recommendations)
+    .where(
+      and(
+        eq(recommendations.ownerId, ownerId),
+        eq(
+          recommendations.modelVersion,
+          INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+        ),
+      ),
+    )
+    .orderBy(desc(recommendations.generatedAt))
+    .limit(1);
+
+  if (
+    !latest[0]?.generatedAt ||
+    !isFreshRecommendationBatch(latest[0].generatedAt)
+  ) {
+    return [];
+  }
+
+  const recommendationRows = await db
+    .select({
+      paperId: recommendations.paperId,
+      reason: recommendations.reason,
+      score: recommendations.score,
+    })
+    .from(recommendations)
+    .where(
+      and(
+        eq(recommendations.ownerId, ownerId),
+        eq(
+          recommendations.modelVersion,
+          INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+        ),
+        eq(recommendations.generatedAt, latest[0].generatedAt),
+      ),
+    )
+    .orderBy(desc(recommendations.score))
+    .limit(limit);
+
+  const visibleRows = recommendationRows.filter(
+    (row) => !state.seenIds.has(row.paperId),
+  );
+
+  if (!visibleRows.length) {
+    return [];
+  }
+
+  const papers = await getPapersByIds(visibleRows.map((row) => row.paperId));
+  const papersById = new Map(papers.map((paper) => [paper.id, paper]));
+
+  return visibleRows
+    .map((row) => {
+      const paper = papersById.get(row.paperId);
+
+      if (!paper) {
+        return null;
+      }
+
+      return {
+        ...paper,
+        recommendationReason: row.reason ?? paper.recommendationReason,
+      };
+    })
+    .filter((paper): paper is Paper => paper !== null);
+}
+
+export async function clearInitialFeedRecommendations(ownerId: string) {
+  await db
+    .delete(recommendations)
+    .where(
+      and(
+        eq(recommendations.ownerId, ownerId),
+        eq(
+          recommendations.modelVersion,
+          INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+        ),
+      ),
+    );
+}
+
+export async function preloadInitialFeedRecommendations(ownerId: string) {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+  const [topics, feedState] = await Promise.all([
+    measureAsync(timings, "topics", getTopics()),
+    measureAsync(timings, "feed_state", getFeedState(ownerId)),
+  ]);
+  const liveFeed = await buildLiveRankedFeed(ownerId, topics, feedState, timings);
+  const batch = liveFeed.rankedPapers.slice(0, INITIAL_FEED_RECOMMENDATION_COUNT);
+
+  await clearInitialFeedRecommendations(ownerId);
+
+  if (batch.length) {
+    const generatedAt = new Date().toISOString();
+
+    await db.insert(recommendations).values(
+      batch.map((paper) => ({
+        ownerId,
+        paperId: paper.id,
+        score: paper.rankingScore,
+        reason: paper.recommendationReason,
+        modelVersion: INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+        generatedAt,
+      })),
+    );
+  }
+
+  console.info(
+    JSON.stringify({
+      event: "initial_feed_preload",
+      totalMs: Math.round(performance.now() - startedAt),
+      timings,
+      rankedCount: liveFeed.rankedPapers.length,
+      storedCount: batch.length,
+      semantic: {
+        used: Boolean(
+          liveFeed.semanticDiagnostics.candidateCount &&
+            !liveFeed.semanticFallbackReason,
+        ),
+        requestedCount: liveFeed.semanticDiagnostics.requestedCount,
+        rpcAttempted: liveFeed.semanticDiagnostics.rpcAttempted,
+        matchedCount: liveFeed.semanticDiagnostics.matchedCount,
+        candidateCount: liveFeed.semanticDiagnostics.candidateCount,
+        model: liveFeed.semanticDiagnostics.model,
+        fallbackReason: liveFeed.semanticFallbackReason,
+      },
+    }),
+  );
+
+  return {
+    storedCount: batch.length,
+  };
+}
+
+export async function getFeedPageData(ownerId: string) {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+  const [topics, feedState] = await Promise.all([
+    measureAsync(timings, "topics", getTopics()),
+    measureAsync(timings, "feed_state", getFeedState(ownerId)),
+  ]);
+  const state = feedState.userState;
+  let rankedPapers = await measureAsync(
+    timings,
+    "recommendation_batch",
+    getLatestInitialRecommendationBatch(ownerId, state),
+  );
+  const recommendationBatchUsed = rankedPapers.length > 0;
+  let liveFeed: LiveRankedFeedResult | null = null;
+
+  if (!rankedPapers.length) {
+    liveFeed = await buildLiveRankedFeed(ownerId, topics, feedState, timings);
+    rankedPapers = liveFeed.rankedPapers;
+  }
+
   console.info(
     JSON.stringify({
       event: "feed_timing",
       totalMs: Math.round(performance.now() - startedAt),
       timings,
+      recommendationBatch: {
+        used: recommendationBatchUsed,
+        candidateCount: recommendationBatchUsed ? rankedPapers.length : 0,
+      },
       semantic: {
-        used: Boolean(semanticCandidates.papers.length && rankedPapers.length),
-        requestedCount: semanticCandidates.diagnostics.requestedCount,
-        rpcAttempted: semanticCandidates.diagnostics.rpcAttempted,
-        matchedCount: semanticCandidates.diagnostics.matchedCount,
-        candidateCount: semanticCandidates.diagnostics.candidateCount,
-        model: semanticCandidates.diagnostics.model,
-        fallbackReason: semanticFallbackReason,
+        used: Boolean(
+          liveFeed &&
+            liveFeed.semanticDiagnostics.candidateCount &&
+            !liveFeed.semanticFallbackReason &&
+            rankedPapers.length,
+        ),
+        requestedCount: liveFeed?.semanticDiagnostics.requestedCount ?? 0,
+        rpcAttempted: liveFeed?.semanticDiagnostics.rpcAttempted ?? false,
+        matchedCount: liveFeed?.semanticDiagnostics.matchedCount ?? 0,
+        candidateCount: liveFeed?.semanticDiagnostics.candidateCount ?? 0,
+        model: liveFeed?.semanticDiagnostics.model ?? null,
+        fallbackReason: liveFeed?.semanticFallbackReason ?? null,
         profileRefreshStatus:
-          semanticCandidates.diagnostics.profileRefreshStatus,
+          liveFeed?.semanticDiagnostics.profileRefreshStatus ?? null,
         profileRefreshReason:
-          semanticCandidates.diagnostics.profileRefreshReason,
-        profileRefreshError: semanticCandidates.diagnostics.profileRefreshError,
+          liveFeed?.semanticDiagnostics.profileRefreshReason ?? null,
+        profileRefreshError:
+          liveFeed?.semanticDiagnostics.profileRefreshError ?? null,
       },
       rankedCount: rankedPapers.length,
     }),
@@ -291,7 +529,7 @@ export async function getFeedPageData(ownerId: string) {
 
   return {
     activePaper: rankedPapers[0] ?? null,
-    nextPapers: rankedPapers.slice(1, 4),
+    nextPapers: rankedPapers.slice(1, INITIAL_FEED_RECOMMENDATION_COUNT),
     favoriteIds: state.favoriteIds,
     readLaterIds: state.readLaterIds,
     readLaterCount: state.readLaterIds.size,
@@ -367,12 +605,9 @@ export async function getSettingsPageData(ownerId: string) {
   ]);
 
   return {
-    interests: topics.map((topic: TopicRow) => ({
-      id: topic.id,
-      label: topic.label,
-      depth: topic.depth,
-      selected: feedState.selectedTopicIds.has(topic.id),
-    })),
+    interests: topics.map((topic: TopicRow) =>
+      userInterestFromTopic(topic, feedState.selectedTopicIds),
+    ),
     readLaterCount: feedState.userState.readLaterIds.size,
   };
 }

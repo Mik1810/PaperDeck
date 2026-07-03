@@ -1,12 +1,21 @@
 import { AppShell } from "@/components/app-shell";
 import { requireOwnerId } from "@/lib/auth/session";
-import { getSettingsPageData } from "@/lib/repositories/user-data";
+import {
+  getSettingsPageData,
+  hasCompletedOnboarding,
+} from "@/lib/repositories/user-data";
 import { SettingsInterestEditor } from "@/components/settings-interest-editor";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const ownerId = await requireOwnerId();
+
+  if (!(await hasCompletedOnboarding(ownerId))) {
+    redirect("/onboarding");
+  }
+
   const { interests, readLaterCount } = await getSettingsPageData(ownerId);
 
   return (

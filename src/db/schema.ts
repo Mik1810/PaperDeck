@@ -69,6 +69,7 @@ export const recommendations = pgTable("recommendations", {
 	generatedAt: timestamp("generated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	seenAt: timestamp("seen_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
+	index("recommendations_owner_model_generated_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.modelVersion.asc().nullsLast().op("text_ops"), table.generatedAt.desc().nullsFirst().op("timestamptz_ops")),
 	index("recommendations_owner_score_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.score.desc().nullsFirst().op("float4_ops")),
 	foreignKey({
 			columns: [table.ownerId],

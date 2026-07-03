@@ -15,8 +15,13 @@ import {
   addToPlaylist,
   removeFromPlaylist,
   reorderPlaylistItems,
+  getDefaultOnboardingTopicIds,
+  clearInitialFeedRecommendations,
+  preloadInitialFeedRecommendations,
 } from "@/lib/repositories/user-data";
-import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
+import {
+  writeTopicSelectionProfileEmbedding,
+} from "@/lib/repositories/user-profile-embeddings";
 import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
 
 function requirePaperId(formData: FormData) {
@@ -58,7 +63,24 @@ export async function saveOnboardingInterestsAction(formData: FormData) {
     .filter((topicId): topicId is string => typeof topicId === "string");
 
   await saveSelectedTopics(user.ownerId, topicIds);
-  await refreshUserProfileEmbedding(user.ownerId);
+  await writeTopicSelectionProfileEmbedding(user.ownerId, topicIds);
+  await preloadInitialFeedRecommendations(user.ownerId);
+
+  revalidatePath("/feed");
+  revalidatePath("/onboarding");
+  revalidatePath("/settings");
+  redirect("/feed");
+}
+
+export async function skipOnboardingAction() {
+  const user = await requireUserContext();
+  await ensureUserProfile(user);
+
+  const topicIds = await getDefaultOnboardingTopicIds();
+
+  await saveSelectedTopics(user.ownerId, topicIds);
+  await writeTopicSelectionProfileEmbedding(user.ownerId, topicIds);
+  await preloadInitialFeedRecommendations(user.ownerId);
 
   revalidatePath("/feed");
   revalidatePath("/onboarding");
@@ -70,7 +92,8 @@ export async function saveSettingsInterestsAction(topicIds: string[]) {
   const ownerId = await requireOwnerId();
 
   await saveSelectedTopics(ownerId, topicIds);
-  await refreshUserProfileEmbedding(ownerId);
+  await writeTopicSelectionProfileEmbedding(ownerId, topicIds);
+  await clearInitialFeedRecommendations(ownerId);
 
   revalidatePath("/feed");
   revalidatePath("/settings");

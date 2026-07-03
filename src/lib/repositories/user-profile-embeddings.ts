@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -14,10 +13,19 @@ import {
   playlists,
   playlistItems,
 } from "@/db/schema";
+import {
+  addWeightedEmbeddingVector,
+  createEmbeddingAccumulator,
+  l2NormalizeEmbedding,
+  parseEmbeddingVector,
+  PROFILE_EMBEDDING_DIMENSION,
+  SELECTED_TOPIC_EMBEDDING_WEIGHT,
+  topicSelectionInputSignature,
+  vectorToPgLiteral,
+} from "@/lib/profile-embedding-utils";
 import type { InteractionType } from "@/types/paper";
 
 export const EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2";
-const EMBEDDING_DIMENSION = 384;
 const MAX_INTERACTIONS = 100;
 
 type TopicEmbeddingRow = {
@@ -57,32 +65,11 @@ const paperInteractionWeights: Partial<Record<InteractionType, number>> = {
 };
 
 function parseVector(value: string | number[]) {
-  const vector = Array.isArray(value)
-    ? value.map(Number)
-    : value
-        .replace(/^\[/, "")
-        .replace(/\]$/, "")
-        .split(",")
-        .filter(Boolean)
-        .map(Number);
-
-  if (vector.length !== EMBEDDING_DIMENSION) {
-    throw new Error(
-      `Expected ${EMBEDDING_DIMENSION} embedding dimensions, received ${vector.length}`,
-    );
-  }
-
-  return vector;
+  return parseEmbeddingVector(value, PROFILE_EMBEDDING_DIMENSION);
 }
 
 function l2Normalize(vector: number[]) {
-  const norm = Math.sqrt(vector.reduce((total, value) => total + value * value, 0));
-
-  if (!norm) {
-    return null;
-  }
-
-  return vector.map((value) => value / norm);
+  return l2NormalizeEmbedding(vector);
 }
 
 function addWeightedVector(
@@ -90,15 +77,22 @@ function addWeightedVector(
   vector: number[],
   weight: number,
 ) {
-  for (let index = 0; index < EMBEDDING_DIMENSION; index += 1) {
-    accumulator[index] += vector[index] * weight;
-  }
+  addWeightedEmbeddingVector(accumulator, vector, weight);
 }
 
 function stableSignature(payload: unknown) {
-  return createHash("sha256")
-    .update(JSON.stringify(payload))
-    .digest("hex");
+  return JSON.stringify(payload);
+}
+
+export async function clearUserProfileEmbedding(ownerId: string) {
+  await db
+    .delete(userProfileEmbeddings)
+    .where(
+      and(
+        eq(userProfileEmbeddings.ownerId, ownerId),
+        eq(userProfileEmbeddings.embeddingModel, EMBEDDING_MODEL),
+      ),
+    );
 }
 
 function accumulateWeights(
@@ -135,6 +129,119 @@ async function getReadLaterPaperIds(ownerId: string) {
     .where(eq(playlistItems.playlistId, playlistRows[0].id));
 
   return items.map((r) => r.paperId);
+}
+
+async function upsertUserProfileEmbedding(
+  ownerId: string,
+  normalized: number[],
+  inputSignature: string,
+) {
+  const embedding = sql`${vectorToPgLiteral(normalized)}::vector`;
+
+  await db
+    .insert(userProfileEmbeddings)
+    .values({
+      ownerId,
+      embedding,
+      embeddingModel: EMBEDDING_MODEL,
+      embeddingDimension: PROFILE_EMBEDDING_DIMENSION,
+      inputSignature,
+    })
+    .onConflictDoUpdate({
+      target: [
+        userProfileEmbeddings.ownerId,
+        userProfileEmbeddings.embeddingModel,
+      ],
+      set: {
+        embedding,
+        embeddingDimension: PROFILE_EMBEDDING_DIMENSION,
+        inputSignature,
+        generatedAt: sql`now()`,
+      },
+    });
+}
+
+export async function writeTopicSelectionProfileEmbedding(
+  ownerId: string,
+  topicIds: string[],
+): Promise<ProfileEmbeddingRefreshResult> {
+  const selectedTopicIds = [...new Set(topicIds)].sort();
+
+  if (!selectedTopicIds.length) {
+    await clearUserProfileEmbedding(ownerId);
+
+    return {
+      status: "skipped",
+      reason: "no_weighted_vectors",
+      vectorCount: 0,
+    };
+  }
+
+  const topicEmbRows = await db
+    .select({
+      topicId: topicEmbeddings.topicId,
+      embedding: topicEmbeddings.embedding,
+      embeddedAt: topicEmbeddings.embeddedAt,
+    })
+    .from(topicEmbeddings)
+    .where(
+      and(
+        eq(topicEmbeddings.embeddingModel, EMBEDDING_MODEL),
+        inArray(topicEmbeddings.topicId, selectedTopicIds),
+      ),
+    );
+
+  const accumulator = createEmbeddingAccumulator(PROFILE_EMBEDDING_DIMENSION);
+  let vectorCount = 0;
+  const embeddedTopicsById = new Map(
+    topicEmbRows.map((row) => [row.topicId, row.embeddedAt]),
+  );
+
+  for (const row of topicEmbRows) {
+    addWeightedVector(
+      accumulator,
+      parseVector(row.embedding),
+      SELECTED_TOPIC_EMBEDDING_WEIGHT,
+    );
+    vectorCount += 1;
+  }
+
+  if (!vectorCount) {
+    await clearUserProfileEmbedding(ownerId);
+
+    return {
+      status: "skipped",
+      reason: "no_weighted_vectors",
+      vectorCount,
+    };
+  }
+
+  const normalized = l2Normalize(accumulator);
+
+  if (!normalized) {
+    await clearUserProfileEmbedding(ownerId);
+
+    return {
+      status: "skipped",
+      reason: "zero_vector",
+      vectorCount,
+    };
+  }
+
+  await upsertUserProfileEmbedding(
+    ownerId,
+    normalized,
+    topicSelectionInputSignature(
+      EMBEDDING_MODEL,
+      selectedTopicIds,
+      embeddedTopicsById,
+    ),
+  );
+
+  return {
+    status: "updated",
+    vectorCount,
+  };
 }
 
 export async function refreshUserProfileEmbedding(
@@ -218,7 +325,7 @@ export async function refreshUserProfileEmbedding(
       : ([] as PaperEmbeddingRow[]),
   ]);
 
-  const accumulator = new Array<number>(EMBEDDING_DIMENSION).fill(0);
+  const accumulator = createEmbeddingAccumulator(PROFILE_EMBEDDING_DIMENSION);
   let vectorCount = 0;
   const embeddedTopicsById = new Map(
     topicEmbRows.map((row) => [row.topicId, row.embeddedAt]),
@@ -250,6 +357,8 @@ export async function refreshUserProfileEmbedding(
   }
 
   if (!vectorCount) {
+    await clearUserProfileEmbedding(ownerId);
+
     return {
       status: "skipped",
       reason: "no_weighted_vectors",
@@ -260,6 +369,8 @@ export async function refreshUserProfileEmbedding(
   const normalized = l2Normalize(accumulator);
 
   if (!normalized) {
+    await clearUserProfileEmbedding(ownerId);
+
     return {
       status: "skipped",
       reason: "zero_vector",
@@ -304,27 +415,7 @@ export async function refreshUserProfileEmbedding(
     };
   }
 
-  await db
-    .insert(userProfileEmbeddings)
-    .values({
-      ownerId,
-      embedding: sql`${`[${normalized.join(",")}]`}::vector`,
-      embeddingModel: EMBEDDING_MODEL,
-      embeddingDimension: EMBEDDING_DIMENSION,
-      inputSignature,
-    })
-    .onConflictDoUpdate({
-      target: [
-        userProfileEmbeddings.ownerId,
-        userProfileEmbeddings.embeddingModel,
-      ],
-      set: {
-        embedding: sql`${`[${normalized.join(",")}]`}::vector`,
-        embeddingDimension: EMBEDDING_DIMENSION,
-        inputSignature,
-        generatedAt: sql`now()`,
-      },
-    });
+  await upsertUserProfileEmbedding(ownerId, normalized, inputSignature);
 
   return {
     status: "updated",

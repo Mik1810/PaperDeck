@@ -249,6 +249,7 @@ create index topic_embeddings_model_idx on topic_embeddings(embedding_model);
 create index user_profile_embeddings_generated_idx on user_profile_embeddings(owner_id, generated_at desc);
 create index playlist_items_paper_idx on playlist_items(paper_id);
 create index user_paper_interactions_owner_created_idx on user_paper_interactions(owner_id, created_at desc);
+create index recommendations_owner_model_generated_idx on recommendations(owner_id, model_version, generated_at desc);
 create index recommendations_owner_score_idx on recommendations(owner_id, score desc);
 create index digests_owner_generated_idx on digests(owner_id, generated_at desc);
 create index ingestion_cursors_updated_idx on ingestion_cursors(updated_at desc);

@@ -8,6 +8,13 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Three-step interest onboarding for macro areas, categories, and microcategories with a `Not now` skip path.
+- Onboarding now uses a standalone dark guided wizard instead of the authenticated app shell.
+- Onboarding controls now sit in a narrower separated right rail, and `Theoretical CS` appears before `Other CS`.
+- Wizard completion now preloads the first ranked feed batch into `recommendations` before redirecting to `/feed`.
+- Topic-only profile embedding generation for onboarding and settings writes, built from stored topic vectors without live model inference.
+- Settings interest editing now uses the same macro/category/microcategory grouping as onboarding.
+- Shared arXiv CS category display mapping so raw labels such as `cs.CV` render as human-readable names.
 - MIT License for PaperDeck source code and documentation, with README scope notes for branding and third-party paper metadata.
 - App CI workflow for service-role audit, lint, build, and Playwright smoke tests on pull requests and pushes to `main`.
 - Unit test script for focused repository regression tests.
@@ -20,7 +27,15 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Root route `/` now redirects users into onboarding instead of `/feed`.
+- Onboarding route loading state now uses the same dark wizard shell, avoiding the old `Topics` app-shell flash.
+- `Not now` now defaults users into all broad non-micro CS interests, and settings prevents removing every active interest.
+- Onboarding no longer preselects saved/default interests or shows a duplicate selected summary; broad defaults are applied only by the server-side `Not now` action.
+- `/feed` now reads a fresh preloaded recommendation batch when available instead of generating missing profile embeddings lazily during render.
+- Authenticated app pages now redirect users with incomplete onboarding back to `/onboarding`.
+- Clearing or skipping interests now removes stale user profile embeddings instead of leaving old semantic preferences active.
 - App CI now exposes `DATABASE_URL` to the build job and can be triggered manually.
+- Dev-auth app smoke tests now scope the `Local dev` badge assertion to the page banner to avoid strict locator ambiguity.
 - Paper detail navigation from the feed no longer waits for the `open_detail` tracking write before changing pages.
 - Optimistic deck and playlist mutations now roll back and show visible errors when persistence fails.
 - Unit test command now resolves `server-only` repository imports through the React server condition.

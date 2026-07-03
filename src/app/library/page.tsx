@@ -5,8 +5,12 @@ import { PaperListItem } from "@/components/paper-list-item";
 import { PlaylistPapers } from "@/components/playlist-papers";
 import { PlaylistSidebar } from "@/components/playlist-sidebar";
 import { requireOwnerId } from "@/lib/auth/session";
-import { getLibraryPageData } from "@/lib/repositories/user-data";
+import {
+  getLibraryPageData,
+  hasCompletedOnboarding,
+} from "@/lib/repositories/user-data";
 import { getPapersByIds } from "@/lib/repositories/catalog";
+import { redirect } from "next/navigation";
 import type { Paper } from "@/types/paper";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +21,11 @@ type LibraryPageProps = {
 
 export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   const ownerId = await requireOwnerId();
+
+  if (!(await hasCompletedOnboarding(ownerId))) {
+    redirect("/onboarding");
+  }
+
   const { playlist: selectedPlaylistId } = await searchParams;
   const { playlists, favoritePapers, readLaterPapers, readLaterCount } =
     await getLibraryPageData(ownerId);
