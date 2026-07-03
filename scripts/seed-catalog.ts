@@ -11,11 +11,6 @@ const paperIdentities: Record<
   { column: "arxiv_id" | "semantic_scholar_id" | "openalex_id"; value: string }
 > = {
   "paper-001": { column: "arxiv_id", value: "paperdeck-seed-001" },
-  "paper-002": {
-    column: "semantic_scholar_id",
-    value: "paperdeck-seed-002",
-  },
-  "paper-003": { column: "openalex_id", value: "paperdeck-seed-003" },
   "paper-004": { column: "arxiv_id", value: "paperdeck-seed-004" },
 };
 
