@@ -12,6 +12,7 @@ This project follows Semantic Versioning.
 - Regression tests for playlist item add, remove, and reorder ownership checks.
 - Source display mapping and badges for Crossref, manual, and unknown paper sources.
 - Unit tests for database-to-display paper source mapping.
+- Python summary generation script (`scripts/generate_summaries.py`) using Gemini via `uv`.
 - Generated Supabase database types with repeatable generation and stale-check commands.
 - GitHub Actions check for stale generated database types.
 
