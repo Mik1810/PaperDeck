@@ -28,11 +28,11 @@ Initial implementation:
 
 Current implementation:
 
-- `src/lib/supabase/server.ts` creates a service-role Supabase client for server-only code.
+- `src/db/schema.ts` + `src/db/index.ts` provides the Drizzle ORM client for all app-level database queries.
+- `src/lib/supabase/server.ts` retains `createServiceRoleClient()` for ingestion/enrichment scripts and `createClerkAuthenticatedClient()` for RLS verification.
 - `src/lib/auth/session.ts` converts the Clerk session into the PaperDeck `owner_id`.
-- `scripts/seed-catalog.ts` seeds the initial mock catalog into Supabase through `npm run seed:catalog`.
-- `src/lib/repositories/catalog.ts` reads shared paper/topic data without running seed writes during user requests.
-- `src/lib/repositories/user-data.ts` persists profiles, interests, favorites, default `Read later`, playlist items, Read later toggles, and user-paper interactions.
+- `src/lib/repositories/catalog.ts` reads shared paper/topic data via Drizzle (no seed writes during user requests).
+- `src/lib/repositories/user-data.ts` persists profiles, interests, favorites, default `Read later`, playlist items, Read later toggles, and user-paper interactions via Drizzle.
 - `src/lib/ranking/feed-ranking.ts` computes the current MVP feed ranking from selected topics, recent user feedback, and seen-paper penalties.
 - `src/app/actions.ts` exposes server actions for onboarding and paper interactions.
 

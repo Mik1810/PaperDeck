@@ -35,9 +35,10 @@ After configuration:
 ### Before (MVP — service role only):
 
 ```
-Server Action → createServiceRoleClient() → Supabase (RLS bypassed)
-                     |
-               requireOwnerId() → filters owner_id manually
+Scripts → createServiceRoleClient() → Supabase (RLS bypassed)
+App   → drizzle-orm → postgres-js → DATABASE_URL → Supabase Postgres
+              |
+        requireOwnerId() → filters owner_id manually
 ```
 
 ### After (with Clerk JWT):

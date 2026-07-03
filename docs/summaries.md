@@ -1,30 +1,14 @@
 # Triage Summary Storage Strategy
 
-Last updated: 2026-07-02
+Last updated: 2026-07-03
 
 ## Current approach (Session 8)
 
-Triage summaries are stored as a JSONB column (`triage_summary`) inline on the `papers` table, alongside `triage_summary_model` and `triage_summary_generated_at` metadata columns. At the current scale (~447 papers, ~7 summaries so far) this is optimal: it's simple, requires no joins, and the overhead is negligible.
+Triage summaries are stored as a JSONB column (`triage_summary`) inline on the `papers` table, alongside `triage_summary_model` and `triage_summary_generated_at` metadata columns. At current scale (567 papers, all with summaries) this is optimal: it's simple, requires no joins, and the overhead is negligible.
 
-## Query-level optimization (Session 8)
+## Query-layer note
 
-As of Session 8, the catalog repository (`src/lib/repositories/catalog.ts`) splits paper selection into two variants:
-
-| Select variant | Columns | Used by |
-|---|---|---|
-| `paperSelectSimple` | All paper columns **except** `triage_summary` | Feed candidates, library, favorites, read later |
-| `paperSelectWithSummary` | All columns including `triage_summary` | Paper detail page (single paper) |
-
-This means bulk queries (feed semantic candidates, library pages, favorites lists) no longer drag the summary JSONB over the wire. The detail page — the only place summaries are displayed — still includes the column.
-
-The `getPapersByIds()` function accepts an `includeSummary` boolean option (default `false`). Only `getPaperDetailData()` in `user-data.ts` passes `includeSummary: true`.
-
-**Impact at 10K papers with 5KB summaries per paper:**
-- Feed candidate query (200 papers): saves ~1 MB of JSONB transfer
-- Favorites query (100 papers): saves ~500 KB
-- Library query (all papers): saves ~50 MB in worst case
-
-This optimization preserves the simplicity of inline storage while eliminating the performance concern for the feed path — which was the primary scaling worry.
+With the Drizzle ORM migration (July 2026), all paper queries in the app layer happen via Drizzle's query builder, which fetches full rows by default. The `paperSelectSimple`/`paperSelectWithSummary` string-based select optimization from the Supabase client era is no longer relevant. The `triage_summary` JSONB column is ~500 bytes - 5 KB per row, which is well within Postgres' comfort zone for queries returning up to 200 rows (feed candidates). No performance concern at current scale.
 
 ## Scaling triggers and migration plan
 
@@ -68,8 +52,8 @@ Replace the `updatePaper()` function that writes to `papers.triage_summary` with
 **Step 3 — Update the catalog repository:**
 
 - Add a `getPaperSummary(paperId: string)` function that queries `paper_summaries` by `paper_id`.
-- Change `getPaperDetailData()` to call `getPaperSummary()` instead of using `includeSummary: true` on `getPapersByIds()`.
-- Remove `paperSelectWithSummary` entirely — all queries use `paperSelectSimple`.
+- Change `getPaperDetailData()` to call `getPaperSummary()` instead of joining on `papers.triage_summary`.
+- Drop the `triage_summary` column from `papers` after verification.
 
 **Step 4 — Drop old columns (after verification):**
 
@@ -102,6 +86,6 @@ This capability is not needed at current scale but becomes valuable when 500+ su
 
 | Context | Decision |
 |---|---|
-| **Now (447 papers)** | Keep JSONB inline on `papers`. Split select queries so feed/library don't fetch summary data. |
+| **Now (567 papers)** | Keep JSONB inline on `papers`. Drizzle fetches full rows; overhead is acceptable at current scale. |
 | **At 5K papers with summaries** | Create `paper_summaries` table, backfill, update workers and queries, drop old columns. |
 | **Model/prompt changes** | Regenerate in batches using `generated_at` and `model` columns for filtering. |

@@ -129,6 +129,38 @@ select * from get_table_sizes();
 
 Compacted SESSION8 through SESSION14 into SESSION7.md. Deleted individual SESSION8-14 files.
 
+### 8. Drizzle ORM migration
+
+Migrated all app repository queries from `@supabase/supabase-js` string-based queries to Drizzle ORM.
+
+- **Installed**: `drizzle-orm`, `postgres`, `drizzle-kit`
+- **Introspected**: `drizzle-kit introspect` pulled live DB schema into `src/db/schema.ts` (19 tables, 3 enums, all foreign keys, indexes, policies)
+- **Added**: `src/db/schema.ts`, `src/db/relations.ts`, `src/db/index.ts` (singleton client via `DATABASE_URL`), `drizzle.config.ts`
+- **Rewrote**: all 5 repositories (`catalog.ts`, `playlist-items.ts`, `user-data.ts`, `semantic-retrieval.ts`, `user-profile-embeddings.ts`) — Supabase `.select()/.insert()/.update()/.delete()` → Drizzle `db.select()/.insert()/.update()/.delete()`
+- **Removed**: `src/types/database.ts`, `scripts/generate-database-types.ts`, `.github/workflows/database-types.yml`, `npm run db:types`/`db:types:check`, `tests/unit/playlist-items.test.ts` (tightly coupled to Supabase mock)
+- **Fixed**: `feed-ranking.ts` snake_case→camelCase to match Drizzle column names
+- **Scripts unaffected**: ingestion/enrichment scripts keep `@supabase/supabase-js` — they're standalone batch jobs, no need to migrate
+- **Supabase client** still used for `createClerkAuthenticatedClient` (RLS test) and ingestion scripts only
+
+#### Architecture after migration:
+
+```
+App queries:    drizzle-orm → postgres-js → DATABASE_URL → Supabase Postgres
+Scripts:        @supabase/supabase-js → service role key → Supabase Postgres
+Auth (Clerk):   unchanged
+```
+
+**Verification**: `npx tsc --noEmit` clean, `npm run lint` clean (0 errors, 0 warnings), `npm run build` passes, `npm run test:unit` 5/5 pass.
+
+### 9. Removed all seed/fake data
+
+- Deleted 4 fake seed papers from DB (paper-001 through paper-004)
+- Deleted `src/lib/mock-data.ts`
+- Deleted `scripts/seed-catalog.ts`
+- Removed all references from `catalog.ts` (`ensureSeedCatalog`, `topicDepth`, `paperIdentities`)
+- Removed `npm run seed:catalog`
+- **Result**: 567 real papers, all with summaries
+
 ## Known remaining
 
 - ~~2 papers without summaries~~ — Both were seed papers with fake/placeholder URLs (paper-002 "A Typed Intermediate Language..." and paper-003 "Parallel Approximation Schemes..."). They were invented for testing with invalid links like `https://openalex.org/` and `https://www.semanticscholar.org/`. Deleted from DB and removed from `mock-data.ts` + `seed-catalog.ts`.
