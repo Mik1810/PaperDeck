@@ -58,13 +58,12 @@ def load_input(path: str) -> list[dict[str, Any]]:
     return data  # type: ignore[no-any-return]
 
 
-def validate_item(item: dict[str, Any], idx: int) -> list[str]:
+def validate_item(item: dict[str, Any], idx: int, id_field: str) -> list[str]:
     errors = []
-    arxiv_id = item.get("arxiv_id") or "N/A"
-    title = item.get("title", "") or arxiv_id
+    paper_id = item.get(id_field) or "N/A"
 
-    if not item.get("arxiv_id"):
-        errors.append(f"missing arxiv_id")
+    if not item.get(id_field):
+        errors.append(f"missing '{id_field}'")
 
     for field in REQUIRED_FIELDS:
         val = item.get(field)
@@ -96,10 +95,16 @@ def main() -> None:
         default=MODEL_LABEL,
         help=f"Model label to store (default: {MODEL_LABEL}).",
     )
+    parser.add_argument(
+        "--id-field",
+        default="id",
+        help="Which JSON field to use for paper lookup (default: id).",
+    )
     args = parser.parse_args()
 
+    id_field = args.id_field
     items = load_input(args.input)
-    print(f"Loaded {len(items)} items from {args.input}")
+    print(f"Loaded {len(items)} items from {args.input} (lookup by '{id_field}')")
 
     supabase = SupabaseRestClient()
     ok = 0
@@ -107,16 +112,16 @@ def main() -> None:
     failed = 0
 
     for idx, item in enumerate(items):
-        arxiv_id = item.get("arxiv_id") or "N/A"
-        errors = validate_item(item, idx)
+        paper_id_val = item.get(id_field) or "N/A"
+        errors = validate_item(item, idx, id_field)
 
         if errors:
-            print(f"  [{idx+1}/{len(items)}] {arxiv_id}... INVALID: {'; '.join(errors)}")
+            print(f"  [{idx+1}/{len(items)}] {paper_id_val}... INVALID: {'; '.join(errors)}")
             skipped += 1
             continue
 
         if args.dry_run:
-            print(f"  [{idx+1}/{len(items)}] {arxiv_id}... VALID (dry-run)")
+            print(f"  [{idx+1}/{len(items)}] {paper_id_val}... VALID (dry-run)")
             ok += 1
             continue
 
@@ -125,21 +130,21 @@ def main() -> None:
                 "papers",
                 {
                     "select": "id,triage_summary",
-                    "arxiv_id": f"eq.{arxiv_id}",
+                    id_field: f"eq.{paper_id_val}",
                 },
             )
 
             if not rows or not isinstance(rows, list) or len(rows) == 0:
-                print(f"  [{idx+1}/{len(items)}] {arxiv_id}... NOT FOUND in DB")
+                print(f"  [{idx+1}/{len(items)}] {paper_id_val}... NOT FOUND in DB")
                 failed += 1
                 continue
 
             if rows[0].get("triage_summary"):
-                print(f"  [{idx+1}/{len(items)}] {arxiv_id}... SKIPPED (already has summary)")
+                print(f"  [{idx+1}/{len(items)}] {paper_id_val}... SKIPPED (already has summary)")
                 skipped += 1
                 continue
 
-            paper_id = rows[0]["id"]
+            db_paper_id = rows[0]["id"]
             summary = {
                 "why_it_matters": item["why_it_matters"].strip(),
                 "main_contribution": item["main_contribution"].strip(),
@@ -149,7 +154,7 @@ def main() -> None:
 
             supabase.request_json(
                 "papers",
-                {"id": f"eq.{paper_id}"},
+                {"id": f"eq.{db_paper_id}"},
                 method="PATCH",
                 payload={
                     "triage_summary": summary,
@@ -159,10 +164,10 @@ def main() -> None:
                 prefer="return=minimal",
             )
 
-            print(f"  [{idx+1}/{len(items)}] {arxiv_id}... OK")
+            print(f"  [{idx+1}/{len(items)}] {paper_id_val}... OK")
             ok += 1
         except Exception as exc:
-            print(f"  [{idx+1}/{len(items)}] {arxiv_id}... FAILED: {exc}")
+            print(f"  [{idx+1}/{len(items)}] {paper_id_val}... FAILED: {exc}")
             failed += 1
 
     print(f"\nDone. {ok} OK, {skipped} skipped, {failed} failed ({len(items)} total)")
