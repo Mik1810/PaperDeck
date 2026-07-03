@@ -47,6 +47,7 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Normalized embedding documentation, roadmap status, schema comments, semantic retrieval filtering, remote embedding rows, and GitHub Actions cache naming around the MiniLM model decision.
 - ROADMAP.md implementation status updated to reflect completed ingestion and enrichment pipeline.
 - docs/ingestion.md expanded with backfill mode and all three enrichment worker sections.
 - TASKS.md #10-#14 marked as completed.

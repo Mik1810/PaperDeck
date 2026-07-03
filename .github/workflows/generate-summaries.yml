@@ -57,21 +57,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Generate summaries
         shell: bash
         run: |
-          cmd=(npm run generate:summaries)
+          cmd=(bun run generate:summaries)
 
           if [ "$LLM_DRY_RUN" = "true" ]; then
             cmd+=(-- --dry-run)
