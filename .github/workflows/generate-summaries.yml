@@ -41,6 +41,7 @@ jobs:
       LLM_PROVIDER: ${{ github.event.inputs.provider || vars.LLM_PROVIDER || 'github' }}
       LLM_MODEL: ${{ github.event.inputs.model || vars.LLM_MODEL || 'openai/gpt-4o-mini' }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY || '' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || '' }}
       LLM_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.LLM_BATCH_SIZE || '3' }}
       LLM_LIMIT: ${{ github.event.inputs.limit || vars.LLM_LIMIT || '50' }}
       LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '3000' }}

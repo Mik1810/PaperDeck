@@ -12,12 +12,15 @@ This project follows Semantic Versioning.
 - Regression tests for playlist item add, remove, and reorder ownership checks.
 - Source display mapping and badges for Crossref, manual, and unknown paper sources.
 - Unit tests for database-to-display paper source mapping.
+- Generated Supabase database types with repeatable generation and stale-check commands.
+- GitHub Actions check for stale generated database types.
 
 ### Fixed
 
 - Playlist item add, remove, and reorder mutations now verify playlist ownership before writing through the service-role Supabase client.
 - Manual paper records no longer display as arXiv sources.
 - Summary generation retry delay capped to 300s to prevent hours-long waits on 429 responses from GitHub Models.
+- Repository queries now use generated Supabase table types instead of broad manual row casts.
 
 ## [0.1.4] - 2026-07-02
 
