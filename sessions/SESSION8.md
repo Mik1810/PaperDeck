@@ -8,8 +8,8 @@ Task: Fix summary generation pipeline and upgrade CI actions
 | | Count |
 |---|---|
 | Total papers with summary | **569** |
-| Papers without summary | 2 |
-| Total papers | ~571 |
+| Papers without summary | 0 |
+| Total papers | 569 |
 
 Breakdown by model:
 - `chatgpt:manual`: 473
@@ -131,5 +131,6 @@ Compacted SESSION8 through SESSION14 into SESSION7.md. Deleted individual SESSIO
 
 ## Known remaining
 
-- 2 papers without summaries (non-arxiv sources with abstract but no URL workable by ChatGPT)
-- Workflow automation for summaries is at 569/571 complete
+- ~~2 papers without summaries~~ — Both were seed papers with fake/placeholder URLs (paper-002 "A Typed Intermediate Language..." and paper-003 "Parallel Approximation Schemes..."). They were invented for testing with invalid links like `https://openalex.org/` and `https://www.semanticscholar.org/`. Deleted from DB and removed from `mock-data.ts` + `seed-catalog.ts`.
+- **All 569 remaining papers have summaries. Pipeline complete.**
+- Future: always store valid `url` and `pdf_url` for non-arxiv papers.
