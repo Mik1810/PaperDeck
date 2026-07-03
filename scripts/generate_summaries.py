@@ -25,7 +25,7 @@ DEFAULT_MODEL = "gemini-flash-latest"
 DEFAULT_BATCH_SIZE = 3
 DEFAULT_LIMIT = 50
 DEFAULT_SOURCE_TEXT_CHARS = 8000
-DEFAULT_MAX_OUTPUT_TOKENS = 1600
+DEFAULT_MAX_OUTPUT_TOKENS = 4096
 DEFAULT_RETRIES = 3
 DEFAULT_REQUEST_DELAY_MS = 5000
 DEFAULT_PAPER_DELAY_S = 5
@@ -267,7 +267,17 @@ def call_gemini(
             "temperature": 0.3,
             "maxOutputTokens": config.max_output_tokens,
             "responseMimeType": "application/json",
+            "thinkingConfig": {"thinkingBudget": 0},
         },
+        "safetySettings": [
+            {"category": cat, "threshold": "BLOCK_NONE"}
+            for cat in (
+                "HARM_CATEGORY_HARASSMENT",
+                "HARM_CATEGORY_HATE_SPEECH",
+                "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "HARM_CATEGORY_DANGEROUS_CONTENT",
+            )
+        ],
     }
 
     for attempt in range(config.retries + 1):
@@ -280,19 +290,35 @@ def call_gemini(
 
         if response.status_code == 200:
             data = response.json()
-            raw = (
-                data.get("candidates", [{}])[0]
-                .get("content", {})
-                .get("parts", [{}])[0]
-                .get("text", "")
+            candidates = data.get("candidates", [])
+            prompt_feedback = data.get("promptFeedback", {})
+
+            if not candidates and prompt_feedback.get("blockReason"):
+                raise RuntimeError(
+                    f"Gemini blocked: {prompt_feedback.get('blockReason')} — "
+                    f"{json.dumps(prompt_feedback)[:300]}"
+                )
+
+            finish_reason = candidates[0].get("finishReason", "?") if candidates else "no_candidates"
+
+            parts = (
+                candidates[0].get("content", {}).get("parts", [])
+                if candidates
+                else []
+            )
+
+            raw = "".join(
+                p.get("text", "") for p in parts if isinstance(p.get("text"), str)
             )
 
             if not raw:
                 raise RuntimeError(
-                    f"Gemini returned empty response: {json.dumps(data)[:300]}"
+                    f"Gemini returned empty response (finish_reason={finish_reason}, "
+                    f"candidates={len(candidates)}, parts={len(parts)}): "
+                    f"{json.dumps(data)[:500]}"
                 )
 
-            return parse_summary(raw)
+            return parse_summary(raw, title)
 
         if response.status_code in (429, 503) and attempt < config.retries:
             retry_after = response.headers.get("Retry-After")
@@ -320,11 +346,17 @@ def call_gemini(
     raise RuntimeError("Gemini API error: max retries exceeded")
 
 
-def parse_summary(raw: str) -> Summary:
+def parse_summary(raw: str, title: str = "") -> Summary:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        data = json.loads(_extract_json(raw))
+        try:
+            data = json.loads(_extract_json(raw))
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ValueError(
+                f"Failed to parse JSON (title: {title[:80]}, "
+                f"raw len={len(raw)}): {raw[:500]}"
+            ) from exc
 
     missing = [
         field
