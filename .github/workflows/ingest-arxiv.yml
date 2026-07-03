@@ -44,10 +44,10 @@ jobs:
       - name: Ingest arXiv papers
         shell: bash
         run: |
-          cmd=(bun run ingest:arxiv)
+          cmd=(bun scripts/ingest-arxiv.ts)
 
           if [ "$ARXIV_DRY_RUN" = "true" ]; then
-            cmd+=(-- --dry-run)
+            cmd+=(--dry-run)
           fi
 
           "${cmd[@]}"
