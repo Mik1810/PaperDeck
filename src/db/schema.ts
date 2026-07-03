@@ -13,7 +13,7 @@ export const profiles = pgTable("profiles", {
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'string' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
+}, () => [
 	pgPolicy("profiles_insert_own", { as: "permissive", for: "insert", to: ["public"], withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
 	pgPolicy("profiles_select_own", { as: "permissive", for: "select", to: ["public"] }),
 	pgPolicy("profiles_update_own", { as: "permissive", for: "update", to: ["public"] }),

@@ -379,7 +379,7 @@ export async function getSettingsPageData(ownerId: string) {
 
 export async function getPaperDetailData(ownerId: string, paperId: string) {
   const [papers, state] = await Promise.all([
-    getPapersByIds([paperId], { includeSummary: true }),
+    getPapersByIds([paperId]),
     getPaperDetailState(ownerId, paperId),
   ]);
 
