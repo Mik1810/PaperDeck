@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -16,6 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { Layers } from "lucide-react";
 import { reorderPlaylistAction } from "@/app/actions";
+import { MutationAlert } from "@/components/mutation-alert";
 import { SortablePlaylistPaper } from "@/components/sortable-playlist-paper";
 import type { Paper } from "@/types/paper";
 
@@ -26,12 +27,16 @@ type Props = {
 
 export function PlaylistPapers({ playlistId, papers }: Props) {
   const [orderedPapers, setOrderedPapers] = useState(papers);
+  const [reorderErrorMessage, setReorderErrorMessage] = useState<string | null>(
+    null,
+  );
+  const reorderRequestId = useRef(0);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  function handleDragEnd(event: DragEndEvent) {
+  async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
 
     if (!over || active.id === over.id) {
@@ -45,8 +50,13 @@ export function PlaylistPapers({ playlistId, papers }: Props) {
       return;
     }
 
+    const previousOrder = orderedPapers;
     const newOrder = arrayMove(orderedPapers, oldIndex, newIndex);
+    const requestId = reorderRequestId.current + 1;
+    reorderRequestId.current = requestId;
+
     setOrderedPapers(newOrder);
+    setReorderErrorMessage(null);
 
     const formData = new FormData();
     formData.set("playlistId", playlistId);
@@ -55,7 +65,16 @@ export function PlaylistPapers({ playlistId, papers }: Props) {
       formData.append("paperId", paper.id);
     }
 
-    reorderPlaylistAction(formData);
+    try {
+      await reorderPlaylistAction(formData);
+    } catch {
+      if (reorderRequestId.current === requestId) {
+        setOrderedPapers(previousOrder);
+        setReorderErrorMessage(
+          "We could not save this playlist order. It has been restored.",
+        );
+      }
+    }
   }
 
   if (!papers.length) {
@@ -79,6 +98,7 @@ export function PlaylistPapers({ playlistId, papers }: Props) {
 
   return (
     <div className="space-y-2">
+      <MutationAlert message={reorderErrorMessage} />
       <DndContext
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}

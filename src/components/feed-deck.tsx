@@ -3,6 +3,10 @@
 import { useMemo, useState } from "react";
 import { PaperCard } from "@/components/paper-card";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
+import {
+  deckMutationErrorMessage,
+  submitDeckAction,
+} from "@/lib/client/deck-mutations";
 import type { Paper } from "@/types/paper";
 
 type FeedDeckProps = {
@@ -30,6 +34,10 @@ export function FeedDeck({
     queueSignature,
     paperIds: new Set(),
   }));
+  const [dismissError, setDismissError] = useState<{
+    message: string;
+    paperId: string;
+  } | null>(null);
   const favoriteIds = useMemo(
     () => new Set(favoritePaperIds),
     [favoritePaperIds],
@@ -50,6 +58,41 @@ export function FeedDeck({
   const visibleActivePaper = visiblePapers[0] ?? null;
   const visibleNextPapers = visiblePapers.slice(1, 4);
 
+  function setPaperDismissed(paperId: string, isDismissed: boolean) {
+    setDismissedState((current) => {
+      const paperIds =
+        current.queueSignature === queueSignature
+          ? new Set(current.paperIds)
+          : new Set<string>();
+
+      if (isDismissed) {
+        paperIds.add(paperId);
+      } else {
+        paperIds.delete(paperId);
+      }
+
+      return {
+        queueSignature,
+        paperIds,
+      };
+    });
+  }
+
+  async function handleDismissSubmit(paperId: string) {
+    setDismissError(null);
+    setPaperDismissed(paperId, true);
+
+    try {
+      await submitDeckAction("dismiss", paperId);
+    } catch {
+      setPaperDismissed(paperId, false);
+      setDismissError({
+        message: deckMutationErrorMessage("dismiss"),
+        paperId,
+      });
+    }
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="lg:pr-0">
@@ -58,23 +101,13 @@ export function FeedDeck({
             key={visibleActivePaper.id}
             isFavorite={favoriteIds.has(visibleActivePaper.id)}
             isSaved={readLaterIds.has(visibleActivePaper.id)}
-            onDismissSubmit={(paperId) =>
-              setDismissedState((current) => {
-                const paperIds =
-                  current.queueSignature === queueSignature
-                    ? new Set(current.paperIds)
-                    : new Set<string>();
-
-                paperIds.add(paperId);
-
-                return {
-                  queueSignature,
-                  paperIds,
-                };
-              })
+            dismissErrorMessage={
+              dismissError?.paperId === visibleActivePaper.id
+                ? dismissError.message
+                : null
             }
+            onDismissSubmit={handleDismissSubmit}
             paper={visibleActivePaper}
-            sourcePath="/feed"
           />
         ) : activePaper === null && nextPapers.length === 0 ? (
           <div className="w-full max-w-md rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">

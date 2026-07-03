@@ -30,6 +30,10 @@ export async function POST(request: Request) {
         await recordPaperInteraction(ownerId, paperId, "dismiss");
         return NextResponse.json({ ok: true, action: "dismiss" });
       }
+      case "open_detail": {
+        await recordPaperInteraction(ownerId, paperId, "open_detail");
+        return NextResponse.json({ ok: true, action: "open_detail" });
+      }
       default:
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
     }

@@ -84,16 +84,6 @@ export async function dismissPaperAction(formData: FormData) {
   revalidatePath(sourcePathFrom(formData, "/feed"));
 }
 
-export async function openPaperAction(formData: FormData) {
-  const ownerId = await requireOwnerId();
-  const paperId = requirePaperId(formData);
-
-  await recordPaperInteraction(ownerId, paperId, "open_detail");
-
-  revalidatePath(sourcePathFrom(formData, "/feed"));
-  redirect(`/papers/${paperId}`);
-}
-
 export async function toggleFavoriteAction(formData: FormData) {
   const ownerId = await requireOwnerId();
   const paperId = requirePaperId(formData);

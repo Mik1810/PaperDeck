@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { MathContent } from "@/components/math-content";
+import { MutationAlert } from "@/components/mutation-alert";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
 import {
   Bookmark,
@@ -13,36 +15,56 @@ import {
   X,
 } from "lucide-react";
 import {
-  openPaperAction,
-} from "@/app/actions";
+  deckMutationErrorMessage,
+  recordOpenDetail,
+  type DeckMutationAction,
+  submitDeckAction,
+} from "@/lib/client/deck-mutations";
 import type { Paper } from "@/types/paper";
 
-async function deckAction(action: string, paperId: string) {
-  await fetch("/api/deck", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, paperId }),
-  });
-}
-
 type PaperCardProps = {
+  dismissErrorMessage?: string | null;
   paper: Paper;
   isFavorite?: boolean;
   isSaved?: boolean;
-  onDismissSubmit?: (paperId: string) => void;
-  sourcePath?: string;
+  onDismissSubmit?: (paperId: string) => void | Promise<void>;
 };
 
 export function PaperCard({
+  dismissErrorMessage,
   paper,
   isFavorite = false,
   isSaved = false,
   onDismissSubmit,
-  sourcePath = "/feed",
 }: PaperCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
   const [optimisticSaved, setOptimisticSaved] = useState(isSaved);
+  const [mutationErrorMessage, setMutationErrorMessage] = useState<
+    string | null
+  >(null);
+  const [pendingAction, setPendingAction] =
+    useState<DeckMutationAction | null>(null);
+  const isMutationPending = pendingAction !== null;
+
+  async function commitDeckMutation(
+    action: DeckMutationAction,
+    rollback: () => void,
+  ) {
+    setMutationErrorMessage(null);
+    setPendingAction(action);
+
+    try {
+      await submitDeckAction(action, paper.id);
+    } catch {
+      rollback();
+      setMutationErrorMessage(deckMutationErrorMessage(action));
+    } finally {
+      setPendingAction((current) => (current === action ? null : current));
+    }
+  }
+
+  const visibleErrorMessage = dismissErrorMessage ?? mutationErrorMessage;
 
   return (
     <article className="flex h-[min(760px,calc(100dvh-150px))] min-h-[360px] w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] sm:min-h-[560px] lg:max-w-none">
@@ -58,6 +80,8 @@ export function PaperCard({
         </div>
         <PaperSourceBadge source={paper.source} />
       </div>
+
+      <MutationAlert className="mx-5 mt-4" message={visibleErrorMessage} />
 
       <div className="flex-1 overflow-y-auto px-5 py-5">
         <div className="mb-4 flex flex-wrap gap-2">
@@ -106,32 +130,42 @@ export function PaperCard({
 
       <div className="grid grid-cols-5 gap-2 border-t border-slate-100 bg-slate-50 p-3">
         <button
-          className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700"
+          className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={isMutationPending}
           onClick={() => {
-            onDismissSubmit?.(paper.id);
-            void deckAction("dismiss", paper.id);
+            setMutationErrorMessage(null);
+            if (onDismissSubmit) {
+              void onDismissSubmit(paper.id);
+              return;
+            }
+
+            void commitDeckMutation("dismiss", () => undefined);
           }}
           type="button"
         >
           <X aria-label="Dismiss paper" size={19} strokeWidth={2.5} />
         </button>
-        <form action={openPaperAction} className="col-span-2">
-          <input name="paperId" type="hidden" value={paper.id} />
-          <input name="sourcePath" type="hidden" value={sourcePath} />
-          <button className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white">
-            <MoveRight aria-hidden="true" size={18} strokeWidth={2.5} />
-            Open
-          </button>
-        </form>
+        <Link
+          className="col-span-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white"
+          href={`/papers/${paper.id}`}
+          onClick={() => recordOpenDetail(paper.id)}
+        >
+          <MoveRight aria-hidden="true" size={18} strokeWidth={2.5} />
+          Open
+        </Link>
         <button
           className={`grid h-12 w-full place-items-center rounded-lg border ${
             optimisticFavorite
               ? "border-pink-300 bg-pink-50 text-pink-700"
               : "border-pink-200 bg-white text-pink-700"
-          }`}
+          } disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={isMutationPending}
           onClick={() => {
-            setOptimisticFavorite((current) => !current);
-            void deckAction("favorite", paper.id);
+            const previousFavorite = optimisticFavorite;
+            setOptimisticFavorite(!previousFavorite);
+            void commitDeckMutation("favorite", () =>
+              setOptimisticFavorite(previousFavorite),
+            );
           }}
           type="button"
         >
@@ -149,10 +183,14 @@ export function PaperCard({
             optimisticSaved
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
               : "border-emerald-200 bg-white text-emerald-700"
-          }`}
+          } disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={isMutationPending}
           onClick={() => {
-            setOptimisticSaved((current) => !current);
-            void deckAction("read_later", paper.id);
+            const previousSaved = optimisticSaved;
+            setOptimisticSaved(!previousSaved);
+            void commitDeckMutation("read_later", () =>
+              setOptimisticSaved(previousSaved),
+            );
           }}
           type="button"
         >
