@@ -8,6 +8,7 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- MIT License for PaperDeck source code and documentation, with README scope notes for branding and third-party paper metadata.
 - App CI workflow for service-role audit, lint, build, and Playwright smoke tests on pull requests and pushes to `main`.
 - Unit test script for focused repository regression tests.
 - Regression tests for playlist item add, remove, and reorder ownership checks.

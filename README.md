@@ -191,6 +191,12 @@ Protected routes require Clerk production keys on public deployments. Developmen
 
 The repository logo lives at [`logo/paperdeck-logo.svg`](./logo/paperdeck-logo.svg).
 
+## License
+
+PaperDeck source code and documentation are licensed under the [MIT License](./LICENSE).
+
+The PaperDeck name and logo are project branding; the MIT License does not grant trademark rights. Paper metadata, abstracts, and external links remain subject to the terms and licenses of their original sources.
+
 ## Roadmap
 
 The detailed roadmap is maintained in [ROADMAP.md](./ROADMAP.md).

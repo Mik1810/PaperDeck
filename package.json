@@ -1,6 +1,7 @@
 {
   "name": "paperdeck",
   "version": "0.1.4",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "next dev",

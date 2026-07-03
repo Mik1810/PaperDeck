@@ -15,6 +15,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Nome prodotto consigliato: `PaperDeck`.
 - Nome repository consigliato: `paperdeck`; fallback se non disponibile: `cs-paperdeck`.
 - Repository GitHub: pubblico.
+- Licenza repository: MIT per codice sorgente e documentazione.
 - Dominio iniziale: solo informatica.
 - Lingua abstract: inglese, almeno nella prima versione.
 - Traduzione/riassunto in italiano: rimandati a una fase successiva.
