@@ -20,6 +20,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- App CI now exposes `DATABASE_URL` to the build job and can be triggered manually.
 - Paper detail navigation from the feed no longer waits for the `open_detail` tracking write before changing pages.
 - Optimistic deck and playlist mutations now roll back and show visible errors when persistence fails.
 - Unit test command now resolves `server-only` repository imports through the React server condition.

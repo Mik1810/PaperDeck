@@ -1,6 +1,7 @@
 name: App CI
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -23,6 +24,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL || '' }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || '' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
       PAPERDECK_E2E_DEV_AUTH: "true"
 
     steps:
