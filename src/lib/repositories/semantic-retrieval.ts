@@ -1,18 +1,14 @@
 import "server-only";
 
+import { desc, eq, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { userProfileEmbeddings } from "@/db/schema";
 import { getPapersByIds } from "@/lib/repositories/catalog";
-import { createServiceRoleClient } from "@/lib/supabase/server";
 import {
-  EMBEDDING_MODEL,
   refreshUserProfileEmbedding,
   type ProfileEmbeddingRefreshResult,
 } from "@/lib/repositories/user-profile-embeddings";
 import type { Paper } from "@/types/paper";
-
-type UserProfileEmbeddingRow = {
-  embedding: string;
-  embedding_model: string;
-};
 
 type SemanticMatchRow = {
   paper_id: string;
@@ -47,24 +43,14 @@ export type SemanticRetrievalDiagnostics = {
   profileRefreshError: string | null;
 };
 
-function assertNoError(error: { message: string } | null, context: string) {
-  if (error) {
-    throw new Error(`${context}: ${error.message}`);
-  }
-}
-
-export async function getSemanticPaperCandidates(
-  ownerId: string,
-  matchCount = 100,
-): Promise<SemanticPaperCandidates> {
-  const supabase = createServiceRoleClient();
-  const emptyResult = (
-    diagnostics: Partial<SemanticRetrievalDiagnostics>,
-  ): SemanticPaperCandidates => ({
+function emptyResult(
+  diagnostics: Partial<SemanticRetrievalDiagnostics>,
+): SemanticPaperCandidates {
+  return {
     papers: [],
     semanticScores: new Map(),
     diagnostics: {
-      requestedCount: matchCount,
+      requestedCount: 100,
       rpcAttempted: false,
       matchedCount: 0,
       candidateCount: 0,
@@ -75,24 +61,47 @@ export async function getSemanticPaperCandidates(
       profileRefreshError: null,
       ...diagnostics,
     },
-  });
+  };
+}
 
-  const { data: profileEmbedding, error: profileError } = await supabase
-    .from("user_profile_embeddings")
-    .select("embedding, embedding_model")
-    .eq("owner_id", ownerId)
-    .eq("embedding_model", EMBEDDING_MODEL)
-    .order("generated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+async function matchPapersByEmbedding(
+  queryEmbedding: string | number[],
+  matchCount: number,
+  embeddingModelFilter: string,
+): Promise<SemanticMatchRow[]> {
+  const embeddingStr = Array.isArray(queryEmbedding)
+    ? `[${queryEmbedding.join(",")}]`
+    : queryEmbedding;
 
-  assertNoError(profileError, "Load user profile embedding");
+  const result = await db.execute(
+    sql`SELECT * FROM match_papers_by_embedding(${embeddingStr}::vector, ${matchCount}, ${embeddingModelFilter})`,
+  );
 
-  if (!profileEmbedding) {
+  return (result as unknown as SemanticMatchRow[]) ?? [];
+}
+
+export async function getSemanticPaperCandidates(
+  ownerId: string,
+  matchCount = 100,
+): Promise<SemanticPaperCandidates> {
+  const profileRows = await db
+    .select({
+      embedding: userProfileEmbeddings.embedding,
+      embeddingModel: userProfileEmbeddings.embeddingModel,
+    })
+    .from(userProfileEmbeddings)
+    .where(
+      eq(userProfileEmbeddings.ownerId, ownerId),
+    )
+    .orderBy(desc(userProfileEmbeddings.generatedAt))
+    .limit(1);
+
+  if (!profileRows.length) {
     try {
       const refreshResult = await refreshUserProfileEmbedding(ownerId);
 
       return emptyResult({
+        requestedCount: matchCount,
         fallbackReason: "profile_missing",
         profileRefreshStatus: refreshResult.status,
         profileRefreshReason:
@@ -100,6 +109,7 @@ export async function getSemanticPaperCandidates(
       });
     } catch (error) {
       return emptyResult({
+        requestedCount: matchCount,
         fallbackReason: "profile_refresh_failed",
         profileRefreshError:
           error instanceof Error ? error.message : "Unknown profile refresh error",
@@ -107,24 +117,20 @@ export async function getSemanticPaperCandidates(
     }
   }
 
-  const embeddingRow = profileEmbedding as UserProfileEmbeddingRow;
-  const { data: matches, error: matchesError } = await supabase.rpc(
-    "match_papers_by_embedding",
-    {
-      query_embedding: embeddingRow.embedding,
-      match_count: matchCount,
-      embedding_model_filter: embeddingRow.embedding_model,
-    },
+  const profileRow = profileRows[0];
+  const model = profileRow.embeddingModel;
+
+  const semanticMatches = await matchPapersByEmbedding(
+    profileRow.embedding,
+    matchCount,
+    model,
   );
-
-  assertNoError(matchesError, "Match papers by embedding");
-
-  const semanticMatches = (matches ?? []) as SemanticMatchRow[];
 
   if (!semanticMatches.length) {
     return emptyResult({
+      requestedCount: matchCount,
       rpcAttempted: true,
-      model: embeddingRow.embedding_model,
+      model,
       fallbackReason: "no_matches",
     });
   }
@@ -132,15 +138,17 @@ export async function getSemanticPaperCandidates(
   const semanticScores = new Map(
     semanticMatches.map((match) => [match.paper_id, match.semantic_score]),
   );
+
   const papers = await getPapersByIds(
     semanticMatches.map((match) => match.paper_id),
   );
 
   if (!papers.length) {
     return emptyResult({
+      requestedCount: matchCount,
       rpcAttempted: true,
       matchedCount: semanticMatches.length,
-      model: embeddingRow.embedding_model,
+      model,
       fallbackReason: "no_papers_loaded",
     });
   }
@@ -153,7 +161,7 @@ export async function getSemanticPaperCandidates(
       rpcAttempted: true,
       matchedCount: semanticMatches.length,
       candidateCount: papers.length,
-      model: embeddingRow.embedding_model,
+      model,
       fallbackReason: null,
       profileRefreshStatus: null,
       profileRefreshReason: null,

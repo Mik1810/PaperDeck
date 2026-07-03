@@ -2,11 +2,11 @@ import type { InteractionType, Paper } from "@/types/paper";
 
 export type RankingTopic = {
   id: string;
-  parent_id: string | null;
+  parentId: string | null;
 };
 
 export type RankingInteraction = {
-  paper_id: string;
+  paperId: string;
   action: InteractionType;
 };
 
@@ -69,7 +69,7 @@ function buildTopicAffinity(
   topics: RankingTopic[],
 ) {
   const parentByTopicId = new Map(
-    topics.map((topic) => [topic.id, topic.parent_id]),
+    topics.map((topic) => [topic.id, topic.parentId]),
   );
   const selectedAncestors = new Set(
     [...selectedTopicIds].flatMap((topicId) =>
@@ -114,7 +114,7 @@ function buildFeedbackTopicWeights(
       continue;
     }
 
-    const paper = papersById.get(interaction.paper_id);
+    const paper = papersById.get(interaction.paperId);
 
     if (!paper) {
       continue;

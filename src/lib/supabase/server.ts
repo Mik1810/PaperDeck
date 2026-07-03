@@ -2,7 +2,6 @@ import "server-only";
 
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
 
 export function createServiceRoleClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,7 +15,7 @@ export function createServiceRoleClient() {
     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
   }
 
-  return createClient<Database>(supabaseUrl, serviceRoleKey, {
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -45,7 +44,7 @@ export async function createClerkAuthenticatedClient() {
     );
   }
 
-  return createClient<Database>(supabaseUrl, anonKey, {
+  return createClient(supabaseUrl, anonKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

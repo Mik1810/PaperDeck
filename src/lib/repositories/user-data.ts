@@ -1,5 +1,15 @@
 import "server-only";
 
+import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { db } from "@/db";
+import {
+  profiles,
+  playlists,
+  playlistItems,
+  userInterests,
+  favorites,
+  userPaperInteractions,
+} from "@/db/schema";
 import {
   isFeedHiddenAction,
   rankFeedPapers,
@@ -12,21 +22,10 @@ import {
   reorderOwnedPlaylistItems,
 } from "@/lib/repositories/playlist-items";
 import { getSemanticPaperCandidates } from "@/lib/repositories/semantic-retrieval";
-import { createServiceRoleClient } from "@/lib/supabase/server";
-import type { Tables } from "@/types/database";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
 import type { InteractionType, Playlist } from "@/types/paper";
 
 type TopicRow = Awaited<ReturnType<typeof getTopics>>[number];
-type ReadLaterPlaylistRow = Pick<Tables<"playlists">, "id"> & {
-  playlist_items: Array<Pick<Tables<"playlist_items">, "paper_id">> | null;
-};
-type PlaylistSummaryRow = Pick<
-  Tables<"playlists">,
-  "id" | "name" | "is_default"
-> & {
-  playlist_items: Array<Pick<Tables<"playlist_items">, "paper_id">> | null;
-};
 
 type UserPaperState = {
   favoriteIds: Set<string>;
@@ -34,41 +33,6 @@ type UserPaperState = {
   seenIds: Set<string>;
   interactions: RankingInteraction[];
 };
-
-type RepositoryError = {
-  code?: string;
-  details?: string | null;
-  message: string;
-};
-
-function assertNoError(error: RepositoryError | null, context: string) {
-  if (error) {
-    throw new Error(`${context}: ${error.message}`);
-  }
-}
-
-function isMissingProfileError(error: RepositoryError | null) {
-  if (!error || error.code !== "23503") {
-    return false;
-  }
-
-  return `${error.message} ${error.details ?? ""}`.includes("profiles");
-}
-
-async function mutateWithProfileRetry(
-  ownerId: string,
-  context: string,
-  mutate: () => PromiseLike<{ error: RepositoryError | null }>,
-) {
-  let { error } = await mutate();
-
-  if (isMissingProfileError(error)) {
-    await ensureUserProfileForOwner(ownerId);
-    ({ error } = await mutate());
-  }
-
-  assertNoError(error, context);
-}
 
 async function measureAsync<T>(
   timings: Record<string, number>,
@@ -95,79 +59,62 @@ function measureSync<T>(
 }
 
 export async function ensureUserProfile(user: AuthenticatedUserContext) {
-  const supabase = createServiceRoleClient();
   const now = new Date().toISOString();
 
-  const { error: profileError } = await supabase.from("profiles").upsert(
-    {
-      owner_id: user.ownerId,
-      display_name: user.displayName,
-      image_url: user.imageUrl,
-      updated_at: now,
-    },
-    { onConflict: "owner_id" },
-  );
+  await db
+    .insert(profiles)
+    .values({
+      ownerId: user.ownerId,
+      displayName: user.displayName,
+      imageUrl: user.imageUrl,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: profiles.ownerId,
+      set: {
+        displayName: user.displayName,
+        imageUrl: user.imageUrl,
+        updatedAt: now,
+      },
+    });
 
-  assertNoError(profileError, "Ensure profile");
   await ensureReadLaterPlaylist(user.ownerId);
 }
 
 export async function ensureUserProfileForOwner(ownerId: string) {
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("profiles")
-    .upsert(
-      {
-        owner_id: ownerId,
-      },
-      { ignoreDuplicates: true, onConflict: "owner_id" },
-    );
-
-  assertNoError(error, "Ensure profile");
+  await db
+    .insert(profiles)
+    .values({ ownerId })
+    .onConflictDoNothing({ target: profiles.ownerId });
 }
 
 async function findReadLaterPlaylistId(ownerId: string) {
-  const supabase = createServiceRoleClient();
-  const { data, error } = await supabase
-    .from("playlists")
-    .select("id")
-    .eq("owner_id", ownerId)
-    .eq("name", "Read later")
-    .maybeSingle();
+  const rows = await db
+    .select({ id: playlists.id })
+    .from(playlists)
+    .where(and(eq(playlists.ownerId, ownerId), eq(playlists.name, "Read later")))
+    .limit(1);
 
-  assertNoError(error, "Find Read later playlist");
-
-  return data?.id;
+  return rows[0]?.id;
 }
 
 export async function ensureReadLaterPlaylist(ownerId: string) {
-  const supabase = createServiceRoleClient();
   const existingId = await findReadLaterPlaylistId(ownerId);
 
   if (existingId) {
     return existingId;
   }
 
-  const createPlaylist = () =>
-    supabase
-      .from("playlists")
-      .insert({
-        owner_id: ownerId,
-        name: "Read later",
-        description: "Default private queue for papers to revisit.",
-        is_default: true,
-      })
-      .select("id")
-      .single();
+  const [created] = await db
+    .insert(playlists)
+    .values({
+      ownerId,
+      name: "Read later",
+      description: "Default private queue for papers to revisit.",
+      isDefault: true,
+    })
+    .returning({ id: playlists.id });
 
-  let { data: created, error: createError } = await createPlaylist();
-
-  if (isMissingProfileError(createError)) {
-    await ensureUserProfileForOwner(ownerId);
-    ({ data: created, error: createError } = await createPlaylist());
-  }
-
-  assertNoError(createError, "Create Read later playlist");
   if (!created) {
     throw new Error("Create Read later playlist: missing saved row");
   }
@@ -176,48 +123,38 @@ export async function ensureReadLaterPlaylist(ownerId: string) {
 }
 
 export async function getSelectedTopicIds(ownerId: string) {
-  const supabase = createServiceRoleClient();
-  const { data, error } = await supabase
-    .from("user_interests")
-    .select("topic_id")
-    .eq("owner_id", ownerId);
+  const rows = await db
+    .select({ topicId: userInterests.topicId })
+    .from(userInterests)
+    .where(eq(userInterests.ownerId, ownerId));
 
-  assertNoError(error, "Load selected topics");
-
-  return new Set((data ?? []).map((item) => item.topic_id));
+  return new Set(rows.map((r) => r.topicId));
 }
 
 export async function saveSelectedTopics(ownerId: string, topicIds: string[]) {
-  const supabase = createServiceRoleClient();
-
-  const { error: deleteError } = await supabase
-    .from("user_interests")
-    .delete()
-    .eq("owner_id", ownerId);
-
-  assertNoError(deleteError, "Clear selected topics");
+  await db
+    .delete(userInterests)
+    .where(eq(userInterests.ownerId, ownerId));
 
   if (topicIds.length) {
-    const { error: insertError } = await supabase.from("user_interests").insert(
+    await db.insert(userInterests).values(
       topicIds.map((topicId) => ({
-        owner_id: ownerId,
-        topic_id: topicId,
+        ownerId,
+        topicId,
         weight: 1,
       })),
     );
-
-    assertNoError(insertError, "Save selected topics");
   }
 
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({
-      onboarding_completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("owner_id", ownerId);
+  const now = new Date().toISOString();
 
-  assertNoError(profileError, "Mark onboarding complete");
+  await db
+    .update(profiles)
+    .set({
+      onboardingCompletedAt: now,
+      updatedAt: now,
+    })
+    .where(eq(profiles.ownerId, ownerId));
 }
 
 export async function getOnboardingData(ownerId: string) {
@@ -238,53 +175,50 @@ type FeedState = {
 };
 
 async function getFeedState(ownerId: string): Promise<FeedState> {
-  const supabase = createServiceRoleClient();
-
   const [
-    { data: interests, error: interestsError },
-    { data: favorites, error: favoritesError },
-    { data: readLaterPlaylist, error: readLaterPlaylistError },
-    { data: interactions, error: interactionsError },
+    interests,
+    favRows,
+    rlPlaylist,
+    interactionRows,
   ] = await Promise.all([
-    supabase.from("user_interests").select("topic_id").eq("owner_id", ownerId),
-    supabase.from("favorites").select("paper_id").eq("owner_id", ownerId),
-    supabase
-      .from("playlists")
-      .select("id, playlist_items(paper_id)")
-      .eq("owner_id", ownerId)
-      .eq("name", "Read later")
-      .returns<ReadLaterPlaylistRow[]>()
-      .maybeSingle(),
-    supabase
-      .from("user_paper_interactions")
-      .select("paper_id, action")
-      .eq("owner_id", ownerId)
-      .order("created_at", { ascending: false })
+    db
+      .select({ topicId: userInterests.topicId })
+      .from(userInterests)
+      .where(eq(userInterests.ownerId, ownerId)),
+    db
+      .select({ paperId: favorites.paperId })
+      .from(favorites)
+      .where(eq(favorites.ownerId, ownerId)),
+    (async () => {
+      const playlistId = await findReadLaterPlaylistId(ownerId);
+      if (!playlistId) return [] as Array<{ paperId: string }>;
+      return db
+        .select({ paperId: playlistItems.paperId })
+        .from(playlistItems)
+        .where(eq(playlistItems.playlistId, playlistId));
+    })(),
+    db
+      .select({
+        paperId: userPaperInteractions.paperId,
+        action: userPaperInteractions.action,
+      })
+      .from(userPaperInteractions)
+      .where(eq(userPaperInteractions.ownerId, ownerId))
+      .orderBy(desc(userPaperInteractions.createdAt))
       .limit(200),
   ]);
 
-  assertNoError(interestsError, "Load selected topics");
-  assertNoError(favoritesError, "Load favorites");
-  assertNoError(readLaterPlaylistError, "Load Read later playlist");
-  assertNoError(interactionsError, "Load interactions");
-
-  const playlistItems = readLaterPlaylist?.playlist_items ?? [];
-
   return {
-    selectedTopicIds: new Set(
-      (interests ?? []).map((item) => item.topic_id),
-    ),
+    selectedTopicIds: new Set(interests.map((r) => r.topicId)),
     userState: {
-      favoriteIds: new Set(
-        (favorites ?? []).map((item) => item.paper_id),
-      ),
-      readLaterIds: new Set(playlistItems.map((item) => item.paper_id)),
+      favoriteIds: new Set(favRows.map((r) => r.paperId)),
+      readLaterIds: new Set(rlPlaylist.map((r) => r.paperId)),
       seenIds: new Set(
-        (interactions ?? [])
-          .filter((item) => isFeedHiddenAction(item.action))
-          .map((item) => item.paper_id),
+        interactionRows
+          .filter((r) => isFeedHiddenAction(r.action))
+          .map((r) => r.paperId),
       ),
-      interactions: interactions ?? [],
+      interactions: interactionRows,
     },
   };
 }
@@ -365,52 +299,58 @@ export async function getFeedPageData(ownerId: string) {
 }
 
 export async function getLibraryPageData(ownerId: string) {
-  const supabase = createServiceRoleClient();
+  const playlistRows = await db
+    .select({
+      id: playlists.id,
+      name: playlists.name,
+      isDefault: playlists.isDefault,
+    })
+    .from(playlists)
+    .where(eq(playlists.ownerId, ownerId))
+    .orderBy(playlists.createdAt);
 
-  const [
-    { data: playlists, error: playlistsError },
-    { data: favoriteRows, error: favoritesError },
-  ] = await Promise.all([
-    supabase
-      .from("playlists")
-      .select("id, name, is_default, playlist_items(paper_id)")
-      .eq("owner_id", ownerId)
-      .order("created_at", { ascending: true })
-      .returns<PlaylistSummaryRow[]>(),
-    supabase.from("favorites").select("paper_id").eq("owner_id", ownerId),
-  ]);
+  const favoriteRows = await db
+    .select({ paperId: favorites.paperId })
+    .from(favorites)
+    .where(eq(favorites.ownerId, ownerId));
 
-  assertNoError(playlistsError, "Load playlists");
-  assertNoError(favoritesError, "Load library favorites");
-
-  const readLaterPlaylist = (playlists ?? []).find(
-    (playlist) => playlist.name === "Read later",
+  const readLaterPlaylist = playlistRows.find(
+    (p) => p.name === "Read later",
   );
-  const readLaterPlaylistId = readLaterPlaylist?.id;
-  const { data: readLaterRows, error: readLaterError } = readLaterPlaylistId
-    ? await supabase
-        .from("playlist_items")
-        .select("paper_id")
-        .eq("playlist_id", readLaterPlaylistId)
-        .order("added_at", { ascending: false })
-    : { data: [], error: null };
 
-  assertNoError(readLaterError, "Load library Read later");
+  let readLaterIds: string[] = [];
 
-  const favoriteIds = (favoriteRows ?? []).map((row) => row.paper_id);
-  const readLaterIds = (readLaterRows ?? []).map((row) => row.paper_id);
+  if (readLaterPlaylist) {
+    const items = await db
+      .select({ paperId: playlistItems.paperId })
+      .from(playlistItems)
+      .where(eq(playlistItems.playlistId, readLaterPlaylist.id))
+      .orderBy(desc(playlistItems.addedAt));
+    readLaterIds = items.map((r) => r.paperId);
+  }
+
+  const favoriteIds = favoriteRows.map((r) => r.paperId);
 
   const [favoritePapers, readLaterPapers] = await Promise.all([
     getPapersByIds(favoriteIds),
     getPapersByIds(readLaterIds),
   ]);
 
-  const playlistSummaries: Playlist[] = (playlists ?? []).map((playlist) => ({
-    id: playlist.id,
-    name: playlist.name,
-    paperIds: (playlist.playlist_items ?? []).map((item) => item.paper_id),
-    isDefault: playlist.is_default ?? false,
-  }));
+  const playlistSummaries: Playlist[] = await Promise.all(
+    playlistRows.map(async (playlist) => {
+      const items = await db
+        .select({ paperId: playlistItems.paperId })
+        .from(playlistItems)
+        .where(eq(playlistItems.playlistId, playlist.id));
+
+      return {
+        id: playlist.id,
+        name: playlist.name,
+        paperIds: items.map((r) => r.paperId),
+        isDefault: playlist.isDefault ?? false,
+      };
+    }),
+  );
 
   return {
     playlists: playlistSummaries,
@@ -452,61 +392,60 @@ export async function getPaperDetailData(ownerId: string, paperId: string) {
 }
 
 async function getPaperDetailState(ownerId: string, paperId: string) {
-  const supabase = createServiceRoleClient();
-  const [
-    { data: favorite, error: favoriteError },
-    { data: readLaterPlaylist, error: readLaterPlaylistError },
-  ] = await Promise.all([
-    supabase
-      .from("favorites")
-      .select("paper_id")
-      .eq("owner_id", ownerId)
-      .eq("paper_id", paperId)
-      .maybeSingle(),
-    supabase
-      .from("playlists")
-      .select("id")
-      .eq("owner_id", ownerId)
-      .eq("name", "Read later")
-      .maybeSingle(),
+  const [favRow, rlPlaylist] = await Promise.all([
+    db
+      .select({ paperId: favorites.paperId })
+      .from(favorites)
+      .where(
+        and(
+          eq(favorites.ownerId, ownerId),
+          eq(favorites.paperId, paperId),
+        ),
+      )
+      .limit(1),
+    db
+      .select({ id: playlists.id })
+      .from(playlists)
+      .where(
+        and(
+          eq(playlists.ownerId, ownerId),
+          eq(playlists.name, "Read later"),
+        ),
+      )
+      .limit(1),
   ]);
 
-  assertNoError(favoriteError, "Load detail favorite state");
-  assertNoError(readLaterPlaylistError, "Load detail Read later playlist");
-
-  const playlistId = readLaterPlaylist?.id;
+  const playlistId = rlPlaylist[0]?.id;
 
   if (!playlistId) {
     return {
-      isFavorite: Boolean(favorite),
+      isFavorite: favRow.length > 0,
       isSaved: false,
       readLaterCount: 0,
     };
   }
 
-  const [
-    { data: readLaterItem, error: readLaterItemError },
-    { count: readLaterCount, error: readLaterCountError },
-  ] = await Promise.all([
-    supabase
-      .from("playlist_items")
-      .select("paper_id")
-      .eq("playlist_id", playlistId)
-      .eq("paper_id", paperId)
-      .maybeSingle(),
-    supabase
-      .from("playlist_items")
-      .select("paper_id", { count: "exact", head: true })
-      .eq("playlist_id", playlistId),
+  const [readLaterItem, readLaterCount] = await Promise.all([
+    db
+      .select({ paperId: playlistItems.paperId })
+      .from(playlistItems)
+      .where(
+        and(
+          eq(playlistItems.playlistId, playlistId),
+          eq(playlistItems.paperId, paperId),
+        ),
+      )
+      .limit(1),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(playlistItems)
+      .where(eq(playlistItems.playlistId, playlistId)),
   ]);
 
-  assertNoError(readLaterItemError, "Load detail Read later state");
-  assertNoError(readLaterCountError, "Count detail Read later items");
-
   return {
-    isFavorite: Boolean(favorite),
-    isSaved: Boolean(readLaterItem),
-    readLaterCount: readLaterCount ?? 0,
+    isFavorite: favRow.length > 0,
+    isSaved: readLaterItem.length > 0,
+    readLaterCount: Number(readLaterCount[0]?.count ?? 0),
   };
 }
 
@@ -516,94 +455,90 @@ export async function recordPaperInteraction(
   action: InteractionType,
   context = "feed",
 ) {
-  const supabase = createServiceRoleClient();
-  await mutateWithProfileRetry(ownerId, `Record ${action} interaction`, () =>
-    supabase.from("user_paper_interactions").insert({
-      owner_id: ownerId,
-      paper_id: paperId,
-      action,
-      context,
-    }),
-  );
+  await db.insert(userPaperInteractions).values({
+    ownerId,
+    paperId,
+    action,
+    context,
+  });
 }
 
 export async function toggleFavorite(ownerId: string, paperId: string) {
-  const supabase = createServiceRoleClient();
-  const { data: existing, error: existingError } = await supabase
-    .from("favorites")
-    .select("paper_id")
-    .eq("owner_id", ownerId)
-    .eq("paper_id", paperId)
-    .maybeSingle();
+  const existing = await db
+    .select({ paperId: favorites.paperId })
+    .from(favorites)
+    .where(
+      and(
+        eq(favorites.ownerId, ownerId),
+        eq(favorites.paperId, paperId),
+      ),
+    )
+    .limit(1);
 
-  assertNoError(existingError, "Find favorite");
-
-  if (existing) {
-    const { error } = await supabase
-      .from("favorites")
-      .delete()
-      .eq("owner_id", ownerId)
-      .eq("paper_id", paperId);
-
-    assertNoError(error, "Remove favorite");
+  if (existing.length) {
+    await db
+      .delete(favorites)
+      .where(
+        and(
+          eq(favorites.ownerId, ownerId),
+          eq(favorites.paperId, paperId),
+        ),
+      );
     return;
   }
 
-  await mutateWithProfileRetry(ownerId, "Add favorite", () =>
-    supabase.from("favorites").insert({
-      owner_id: ownerId,
-      paper_id: paperId,
-    }),
-  );
+  await db.insert(favorites).values({ ownerId, paperId });
   await recordPaperInteraction(ownerId, paperId, "favorite");
 }
 
 export async function toggleReadLater(ownerId: string, paperId: string) {
-  const supabase = createServiceRoleClient();
   const playlistId = await ensureReadLaterPlaylist(ownerId);
-  const { data: existing, error: existingError } = await supabase
-    .from("playlist_items")
-    .select("paper_id")
-    .eq("playlist_id", playlistId)
-    .eq("paper_id", paperId)
-    .maybeSingle();
 
-  assertNoError(existingError, "Find Read later item");
+  const existing = await db
+    .select({ paperId: playlistItems.paperId })
+    .from(playlistItems)
+    .where(
+      and(
+        eq(playlistItems.playlistId, playlistId),
+        eq(playlistItems.paperId, paperId),
+      ),
+    )
+    .limit(1);
 
-  if (existing) {
-    const { error } = await supabase
-      .from("playlist_items")
-      .delete()
-      .eq("playlist_id", playlistId)
-      .eq("paper_id", paperId);
-
-    assertNoError(error, "Remove from Read later");
+  if (existing.length) {
+    await db
+      .delete(playlistItems)
+      .where(
+        and(
+          eq(playlistItems.playlistId, playlistId),
+          eq(playlistItems.paperId, paperId),
+        ),
+      );
     return;
   }
 
-  const { error } = await supabase.from("playlist_items").upsert(
-    {
-      playlist_id: playlistId,
-      paper_id: paperId,
+  await db
+    .insert(playlistItems)
+    .values({
+      playlistId,
+      paperId,
       position: 0,
-    },
-    { onConflict: "playlist_id,paper_id" },
-  );
+    })
+    .onConflictDoUpdate({
+      target: [playlistItems.playlistId, playlistItems.paperId],
+      set: { position: 0 },
+    });
 
-  assertNoError(error, "Save to Read later");
   await recordPaperInteraction(ownerId, paperId, "save_to_playlist");
 }
 
 export async function createPlaylist(ownerId: string, name: string) {
-  const supabase = createServiceRoleClient();
-  const { data, error } = await supabase
-    .from("playlists")
-    .insert({ owner_id: ownerId, name, is_default: false })
-    .select("id, name")
-    .single();
+  const [row] = await db
+    .insert(playlists)
+    .values({ ownerId, name, isDefault: false })
+    .returning({ id: playlists.id, name: playlists.name });
 
-  assertNoError(error, "Create playlist");
-  return data;
+  return row;
 }
 
 export async function renamePlaylist(
@@ -611,27 +546,28 @@ export async function renamePlaylist(
   playlistId: string,
   name: string,
 ) {
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("playlists")
-    .update({ name, updated_at: new Date().toISOString() })
-    .eq("id", playlistId)
-    .eq("owner_id", ownerId)
-    .neq("is_default", true);
-
-  assertNoError(error, "Rename playlist");
+  await db
+    .update(playlists)
+    .set({ name, updatedAt: new Date().toISOString() })
+    .where(
+      and(
+        eq(playlists.id, playlistId),
+        eq(playlists.ownerId, ownerId),
+        ne(playlists.isDefault, true),
+      ),
+    );
 }
 
 export async function deletePlaylist(ownerId: string, playlistId: string) {
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("playlists")
-    .delete()
-    .eq("id", playlistId)
-    .eq("owner_id", ownerId)
-    .neq("is_default", true);
-
-  assertNoError(error, "Delete playlist");
+  await db
+    .delete(playlists)
+    .where(
+      and(
+        eq(playlists.id, playlistId),
+        eq(playlists.ownerId, ownerId),
+        ne(playlists.isDefault, true),
+      ),
+    );
 }
 
 export async function addToPlaylist(
@@ -639,8 +575,7 @@ export async function addToPlaylist(
   playlistId: string,
   paperId: string,
 ) {
-  const supabase = createServiceRoleClient();
-  await addToOwnedPlaylist(supabase, ownerId, playlistId, paperId);
+  await addToOwnedPlaylist(ownerId, playlistId, paperId);
 }
 
 export async function removeFromPlaylist(
@@ -648,8 +583,7 @@ export async function removeFromPlaylist(
   playlistId: string,
   paperId: string,
 ) {
-  const supabase = createServiceRoleClient();
-  await removeFromOwnedPlaylist(supabase, ownerId, playlistId, paperId);
+  await removeFromOwnedPlaylist(ownerId, playlistId, paperId);
 }
 
 export async function reorderPlaylistItems(
@@ -657,11 +591,5 @@ export async function reorderPlaylistItems(
   playlistId: string,
   orderedPaperIds: string[],
 ) {
-  const supabase = createServiceRoleClient();
-  await reorderOwnedPlaylistItems(
-    supabase,
-    ownerId,
-    playlistId,
-    orderedPaperIds,
-  );
+  await reorderOwnedPlaylistItems(ownerId, playlistId, orderedPaperIds);
 }

@@ -1,6 +1,10 @@
-import type { Enums } from "@/types/database";
-
-export type DatabasePaperSource = Enums<"paper_source">;
+export type DatabasePaperSource =
+  | "arxiv"
+  | "semantic_scholar"
+  | "openalex"
+  | "dblp"
+  | "crossref"
+  | "manual";
 
 export type KnownPaperSource =
   | "arXiv"
@@ -12,7 +16,7 @@ export type KnownPaperSource =
 
 export type PaperSource = KnownPaperSource | "Unknown";
 
-export type PaperAccess = Enums<"paper_access">;
+export type PaperAccess = "open" | "publisher" | "unknown";
 
 export type PaperTopic = {
   id: string;
@@ -60,4 +64,12 @@ export type Playlist = {
   isDefault?: boolean;
 };
 
-export type InteractionType = Enums<"interaction_type">;
+export type InteractionType =
+  | "seen"
+  | "open_detail"
+  | "dismiss"
+  | "favorite"
+  | "save_to_playlist"
+  | "read"
+  | "not_interested"
+  | "already_read";

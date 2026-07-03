@@ -1,120 +1,91 @@
 import "server-only";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
-
-type RepositoryError = {
-  message: string;
-};
-
-export type PlaylistItemMutationClient = SupabaseClient<Database>;
-
-function assertNoError(error: RepositoryError | null, context: string) {
-  if (error) {
-    throw new Error(`${context}: ${error.message}`);
-  }
-}
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { playlists, playlistItems } from "@/db/schema";
 
 async function requireOwnedPlaylist(
-  supabase: PlaylistItemMutationClient,
   ownerId: string,
   playlistId: string,
   context: string,
 ) {
-  const { data, error } = await supabase
-    .from("playlists")
-    .select("id")
-    .eq("id", playlistId)
-    .eq("owner_id", ownerId)
-    .maybeSingle();
+  const rows = await db
+    .select({ id: playlists.id, ownerId: playlists.ownerId })
+    .from(playlists)
+    .where(eq(playlists.id, playlistId))
+    .limit(1);
 
-  assertNoError(error, context);
+  if (!rows.length) {
+    throw new Error(`${context}: playlist not found`);
+  }
 
-  if (!data) {
-    throw new Error(`${context}: playlist not found or not owned by user`);
+  if (rows[0].ownerId !== ownerId) {
+    throw new Error(`${context}: playlist not owned by user`);
   }
 }
 
 export async function addToOwnedPlaylist(
-  supabase: PlaylistItemMutationClient,
   ownerId: string,
   playlistId: string,
   paperId: string,
 ) {
-  await requireOwnedPlaylist(
-    supabase,
-    ownerId,
-    playlistId,
-    "Authorize playlist add",
-  );
+  await requireOwnedPlaylist(ownerId, playlistId, "Authorize playlist add");
 
-  const { data: maxRow, error: maxError } = await supabase
-    .from("playlist_items")
-    .select("position")
-    .eq("playlist_id", playlistId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const maxRows = await db
+    .select({ position: playlistItems.position })
+    .from(playlistItems)
+    .where(eq(playlistItems.playlistId, playlistId))
+    .orderBy(desc(playlistItems.position))
+    .limit(1);
 
-  assertNoError(maxError, "Find playlist position");
+  const nextPosition = (maxRows[0]?.position ?? -1) + 1;
 
-  const currentMaxPosition =
-    typeof maxRow?.position === "number" ? maxRow.position : -1;
-
-  const { error } = await supabase.from("playlist_items").upsert(
-    {
-      playlist_id: playlistId,
-      paper_id: paperId,
-      position: currentMaxPosition + 1,
-    },
-    { onConflict: "playlist_id,paper_id" },
-  );
-
-  assertNoError(error, "Add to playlist");
+  await db
+    .insert(playlistItems)
+    .values({
+      playlistId,
+      paperId,
+      position: nextPosition,
+    })
+    .onConflictDoUpdate({
+      target: [playlistItems.playlistId, playlistItems.paperId],
+      set: { position: nextPosition },
+    });
 }
 
 export async function removeFromOwnedPlaylist(
-  supabase: PlaylistItemMutationClient,
   ownerId: string,
   playlistId: string,
   paperId: string,
 ) {
-  await requireOwnedPlaylist(
-    supabase,
-    ownerId,
-    playlistId,
-    "Authorize playlist removal",
-  );
+  await requireOwnedPlaylist(ownerId, playlistId, "Authorize playlist removal");
 
-  const { error } = await supabase
-    .from("playlist_items")
-    .delete()
-    .eq("playlist_id", playlistId)
-    .eq("paper_id", paperId);
-
-  assertNoError(error, "Remove from playlist");
+  await db
+    .delete(playlistItems)
+    .where(
+      and(
+        eq(playlistItems.playlistId, playlistId),
+        eq(playlistItems.paperId, paperId),
+      ),
+    );
 }
 
 export async function reorderOwnedPlaylistItems(
-  supabase: PlaylistItemMutationClient,
   ownerId: string,
   playlistId: string,
   orderedPaperIds: string[],
 ) {
-  await requireOwnedPlaylist(
-    supabase,
-    ownerId,
-    playlistId,
-    "Authorize playlist reorder",
-  );
+  await requireOwnedPlaylist(ownerId, playlistId, "Authorize playlist reorder");
 
   for (let i = 0; i < orderedPaperIds.length; i++) {
-    const { error } = await supabase
-      .from("playlist_items")
-      .update({ position: i })
-      .eq("playlist_id", playlistId)
-      .eq("paper_id", orderedPaperIds[i]);
-
-    assertNoError(error, "Reorder playlist");
+    await db
+      .update(playlistItems)
+      .set({ position: i })
+      .where(
+        and(
+          eq(playlistItems.playlistId, playlistId),
+          eq(playlistItems.paperId, orderedPaperIds[i]),
+        ),
+      );
   }
 }

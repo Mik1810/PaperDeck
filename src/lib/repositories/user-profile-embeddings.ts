@@ -1,7 +1,19 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { createServiceRoleClient } from "@/lib/supabase/server";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { db } from "@/db";
+import {
+  userProfileEmbeddings,
+  topicEmbeddings,
+  papers,
+  userInterests,
+  favorites,
+  userPaperInteractions,
+  playlists,
+  playlistItems,
+} from "@/db/schema";
 import type { InteractionType } from "@/types/paper";
 
 export const EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2";
@@ -9,29 +21,16 @@ const EMBEDDING_DIMENSION = 384;
 const MAX_INTERACTIONS = 100;
 
 type TopicEmbeddingRow = {
-  topic_id: string;
+  topicId: string;
   embedding: string | number[];
-  embedded_at: string | null;
+  embeddedAt: string | null;
 };
 
 type PaperEmbeddingRow = {
   id: string;
   embedding: string | number[];
-  embedded_at: string | null;
+  embeddedAt: string | null;
 };
-
-type InteractionRow = {
-  id: string;
-  paper_id: string;
-  action: InteractionType;
-  created_at: string;
-};
-
-type ProfileEmbeddingRow = {
-  input_signature: string;
-};
-
-type ServiceRoleClient = ReturnType<typeof createServiceRoleClient>;
 
 export type ProfileEmbeddingRefreshResult =
   | {
@@ -57,12 +56,6 @@ const paperInteractionWeights: Partial<Record<InteractionType, number>> = {
   dismiss: -4,
 };
 
-function assertNoError(error: { message: string } | null, context: string) {
-  if (error) {
-    throw new Error(`${context}: ${error.message}`);
-  }
-}
-
 function parseVector(value: string | number[]) {
   const vector = Array.isArray(value)
     ? value.map(Number)
@@ -80,10 +73,6 @@ function parseVector(value: string | number[]) {
   }
 
   return vector;
-}
-
-function vectorLiteral(vector: number[]) {
-  return `[${vector.map((value) => value.toFixed(8)).join(",")}]`;
 }
 
 function l2Normalize(vector: number[]) {
@@ -124,122 +113,118 @@ function accumulateWeights(
   weights.set(paperId, (weights.get(paperId) ?? 0) + weight);
 }
 
-async function clearUserProfileEmbedding(
-  supabase: ServiceRoleClient,
-  ownerId: string,
-  context: string,
-) {
-  const { error } = await supabase
-    .from("user_profile_embeddings")
-    .delete()
-    .eq("owner_id", ownerId)
-    .eq("embedding_model", EMBEDDING_MODEL);
-
-  assertNoError(error, context);
-}
-
 async function getReadLaterPaperIds(ownerId: string) {
-  const supabase = createServiceRoleClient();
-  const { data: readLaterPlaylist, error: playlistError } = await supabase
-    .from("playlists")
-    .select("id")
-    .eq("owner_id", ownerId)
-    .eq("name", "Read later")
-    .maybeSingle();
+  const playlistRows = await db
+    .select({ id: playlists.id })
+    .from(playlists)
+    .where(
+      and(
+        eq(playlists.ownerId, ownerId),
+        eq(playlists.name, "Read later"),
+      ),
+    )
+    .limit(1);
 
-  assertNoError(playlistError, "Find Read later playlist for profile embedding");
-
-  if (!readLaterPlaylist) {
+  if (!playlistRows.length) {
     return [];
   }
 
-  const { data: items, error: itemsError } = await supabase
-    .from("playlist_items")
-    .select("paper_id")
-    .eq("playlist_id", readLaterPlaylist.id);
+  const items = await db
+    .select({ paperId: playlistItems.paperId })
+    .from(playlistItems)
+    .where(eq(playlistItems.playlistId, playlistRows[0].id));
 
-  assertNoError(itemsError, "Load Read later items for profile embedding");
-
-  return (items ?? []).map((item) => item.paper_id as string);
+  return items.map((r) => r.paperId);
 }
 
 export async function refreshUserProfileEmbedding(
   ownerId: string,
 ): Promise<ProfileEmbeddingRefreshResult> {
-  const supabase = createServiceRoleClient();
-  const [
-    { data: interests, error: interestsError },
-    { data: favorites, error: favoritesError },
-    { data: interactions, error: interactionsError },
-    readLaterPaperIds,
-  ] = await Promise.all([
-    supabase
-      .from("user_interests")
-      .select("topic_id, selected_at")
-      .eq("owner_id", ownerId)
-      .order("selected_at", { ascending: true }),
-    supabase.from("favorites").select("paper_id, created_at").eq("owner_id", ownerId),
-    supabase
-      .from("user_paper_interactions")
-      .select("id, paper_id, action, created_at")
-      .eq("owner_id", ownerId)
-      .order("created_at", { ascending: false })
-      .limit(MAX_INTERACTIONS),
-    getReadLaterPaperIds(ownerId),
-  ]);
+  const [interests, favRows, interactionRows, readLaterPaperIds] =
+    await Promise.all([
+      db
+        .select({
+          topicId: userInterests.topicId,
+          selectedAt: userInterests.selectedAt,
+        })
+        .from(userInterests)
+        .where(eq(userInterests.ownerId, ownerId))
+        .orderBy(asc(userInterests.selectedAt)),
+      db
+        .select({ paperId: favorites.paperId, createdAt: favorites.createdAt })
+        .from(favorites)
+        .where(eq(favorites.ownerId, ownerId)),
+      db
+        .select({
+          id: userPaperInteractions.id,
+          paperId: userPaperInteractions.paperId,
+          action: userPaperInteractions.action,
+          createdAt: userPaperInteractions.createdAt,
+        })
+        .from(userPaperInteractions)
+        .where(eq(userPaperInteractions.ownerId, ownerId))
+        .orderBy(desc(userPaperInteractions.createdAt))
+        .limit(MAX_INTERACTIONS),
+      getReadLaterPaperIds(ownerId),
+    ]);
 
-  assertNoError(interestsError, "Load interests for profile embedding");
-  assertNoError(favoritesError, "Load favorites for profile embedding");
-  assertNoError(interactionsError, "Load interactions for profile embedding");
-
-  const selectedTopicIds = [
-    ...new Set((interests ?? []).map((interest) => interest.topic_id as string)),
-  ].sort();
+  const selectedTopicIds = [...new Set(interests.map((r) => r.topicId))].sort();
   const paperWeights = new Map<string, number>();
 
-  for (const favorite of favorites ?? []) {
-    accumulateWeights(paperWeights, favorite.paper_id as string, 6);
+  for (const fav of favRows) {
+    accumulateWeights(paperWeights, fav.paperId, 6);
   }
 
   for (const paperId of readLaterPaperIds) {
     accumulateWeights(paperWeights, paperId, 5);
   }
 
-  for (const interaction of (interactions ?? []) as InteractionRow[]) {
+  for (const interaction of interactionRows) {
     const weight = paperInteractionWeights[interaction.action] ?? 0;
-    accumulateWeights(paperWeights, interaction.paper_id, weight);
+    accumulateWeights(paperWeights, interaction.paperId, weight);
   }
 
-  const [topicEmbeddings, paperEmbeddings] = await Promise.all([
+  const [topicEmbRows, paperEmbRows] = await Promise.all([
     selectedTopicIds.length
-      ? supabase
-          .from("topic_embeddings")
-          .select("topic_id, embedding, embedded_at")
-          .eq("embedding_model", EMBEDDING_MODEL)
-          .in("topic_id", selectedTopicIds)
-      : Promise.resolve({ data: [], error: null }),
+      ? db
+          .select({
+            topicId: topicEmbeddings.topicId,
+            embedding: topicEmbeddings.embedding,
+            embeddedAt: topicEmbeddings.embeddedAt,
+          })
+          .from(topicEmbeddings)
+          .where(
+            and(
+              eq(topicEmbeddings.embeddingModel, EMBEDDING_MODEL),
+              inArray(topicEmbeddings.topicId, selectedTopicIds),
+            ),
+          )
+      : ([] as TopicEmbeddingRow[]),
     paperWeights.size
-      ? supabase
-          .from("papers")
-          .select("id, embedding, embedded_at")
-          .eq("embedding_model", EMBEDDING_MODEL)
-          .not("embedding", "is", null)
-          .in("id", [...paperWeights.keys()])
-      : Promise.resolve({ data: [], error: null }),
+      ? db
+          .select({
+            id: papers.id,
+            embedding: papers.embedding,
+            embeddedAt: papers.embeddedAt,
+          })
+          .from(papers)
+          .where(
+            and(
+              eq(papers.embeddingModel, EMBEDDING_MODEL),
+              isNotNull(papers.embedding),
+              inArray(papers.id, [...paperWeights.keys()]),
+            ),
+          )
+      : ([] as PaperEmbeddingRow[]),
   ]);
-
-  assertNoError(topicEmbeddings.error, "Load topic embeddings");
-  assertNoError(paperEmbeddings.error, "Load paper embeddings");
 
   const accumulator = new Array<number>(EMBEDDING_DIMENSION).fill(0);
   let vectorCount = 0;
-  const signatureTopics = (topicEmbeddings.data ?? []) as TopicEmbeddingRow[];
-  const signaturePapers = (paperEmbeddings.data ?? []) as PaperEmbeddingRow[];
   const embeddedTopicsById = new Map(
-    signatureTopics.map((row) => [row.topic_id, row.embedded_at]),
+    topicEmbRows.map((row) => [row.topicId, row.embeddedAt]),
   );
   const embeddedPapersById = new Map(
-    signaturePapers.map((row) => [row.id, row.embedded_at]),
+    paperEmbRows.map((row) => [row.id, row.embeddedAt]),
   );
   const weightedPaperInputs = [...paperWeights.entries()]
     .map(([id, weight]) => ({
@@ -248,15 +233,15 @@ export async function refreshUserProfileEmbedding(
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  for (const row of signatureTopics) {
+  for (const row of topicEmbRows) {
     addWeightedVector(accumulator, parseVector(row.embedding), 4);
     vectorCount += 1;
   }
 
-  for (const row of signaturePapers) {
+  for (const row of paperEmbRows) {
     const weight = paperWeights.get(row.id) ?? 0;
 
-    if (!weight) {
+    if (!weight || !row.embedding) {
       continue;
     }
 
@@ -265,12 +250,6 @@ export async function refreshUserProfileEmbedding(
   }
 
   if (!vectorCount) {
-    await clearUserProfileEmbedding(
-      supabase,
-      ownerId,
-      "Clear stale user profile embedding without source vectors",
-    );
-
     return {
       status: "skipped",
       reason: "no_weighted_vectors",
@@ -281,12 +260,6 @@ export async function refreshUserProfileEmbedding(
   const normalized = l2Normalize(accumulator);
 
   if (!normalized) {
-    await clearUserProfileEmbedding(
-      supabase,
-      ownerId,
-      "Clear stale user profile embedding with zero vector",
-    );
-
     return {
       status: "skipped",
       reason: "zero_vector",
@@ -304,43 +277,54 @@ export async function refreshUserProfileEmbedding(
       ...paper,
       embeddedAt: embeddedPapersById.get(paper.id) ?? null,
     })),
-    interactions: ((interactions ?? []) as InteractionRow[]).map((interaction) => ({
-      id: interaction.id,
-      action: interaction.action,
-      createdAt: interaction.created_at,
+    interactions: interactionRows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      createdAt: r.createdAt,
     })),
   });
-  const { data: existing, error: existingError } = await supabase
-    .from("user_profile_embeddings")
-    .select("input_signature")
-    .eq("owner_id", ownerId)
-    .eq("embedding_model", EMBEDDING_MODEL)
-    .maybeSingle();
 
-  assertNoError(existingError, "Load existing user profile embedding");
+  const existing = await db
+    .select({
+      inputSignature: userProfileEmbeddings.inputSignature,
+    })
+    .from(userProfileEmbeddings)
+    .where(
+      and(
+        eq(userProfileEmbeddings.ownerId, ownerId),
+        eq(userProfileEmbeddings.embeddingModel, EMBEDDING_MODEL),
+      ),
+    )
+    .limit(1);
 
-  if ((existing as ProfileEmbeddingRow | null)?.input_signature === inputSignature) {
+  if (existing[0]?.inputSignature === inputSignature) {
     return {
       status: "up_to_date",
       vectorCount,
     };
   }
 
-  const { error: upsertError } = await supabase
-    .from("user_profile_embeddings")
-    .upsert(
-      {
-        owner_id: ownerId,
-        embedding: vectorLiteral(normalized),
-        embedding_model: EMBEDDING_MODEL,
-        embedding_dimension: EMBEDDING_DIMENSION,
-        input_signature: inputSignature,
-        generated_at: new Date().toISOString(),
+  await db
+    .insert(userProfileEmbeddings)
+    .values({
+      ownerId,
+      embedding: sql`${`[${normalized.join(",")}]`}::vector`,
+      embeddingModel: EMBEDDING_MODEL,
+      embeddingDimension: EMBEDDING_DIMENSION,
+      inputSignature,
+    })
+    .onConflictDoUpdate({
+      target: [
+        userProfileEmbeddings.ownerId,
+        userProfileEmbeddings.embeddingModel,
+      ],
+      set: {
+        embedding: sql`${`[${normalized.join(",")}]`}::vector`,
+        embeddingDimension: EMBEDDING_DIMENSION,
+        inputSignature,
+        generatedAt: sql`now()`,
       },
-      { onConflict: "owner_id,embedding_model" },
-    );
-
-  assertNoError(upsertError, "Save user profile embedding");
+    });
 
   return {
     status: "updated",

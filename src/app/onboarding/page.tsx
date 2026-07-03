@@ -20,7 +20,7 @@ export default async function OnboardingPage() {
         topics={topics.map((topic) => ({
           id: topic.id,
           label: topic.label,
-          parentId: topic.parent_id,
+          parentId: topic.parentId,
           depth: topic.depth,
         }))}
       />
