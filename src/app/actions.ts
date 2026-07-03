@@ -160,40 +160,55 @@ export async function deletePlaylistAction(formData: FormData) {
 }
 
 export async function addToPlaylistAction(formData: FormData) {
-  await requireOwnerId();
+  const ownerId = await requireOwnerId();
   const playlistId = formData.get("playlistId");
   const paperId = formData.get("paperId");
 
-  if (typeof playlistId !== "string" || typeof paperId !== "string") {
+  if (
+    typeof playlistId !== "string" ||
+    !playlistId ||
+    typeof paperId !== "string" ||
+    !paperId
+  ) {
     throw new Error("Missing playlistId or paperId");
   }
 
-  await addToPlaylist(playlistId, paperId);
+  await addToPlaylist(ownerId, playlistId, paperId);
   revalidatePath("/library");
 }
 
 export async function removeFromPlaylistAction(formData: FormData) {
-  await requireOwnerId();
+  const ownerId = await requireOwnerId();
   const playlistId = formData.get("playlistId");
   const paperId = formData.get("paperId");
 
-  if (typeof playlistId !== "string" || typeof paperId !== "string") {
+  if (
+    typeof playlistId !== "string" ||
+    !playlistId ||
+    typeof paperId !== "string" ||
+    !paperId
+  ) {
     throw new Error("Missing playlistId or paperId");
   }
 
-  await removeFromPlaylist(playlistId, paperId);
+  await removeFromPlaylist(ownerId, playlistId, paperId);
   revalidatePath("/library");
 }
 
 export async function reorderPlaylistAction(formData: FormData) {
-  await requireOwnerId();
-  const playlistId = formData.get("playlistId") as string;
-  const paperIds = formData.getAll("paperId") as string[];
+  const ownerId = await requireOwnerId();
+  const playlistId = formData.get("playlistId");
+  const paperIds = formData
+    .getAll("paperId")
+    .filter(
+      (paperId): paperId is string =>
+        typeof paperId === "string" && Boolean(paperId),
+    );
 
-  if (!playlistId || !paperIds.length) {
+  if (typeof playlistId !== "string" || !playlistId || !paperIds.length) {
     throw new Error("Missing playlistId or paperIds");
   }
 
-  await reorderPlaylistItems(playlistId, paperIds);
+  await reorderPlaylistItems(ownerId, playlistId, paperIds);
   revalidatePath("/library");
 }

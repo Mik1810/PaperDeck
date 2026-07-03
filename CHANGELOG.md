@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- Unit test script for focused repository regression tests.
+- Regression tests for playlist item add, remove, and reorder ownership checks.
+
+### Fixed
+
+- Playlist item add, remove, and reorder mutations now verify playlist ownership before writing through the service-role Supabase client.
+
 ## [0.1.4] - 2026-07-02
 
 ### Added

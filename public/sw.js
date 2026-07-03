@@ -1,8 +1,7 @@
-const CACHE_VERSION = "paperdeck-v1";
+const CACHE_VERSION = "paperdeck-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
-const PRECACHE_URLS = ["/feed", "/offline.html"];
+const PRECACHE_URLS = ["/offline.html"];
 
 const STATIC_PATTERNS = [
   /\.(?:js|css|woff2?|ttf|eot|otf)$/,
@@ -39,7 +38,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key.startsWith("paperdeck-") && key !== STATIC_CACHE && key !== PAGE_CACHE)
+            .filter((key) => key.startsWith("paperdeck-") && key !== STATIC_CACHE)
             .map((key) => caches.delete(key)),
         ),
       )
@@ -78,16 +77,7 @@ self.addEventListener("fetch", (event) => {
   if (isNavigation(request)) {
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(PAGE_CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match("/offline.html")),
-        ),
+        .catch(() => caches.match("/offline.html")),
     );
     return;
   }

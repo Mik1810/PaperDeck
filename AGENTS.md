@@ -1,7 +1,5 @@
 # Agent Guide
 
-This file guides future agent work on PaperDeck.
-
 ## Project Purpose
 
 PaperDeck is a mobile-first academic paper discovery app for computer science. The MVP should help a user discover relevant papers through a social-style full-screen deck, save interesting papers, and build private reading lists.
@@ -22,53 +20,38 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 - Embeddings: start with `BAAI/bge-small-en-v1.5`.
 - Ranking: semantic relevance is more important than recency or citation count.
 - Feed: full-screen mobile card deck.
-- Swipe left: dismiss this paper.
-- Swipe right: open paper detail and count as a light positive signal.
 - Heart: favorite.
 - Bookmark: save to default `Read later` playlist.
-- Notes: post-MVP.
 
 ## Important Files
 
 - `ROADMAP.md`: source of truth for product and architecture decisions.
 - `README.md`: public-facing repository overview.
 - `CHANGELOG.md`: short semver change history.
-- `docs/database.md`: Supabase ownership, access, and RLS plan.
+- `sessions` folder: Here, in each new session of work, create the SESSIONi.md where i is the next session number.
+- `docs` folder for specification.
 - `supabase/schema.sql`: initial schema and policy draft.
-- `sessions/`: session records. Add a new `SESSIONN.md` file for major planning or implementation sessions.
-- `logo/paperdeck-logo.svg`: repository logo.
 
 ## Working Rules
 
 - Keep changes scoped and intentional.
+- After each modification, save it on the SESSIONi.md file with a brief description of the change. 
 - Before starting implementation work on a GitHub issue, briefly describe the issue being addressed, why it matters, and the intended attack plan.
 - Update `ROADMAP.md` when product or architecture decisions change.
 - Update `CHANGELOG.md` for notable repository changes.
 - Add or update a session file when a session produces meaningful decisions or implementation work.
 - Do not introduce paid services unless explicitly approved.
 - Keep the architecture free-first.
-- Do not expose `SUPABASE_SERVICE_ROLE_KEY` to browser code.
+- Do not expose any key in `.env.local` to browser code.
 - Do not put long-running ingestion, PDF parsing, or local embedding generation on Vercel Functions.
 - Prefer official APIs and documented sources over scraping.
 - Do not import or republish full text unless the license and source clearly allow it.
 - Preserve LaTeX/math notation in abstracts and render it later with KaTeX or MathJax.
-
-## Planned MVP Build Order
-
-1. Scaffold Next.js with TypeScript.
-2. Add mobile-first app shell.
-3. Configure Clerk Google login. Done.
-4. Configure Supabase and database schema. In progress.
-5. Add interest onboarding.
-6. Add paper card deck UI.
-7. Add favorites and default `Read later` playlist.
-8. Add ingestion worker for arXiv.
-9. Add embeddings with `BAAI/bge-small-en-v1.5`.
-10. Add initial ranking and recommendation feed.
+- After working on a Github issue, update the issue with a summary of what was done and any next steps in correct markdown style. Eventually, close it when the work is complete.
 
 ## Validation Expectations
 
 - Run relevant tests/checks before finalizing implementation work.
+- After each modification, ask yourself if the change is complete, correct, and well-documented. Then, try to simplify the change and remove any unnecessary code or complexity, or useless dependencies.
 - If no tests exist yet, state that explicitly.
-- Validate SVG/XML assets when edited.
 - For frontend work, verify responsive mobile behavior before considering the task complete.

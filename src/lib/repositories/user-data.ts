@@ -6,6 +6,12 @@ import {
   type RankingInteraction,
 } from "@/lib/ranking/feed-ranking";
 import { getAllPapers, getPapersByIds, getTopics } from "@/lib/repositories/catalog";
+import {
+  addToOwnedPlaylist,
+  removeFromOwnedPlaylist,
+  reorderOwnedPlaylistItems,
+  type PlaylistItemMutationClient,
+} from "@/lib/repositories/playlist-items";
 import { getSemanticPaperCandidates } from "@/lib/repositories/semantic-retrieval";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
@@ -621,54 +627,37 @@ export async function deletePlaylist(ownerId: string, playlistId: string) {
   assertNoError(error, "Delete playlist");
 }
 
-export async function addToPlaylist(playlistId: string, paperId: string) {
-  const supabase = createServiceRoleClient();
-  const { data: maxRow } = await supabase
-    .from("playlist_items")
-    .select("position")
-    .eq("playlist_id", playlistId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const nextPosition = ((maxRow?.position as number) ?? -1) + 1;
-
-  const { error } = await supabase
-    .from("playlist_items")
-    .upsert(
-      { playlist_id: playlistId, paper_id: paperId, position: nextPosition },
-      { onConflict: "playlist_id,paper_id" },
-    );
-
-  assertNoError(error, "Add to playlist");
+export async function addToPlaylist(
+  ownerId: string,
+  playlistId: string,
+  paperId: string,
+) {
+  const supabase =
+    createServiceRoleClient() as unknown as PlaylistItemMutationClient;
+  await addToOwnedPlaylist(supabase, ownerId, playlistId, paperId);
 }
 
-export async function removeFromPlaylist(playlistId: string, paperId: string) {
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("playlist_items")
-    .delete()
-    .eq("playlist_id", playlistId)
-    .eq("paper_id", paperId);
-
-  assertNoError(error, "Remove from playlist");
+export async function removeFromPlaylist(
+  ownerId: string,
+  playlistId: string,
+  paperId: string,
+) {
+  const supabase =
+    createServiceRoleClient() as unknown as PlaylistItemMutationClient;
+  await removeFromOwnedPlaylist(supabase, ownerId, playlistId, paperId);
 }
 
 export async function reorderPlaylistItems(
+  ownerId: string,
   playlistId: string,
   orderedPaperIds: string[],
 ) {
-  const supabase = createServiceRoleClient();
-
-  for (let i = 0; i < orderedPaperIds.length; i++) {
-    const { error } = await supabase
-      .from("playlist_items")
-      .update({ position: i })
-      .eq("playlist_id", playlistId)
-      .eq("paper_id", orderedPaperIds[i]);
-
-    if (error) {
-      throw error;
-    }
-  }
+  const supabase =
+    createServiceRoleClient() as unknown as PlaylistItemMutationClient;
+  await reorderOwnedPlaylistItems(
+    supabase,
+    ownerId,
+    playlistId,
+    orderedPaperIds,
+  );
 }
