@@ -121,10 +121,10 @@ curl -sS -o /dev/null -w 'sign-up %{http_code}\n' https://paperdeck.michaelpicci
 
 Expected result:
 
-- `/` redirects to `/onboarding`.
+- `/` redirects authenticated users with completed onboarding or saved interests to `/feed`; fresh authenticated users go to `/onboarding`.
 - `/feed` redirects unauthenticated users to `/sign-in`.
 - `/sign-in` and `/sign-up` return `200`.
-- Google sign-in redirects authenticated users to `/onboarding` on first sign-up.
+- Google sign-in redirects fresh users to `/onboarding`; returning users with PaperDeck interests reach `/feed`.
 
 ## References
 

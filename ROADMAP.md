@@ -859,8 +859,10 @@ Output:
 
 Stato implementato:
 
-- Dopo il login, feed, library, settings e dettaglio paper richiedono `onboarding_completed_at`; se manca, la app reindirizza a `/onboarding`.
+- Dopo il login, `/` manda a `/feed` gli utenti con onboarding completato o interessi già salvati; i nuovi utenti senza interessi vengono mandati a `/onboarding`.
+- Feed, library, settings e dettaglio paper richiedono onboarding completato o interessi salvati; se manca uno stato utilizzabile, la app reindirizza a `/onboarding`.
 - L'onboarding e le impostazioni dividono gli interessi in macroaree, categorie e microcategorie; `Not now` completa l'onboarding selezionando tutti gli interessi broad non-micro.
+- Il salvataggio finale dell'onboarding persiste subito gli interessi e poi tratta embedding profilo e preload raccomandazioni come personalizzazione best-effort, non come prerequisito del redirect a `/feed`.
 - Le impostazioni impediscono di rimuovere tutti gli interessi attivi: almeno una macroarea e un topic devono restare selezionati.
 - Le categorie arXiv `cs.*` vengono mostrate con etichette leggibili, mantenendo il codice solo nei dati.
 

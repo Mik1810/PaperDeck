@@ -11,7 +11,7 @@ This project follows Semantic Versioning.
 - Three-step interest onboarding for macro areas, categories, and microcategories with a `Not now` skip path.
 - Onboarding now uses a standalone dark guided wizard instead of the authenticated app shell.
 - Onboarding controls now sit in a narrower separated right rail, and `Theoretical CS` appears before `Other CS`.
-- Wizard completion now preloads the first ranked feed batch into `recommendations` before redirecting to `/feed`.
+- Wizard completion now schedules the first ranked feed batch into `recommendations` as best-effort personalization after the response.
 - Topic-only profile embedding generation for onboarding and settings writes, built from stored topic vectors without live model inference.
 - Settings interest editing now uses the same macro/category/microcategory grouping as onboarding.
 - Shared arXiv CS category display mapping so raw labels such as `cs.CV` render as human-readable names.
@@ -28,12 +28,13 @@ This project follows Semantic Versioning.
 ### Fixed
 
 - Browser favicon generation now writes a real multi-size `.ico` file instead of a PNG payload renamed as `.ico`.
-- Root route `/` now redirects users into onboarding instead of `/feed`.
+- Root route `/` now sends completed or legacy-interest users to `/feed` and only fresh users to `/onboarding`.
+- Onboarding completion now redirects to `/feed` after saving interests, without blocking on profile embedding or recommendation preload failures.
 - Onboarding route loading state now uses the same dark wizard shell, avoiding the old `Topics` app-shell flash.
 - `Not now` now defaults users into all broad non-micro CS interests, and settings prevents removing every active interest.
 - Onboarding no longer preselects saved/default interests or shows a duplicate selected summary; broad defaults are applied only by the server-side `Not now` action.
 - `/feed` now reads a fresh preloaded recommendation batch when available instead of generating missing profile embeddings lazily during render.
-- Authenticated app pages now redirect users with incomplete onboarding back to `/onboarding`.
+- Authenticated app pages now redirect only users without completed onboarding or saved legacy interests back to `/onboarding`.
 - Clearing or skipping interests now removes stale user profile embeddings instead of leaving old semantic preferences active.
 - App CI now exposes `DATABASE_URL` to the build job and can be triggered manually.
 - Dev-auth app smoke tests now scope the `Local dev` badge assertion to the page banner to avoid strict locator ambiguity.

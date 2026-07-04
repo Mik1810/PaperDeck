@@ -7,7 +7,7 @@ import { MathContent } from "@/components/math-content";
 import { requireOwnerId } from "@/lib/auth/session";
 import {
   getPaperDetailData,
-  hasCompletedOnboarding,
+  hasUsableOnboardingState,
 } from "@/lib/repositories/user-data";
 import { redirect } from "next/navigation";
 
@@ -36,7 +36,7 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
   const { paperId } = await params;
   const ownerId = await requireOwnerId();
 
-  if (!(await hasCompletedOnboarding(ownerId))) {
+  if (!(await hasUsableOnboardingState(ownerId))) {
     redirect("/onboarding");
   }
 

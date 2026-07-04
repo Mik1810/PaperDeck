@@ -144,14 +144,23 @@ export async function getSelectedTopicIds(ownerId: string) {
   return new Set(rows.map((r) => r.topicId));
 }
 
-export async function hasCompletedOnboarding(ownerId: string) {
-  const rows = await db
-    .select({ onboardingCompletedAt: profiles.onboardingCompletedAt })
-    .from(profiles)
-    .where(eq(profiles.ownerId, ownerId))
-    .limit(1);
+export async function hasUsableOnboardingState(ownerId: string) {
+  const [profileRows, interestRows] = await Promise.all([
+    db
+      .select({ onboardingCompletedAt: profiles.onboardingCompletedAt })
+      .from(profiles)
+      .where(eq(profiles.ownerId, ownerId))
+      .limit(1),
+    db
+      .select({ topicId: userInterests.topicId })
+      .from(userInterests)
+      .where(eq(userInterests.ownerId, ownerId))
+      .limit(1),
+  ]);
 
-  return Boolean(rows[0]?.onboardingCompletedAt);
+  return Boolean(
+    profileRows[0]?.onboardingCompletedAt || interestRows.length,
+  );
 }
 
 function userInterestFromTopic(topic: TopicRow, selectedTopicIds: Set<string>) {

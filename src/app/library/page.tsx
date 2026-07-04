@@ -7,7 +7,7 @@ import { PlaylistSidebar } from "@/components/playlist-sidebar";
 import { requireOwnerId } from "@/lib/auth/session";
 import {
   getLibraryPageData,
-  hasCompletedOnboarding,
+  hasUsableOnboardingState,
 } from "@/lib/repositories/user-data";
 import { getPapersByIds } from "@/lib/repositories/catalog";
 import { redirect } from "next/navigation";
@@ -22,7 +22,7 @@ type LibraryPageProps = {
 export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   const ownerId = await requireOwnerId();
 
-  if (!(await hasCompletedOnboarding(ownerId))) {
+  if (!(await hasUsableOnboardingState(ownerId))) {
     redirect("/onboarding");
   }
 

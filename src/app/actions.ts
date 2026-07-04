@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { requireOwnerId, requireUserContext } from "@/lib/auth/session";
 import {
   ensureUserProfile,
@@ -23,6 +24,8 @@ import {
   writeTopicSelectionProfileEmbedding,
 } from "@/lib/repositories/user-profile-embeddings";
 import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
+
+type OnboardingPersonalizationSource = "save" | "skip";
 
 function requirePaperId(formData: FormData) {
   const paperId = formData.get("paperId");
@@ -54,6 +57,41 @@ function sourcePathFrom(formData: FormData, fallback: string) {
   return fallback;
 }
 
+function scheduleOnboardingPersonalization(
+  ownerId: string,
+  topicIds: string[],
+  source: OnboardingPersonalizationSource,
+) {
+  const selectedTopicIds = [...new Set(topicIds)];
+
+  after(async () => {
+    try {
+      const profileEmbedding = await writeTopicSelectionProfileEmbedding(
+        ownerId,
+        selectedTopicIds,
+      );
+      const recommendationBatch = await preloadInitialFeedRecommendations(ownerId);
+
+      console.info(
+        JSON.stringify({
+          event: "onboarding_personalization_completed",
+          source,
+          profileEmbedding,
+          recommendationBatch,
+        }),
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          event: "onboarding_personalization_failed",
+          source,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  });
+}
+
 export async function saveOnboardingInterestsAction(formData: FormData) {
   const user = await requireUserContext();
   await ensureUserProfile(user);
@@ -63,8 +101,7 @@ export async function saveOnboardingInterestsAction(formData: FormData) {
     .filter((topicId): topicId is string => typeof topicId === "string");
 
   await saveSelectedTopics(user.ownerId, topicIds);
-  await writeTopicSelectionProfileEmbedding(user.ownerId, topicIds);
-  await preloadInitialFeedRecommendations(user.ownerId);
+  scheduleOnboardingPersonalization(user.ownerId, topicIds, "save");
 
   revalidatePath("/feed");
   revalidatePath("/onboarding");
@@ -79,8 +116,7 @@ export async function skipOnboardingAction() {
   const topicIds = await getDefaultOnboardingTopicIds();
 
   await saveSelectedTopics(user.ownerId, topicIds);
-  await writeTopicSelectionProfileEmbedding(user.ownerId, topicIds);
-  await preloadInitialFeedRecommendations(user.ownerId);
+  scheduleOnboardingPersonalization(user.ownerId, topicIds, "skip");
 
   revalidatePath("/feed");
   revalidatePath("/onboarding");
