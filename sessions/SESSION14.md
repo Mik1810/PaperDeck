@@ -40,3 +40,5 @@ Task: Fix onboarding routing, resilient final submit, and remove a test account
 - Pinned the Playwright dev-auth owner to `playwright-user` by default so `.env.local` cannot make the test reset a different owner than the app server uses.
 - Fixed the first single-query readiness attempt after local verification showed fresh users were incorrectly treated as ready.
 - Follow-up validation passed: `npm run lint`, `npx tsc --noEmit`, `npm run test:unit`, `npm run build`, `npm run test:e2e`, and `git diff --check`.
+- Updated the service worker to stop intercepting dynamic Next.js/RSC/data GET requests such as `/feed` prefetches, while keeping navigations network-only with an offline fallback and static assets cacheable.
+- Service worker follow-up validation passed: `npm run lint`, `npx tsc --noEmit`, `npm run build`, `npm run test:e2e -- tests/e2e/pwa-cache.spec.ts`, and `git diff --check`.

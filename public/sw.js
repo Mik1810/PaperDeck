@@ -1,4 +1,4 @@
-const CACHE_VERSION = "paperdeck-v2";
+const CACHE_VERSION = "paperdeck-v3";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const PRECACHE_URLS = ["/offline.html"];
@@ -61,13 +61,19 @@ self.addEventListener("fetch", (event) => {
   if (isStaticAsset(url.pathname)) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        });
+        const fetchPromise = fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const clone = response.clone();
+              event.waitUntil(
+                caches
+                  .open(STATIC_CACHE)
+                  .then((cache) => cache.put(request, clone)),
+              );
+            }
+            return response;
+          })
+          .catch(() => cached || new Response("", { status: 504 }));
         return cached || fetchPromise;
       }),
     );
@@ -76,13 +82,17 @@ self.addEventListener("fetch", (event) => {
 
   if (isNavigation(request)) {
     event.respondWith(
-      fetch(request)
-        .catch(() => caches.match("/offline.html")),
+      fetch(request).catch(
+        async () =>
+          (await caches.match("/offline.html")) ||
+          new Response("Offline", {
+            status: 503,
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          }),
+      ),
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request)),
-  );
+  // Leave dynamic Next.js/RSC/data requests network-only and browser-managed.
 });

@@ -31,6 +31,7 @@ This project follows Semantic Versioning.
 - Root route `/` now sends completed or legacy-interest users to `/feed` and only fresh users to `/onboarding`.
 - Onboarding completion now redirects to `/feed` after saving interests, without blocking on profile embedding or recommendation preload failures.
 - Database connections now default to a single Postgres client per runtime instance to avoid exhausting the Supabase session pool on Vercel.
+- The service worker now leaves dynamic Next.js data requests network-only and handles static fetch failures without rejected FetchEvent promises.
 - Onboarding route loading state now uses the same dark wizard shell, avoiding the old `Topics` app-shell flash.
 - `Not now` now defaults users into all broad non-micro CS interests, and settings prevents removing every active interest.
 - Onboarding no longer preselects saved/default interests or shows a duplicate selected summary; broad defaults are applied only by the server-side `Not now` action.
