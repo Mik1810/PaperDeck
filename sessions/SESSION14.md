@@ -29,3 +29,14 @@ Task: Fix onboarding routing, resilient final submit, and remove a test account
 - Found exactly one Clerk match for `michaelpiccirilli3` on Gmail before deletion.
 - Deleted the matching PaperDeck `profiles.owner_id` row first; verified owned app rows cascaded to zero for profile, interests, playlists, favorites, interactions, recommendations, profile embeddings, and digests.
 - Deleted the matching Clerk user; verified a follow-up Clerk search returned zero matches.
+
+## Follow-up: Production Connection Limit
+
+- Investigated production error digest `433591811` from the hosted site.
+- Vercel logs showed `EMAXCONNSESSION max clients reached in session mode`, not an auth-cookie issue.
+- Stopped the local dev server that was using the shared database.
+- Reduced the Drizzle/Postgres client default pool size to one connection and documented `DATABASE_MAX_CONNECTIONS=1`.
+- Simplified the onboarding-readiness check from two parallel queries to one query.
+- Pinned the Playwright dev-auth owner to `playwright-user` by default so `.env.local` cannot make the test reset a different owner than the app server uses.
+- Fixed the first single-query readiness attempt after local verification showed fresh users were incorrectly treated as ready.
+- Follow-up validation passed: `npm run lint`, `npx tsc --noEmit`, `npm run test:unit`, `npm run build`, `npm run test:e2e`, and `git diff --check`.

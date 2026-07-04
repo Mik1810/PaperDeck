@@ -30,6 +30,7 @@ This project follows Semantic Versioning.
 - Browser favicon generation now writes a real multi-size `.ico` file instead of a PNG payload renamed as `.ico`.
 - Root route `/` now sends completed or legacy-interest users to `/feed` and only fresh users to `/onboarding`.
 - Onboarding completion now redirects to `/feed` after saving interests, without blocking on profile embedding or recommendation preload failures.
+- Database connections now default to a single Postgres client per runtime instance to avoid exhausting the Supabase session pool on Vercel.
 - Onboarding route loading state now uses the same dark wizard shell, avoiding the old `Topics` app-shell flash.
 - `Not now` now defaults users into all broad non-micro CS interests, and settings prevents removing every active interest.
 - Onboarding no longer preselects saved/default interests or shows a duplicate selected summary; broad defaults are applied only by the server-side `Not now` action.

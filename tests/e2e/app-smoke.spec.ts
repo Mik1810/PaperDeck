@@ -2,7 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 
 const devAuthEnabled = process.env.PAPERDECK_E2E_DEV_AUTH !== "false";
-const devOwnerId = process.env.PAPERDECK_DEV_OWNER_ID ?? "playwright-user";
+const devOwnerId =
+  process.env.PAPERDECK_E2E_OWNER_ID ??
+  process.env.PAPERDECK_DEV_OWNER_ID ??
+  "playwright-user";
 
 function hasConfiguredEnv(name: string) {
   const value = process.env[name];

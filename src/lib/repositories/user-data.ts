@@ -145,21 +145,21 @@ export async function getSelectedTopicIds(ownerId: string) {
 }
 
 export async function hasUsableOnboardingState(ownerId: string) {
-  const [profileRows, interestRows] = await Promise.all([
-    db
-      .select({ onboardingCompletedAt: profiles.onboardingCompletedAt })
-      .from(profiles)
-      .where(eq(profiles.ownerId, ownerId))
-      .limit(1),
-    db
-      .select({ topicId: userInterests.topicId })
-      .from(userInterests)
-      .where(eq(userInterests.ownerId, ownerId))
-      .limit(1),
-  ]);
+  const rows = await db
+    .select({
+      onboardingCompletedAt: profiles.onboardingCompletedAt,
+      hasInterests: sql<boolean>`exists (
+        select 1
+        from ${userInterests}
+        where ${userInterests.ownerId} = ${ownerId}
+      )`,
+    })
+    .from(profiles)
+    .where(eq(profiles.ownerId, ownerId))
+    .limit(1);
 
   return Boolean(
-    profileRows[0]?.onboardingCompletedAt || interestRows.length,
+    rows[0]?.onboardingCompletedAt || rows[0]?.hasInterests,
   );
 }
 

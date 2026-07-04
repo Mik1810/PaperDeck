@@ -7,8 +7,10 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 const devAuth = process.env.PAPERDECK_E2E_DEV_AUTH ?? "true";
+const devOwnerId = process.env.PAPERDECK_E2E_OWNER_ID ?? "playwright-user";
 
 process.env.PAPERDECK_E2E_DEV_AUTH = devAuth;
+process.env.PAPERDECK_DEV_OWNER_ID = devOwnerId;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -30,8 +32,7 @@ export default defineConfig({
     command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
     env: {
       PAPERDECK_DEV_AUTH: devAuth,
-      PAPERDECK_DEV_OWNER_ID:
-        process.env.PAPERDECK_DEV_OWNER_ID ?? "playwright-user",
+      PAPERDECK_DEV_OWNER_ID: devOwnerId,
       NEXT_PUBLIC_CLERK_SIGN_IN_URL:
         process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/sign-in",
       NEXT_PUBLIC_CLERK_SIGN_UP_URL:
