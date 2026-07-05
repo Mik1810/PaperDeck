@@ -79,10 +79,12 @@ NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
 SUPABASE_SERVICE_ROLE_KEY=replace_me
 DATABASE_MAX_CONNECTIONS=1
+LOG_LEVEL=info
 ```
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
 Keep `DATABASE_MAX_CONNECTIONS=1` unless the Supabase pool size is increased; Vercel serverless instances multiply database clients.
+Use `LOG_LEVEL=info` for normal production diagnostics; raise to `debug` only for short investigations and lower to `warn` only if log volume becomes noisy.
 
 `CLERK_AUTHORIZED_PARTIES` is optional while developing, but should be set in production to the final app origin. Use a comma-separated list if more than one origin is intentionally allowed.
 

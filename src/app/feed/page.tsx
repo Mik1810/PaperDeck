@@ -27,7 +27,6 @@ export default async function FeedPage() {
   return (
     <AppShell
       title="Today"
-      subtitle="A relevance-first deck tuned from your topics and recent feedback."
       readLaterCount={readLaterCount}
     >
       <FeedDeck

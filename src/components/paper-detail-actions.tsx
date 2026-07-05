@@ -60,7 +60,7 @@ export function PaperDetailActions({
             optimisticFavorite
               ? "border-pink-300 bg-pink-50 text-pink-700"
               : "border-pink-200 bg-white text-pink-700"
-          } disabled:cursor-not-allowed disabled:opacity-50`}
+          } hover:border-pink-300 hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-50`}
           disabled={isMutationPending}
           onClick={() => {
             const previousFavorite = optimisticFavorite;
@@ -86,7 +86,7 @@ export function PaperDetailActions({
             optimisticSaved
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
               : "border-emerald-200 bg-white text-emerald-700"
-          } disabled:cursor-not-allowed disabled:opacity-50`}
+          } hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50`}
           disabled={isMutationPending}
           onClick={() => {
             const previousSaved = optimisticSaved;
@@ -108,7 +108,7 @@ export function PaperDetailActions({
 
         <form action={feedbackActionPath} method="post">
           <input name="action" type="hidden" value="already_read" />
-          <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-sm font-black text-indigo-700">
+          <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-sm font-black text-indigo-700 hover:border-indigo-300 hover:bg-indigo-50">
             <CheckCircle2 aria-hidden="true" size={18} strokeWidth={2.5} />
             Already read
           </button>
@@ -116,7 +116,7 @@ export function PaperDetailActions({
 
         <form action={feedbackActionPath} method="post">
           <input name="action" type="hidden" value="not_interested" />
-          <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 text-sm font-black text-rose-700">
+          <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 text-sm font-black text-rose-700 hover:border-rose-300 hover:bg-rose-50">
             <X aria-hidden="true" size={18} strokeWidth={2.5} />
             Not interested
           </button>
@@ -126,7 +126,7 @@ export function PaperDetailActions({
           href={paperUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white"
+          className="inline-flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white hover:bg-slate-800"
         >
           <ExternalLink aria-hidden="true" size={18} strokeWidth={2.5} />
           Read online

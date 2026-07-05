@@ -90,7 +90,8 @@ Aggiornato al 2026-07-03:
 - MathJax 3: rendering LaTeX in abstract e summary su detail page e feed card.
 - Sicurezza: audit service-role completato, checklist rotazione secret documentata.
 - Test: suite Playwright smoke con 5 test dev-auth.
-- Osservabilita': log `feed_timing` esteso con diagnostica semantic retrieval.
+- Osservabilita': logger JSON strutturato con `feed_timing`, preload feed, personalizzazione onboarding ed errori API deck.
+- Library: storico `Ignored` per paper dismissati o marcati not interested.
 
 ## Prossimi passi
 

@@ -8,6 +8,8 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Structured server-side JSON logger for Vercel-readable app events and errors.
+- Library ignored-history section for dismissed and not-interested papers.
 - Three-step interest onboarding for macro areas, categories, and microcategories with a `Not now` skip path.
 - Onboarding now uses a standalone dark guided wizard instead of the authenticated app shell.
 - Onboarding controls now sit in a narrower separated right rail, and `Theoretical CS` appears before `Other CS`.
@@ -27,6 +29,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Feed header no longer shows the redundant relevance-first subtitle.
+- Button-like controls now have consistent hover, focus, and active feedback.
+- Paper titles now render inline LaTeX in feed, detail, library, and playlist views.
 - Browser favicon generation now writes a real multi-size `.ico` file instead of a PNG payload renamed as `.ico`.
 - Root route `/` now sends completed or legacy-interest users to `/feed` and only fresh users to `/onboarding`.
 - Onboarding completion now redirects to `/feed` after saving interests, without blocking on profile embedding or recommendation preload failures.

@@ -75,6 +75,33 @@ async function seedLegacyInterestDevOwner() {
   });
 }
 
+async function seedIgnoredHistoryDevOwner() {
+  return withDb(async (sql) => {
+    const papers = await sql<{ id: string; title: string }[]>`
+      select id, title from papers order by published_at desc nulls last, title limit 2
+    `;
+
+    if (papers.length < 2) {
+      throw new Error("Ignored history smoke setup requires at least two papers");
+    }
+
+    await sql`delete from profiles where owner_id = ${devOwnerId}`;
+    await sql`
+      insert into profiles (owner_id, onboarding_completed_at)
+      values (${devOwnerId}, now())
+    `;
+    await sql`
+      insert into user_paper_interactions (owner_id, paper_id, action, context, created_at)
+      values
+        (${devOwnerId}, ${papers[0].id}, 'dismiss', 'feed', now() - interval '2 minutes'),
+        (${devOwnerId}, ${papers[0].id}, 'not_interested', 'feed', now() - interval '1 minute'),
+        (${devOwnerId}, ${papers[1].id}, 'dismiss', 'feed', now())
+    `;
+
+    return papers;
+  });
+}
+
 async function completeDevOnboardingWithTopics(page: Page) {
   await resetDevOwner();
 
@@ -180,6 +207,23 @@ test.describe("dev-auth app smoke", () => {
     await expect(
       page.getByRole("heading", { exact: true, name: "Today" }),
     ).toBeVisible();
+  });
+
+  test("library shows ignored paper history", async ({ page }) => {
+    test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
+
+    const papers = await seedIgnoredHistoryDevOwner();
+
+    const response = await page.goto("/library");
+
+    expect(response?.status()).toBeLessThan(500);
+    await expect(
+      page.getByRole("heading", { exact: true, name: "Ignored" }),
+    ).toBeVisible();
+    await expect(page.getByText("Not interested")).toBeVisible();
+    await expect(page.getByText("Dismissed")).toBeVisible();
+    await expect(page.getByText(papers[0].title)).toHaveCount(1);
+    await expect(page.getByText(papers[1].title)).toHaveCount(1);
   });
 
   for (const { path, heading } of [

@@ -325,7 +325,7 @@ If no user profile embedding exists, or if the semantic candidate set is empty a
 
 Wizard completion additionally persists the first ranked deck to `recommendations` with model version `paperdeck-initial-feed-v1`; `/feed` consumes that fresh batch before recomputing live candidates.
 
-`/feed` logs a structured `feed_timing` event with semantic retrieval diagnostics:
+`/feed` emits a structured `feed_timing` logger event with semantic retrieval diagnostics:
 
 - whether semantic retrieval was used;
 - requested match count;

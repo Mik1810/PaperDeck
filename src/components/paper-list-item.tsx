@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
+import { MathContent } from "@/components/math-content";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
 import type { ReactNode } from "react";
 import type { Paper } from "@/types/paper";
@@ -7,9 +8,10 @@ import type { Paper } from "@/types/paper";
 type PaperListItemProps = {
   paper: Paper;
   action?: ReactNode;
+  meta?: ReactNode;
 };
 
-export function PaperListItem({ paper, action }: PaperListItemProps) {
+export function PaperListItem({ paper, action, meta }: PaperListItemProps) {
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
@@ -21,16 +23,17 @@ export function PaperListItem({ paper, action }: PaperListItemProps) {
             </span>
           </div>
           <h2 className="mt-2 text-base font-black leading-6 text-slate-950">
-            {paper.title}
+            <MathContent text={paper.title} />
           </h2>
           <p className="mt-2 text-sm font-semibold text-slate-500">
             {paper.authors.join(", ")}
           </p>
+          {meta ? <div className="mt-3">{meta}</div> : null}
         </div>
         <Link
           href={paper.url}
           target="_blank"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-600"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 active:scale-[0.98]"
         >
           <ExternalLink aria-label="Open paper" size={17} strokeWidth={2.4} />
         </Link>

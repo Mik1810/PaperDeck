@@ -33,7 +33,7 @@ export function AppShell({
     <div className="min-h-screen bg-[#f6f7fb] text-slate-950">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/92 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/feed" className="flex items-center gap-3">
+          <Link href="/feed" className="flex items-center gap-3 rounded-lg">
             <div className="grid h-10 w-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-sm">
               PD
             </div>
@@ -66,7 +66,7 @@ export function AppShell({
               <>
                 <Show when="signed-out">
                   <SignInButton mode="modal">
-                    <button className="h-10 rounded-lg bg-slate-950 px-4 text-sm font-black text-white shadow-sm">
+                    <button className="h-10 rounded-lg bg-slate-950 px-4 text-sm font-black text-white shadow-sm hover:bg-slate-800">
                       Sign in
                     </button>
                   </SignInButton>

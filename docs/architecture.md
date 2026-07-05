@@ -102,7 +102,7 @@ sequenceDiagram
     Repo->>Ranker: Rank catalog with topic and feedback signals
   end
   Repo-->>Page: activePaper, nextPapers, favoriteIds, readLaterIds
-  Repo-->>Repo: console.info feed_timing with semantic diagnostics
+  Repo-->>Logger: structured feed_timing with semantic diagnostics
   Page->>UI: Render deck
   UI-->>User: Today feed
 ```
@@ -227,5 +227,5 @@ flowchart LR
 - Vercel never loads embedding models or long-running workers.
 - `SUPABASE_SERVICE_ROLE_KEY` is restricted to server-only code and batch workers.
 - Client-visible keys must use the `NEXT_PUBLIC_` prefix only when they are intentionally public.
-- The feed logs `feed_timing` JSON with nested semantic retrieval diagnostics for debugging.
+- The server logger emits structured JSON events for feed timing, preload, onboarding personalization, and deck API failures.
 - Playwright smoke tests cover core authenticated pages through local dev auth; Clerk redirect tests are opt-in.

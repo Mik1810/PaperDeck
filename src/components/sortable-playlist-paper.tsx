@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { BookmarkX, GripVertical } from "lucide-react";
 import { removeFromPlaylistAction } from "@/app/actions";
+import { MathContent } from "@/components/math-content";
 import type { Paper } from "@/types/paper";
 
 type Props = {
@@ -48,7 +49,7 @@ export function SortablePlaylistPaper({ paper, playlistId }: Props) {
           className="text-sm font-bold text-slate-900 hover:text-teal-700"
           href={`/papers/${paper.id}`}
         >
-          {paper.title}
+          <MathContent text={paper.title} />
         </a>
         <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
           {paper.authors.join(", ")} - {paper.year}

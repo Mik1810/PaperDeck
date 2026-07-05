@@ -96,7 +96,7 @@ export function PaperCard({
         </div>
 
         <h2 className="text-2xl font-black leading-8 tracking-normal text-slate-950">
-          {paper.title}
+          <MathContent text={paper.title} />
         </h2>
 
         <p className="mt-3 text-sm font-bold text-slate-500">
@@ -114,7 +114,7 @@ export function PaperCard({
             <MathContent text={paper.abstract} />
           </div>
           <button
-            className="inline-flex items-center gap-1 text-sm font-black text-teal-700"
+            className="inline-flex items-center gap-1 rounded-md text-sm font-black text-teal-700 hover:text-teal-900"
             type="button"
             onClick={() => setIsExpanded((current) => !current)}
           >
@@ -130,7 +130,7 @@ export function PaperCard({
 
       <div className="grid grid-cols-5 gap-2 border-t border-slate-100 bg-slate-50 p-3">
         <button
-          className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700 hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={isMutationPending}
           onClick={() => {
             setMutationErrorMessage(null);
@@ -146,7 +146,7 @@ export function PaperCard({
           <X aria-label="Dismiss paper" size={19} strokeWidth={2.5} />
         </button>
         <Link
-          className="col-span-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white"
+          className="col-span-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white hover:bg-slate-800"
           href={`/papers/${paper.id}`}
           onClick={() => recordOpenDetail(paper.id)}
         >
@@ -158,7 +158,7 @@ export function PaperCard({
             optimisticFavorite
               ? "border-pink-300 bg-pink-50 text-pink-700"
               : "border-pink-200 bg-white text-pink-700"
-          } disabled:cursor-not-allowed disabled:opacity-50`}
+          } hover:border-pink-300 hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-50`}
           disabled={isMutationPending}
           onClick={() => {
             const previousFavorite = optimisticFavorite;
@@ -183,7 +183,7 @@ export function PaperCard({
             optimisticSaved
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
               : "border-emerald-200 bg-white text-emerald-700"
-          } disabled:cursor-not-allowed disabled:opacity-50`}
+          } hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50`}
           disabled={isMutationPending}
           onClick={() => {
             const previousSaved = optimisticSaved;
@@ -194,22 +194,22 @@ export function PaperCard({
           }}
           type="button"
         >
-            <Bookmark
-              aria-label={
-                optimisticSaved ? "Saved to Read later" : "Save to Read later"
-              }
-              fill={optimisticSaved ? "currentColor" : "none"}
-              size={19}
-              strokeWidth={2.5}
-            />
-          </button>
+          <Bookmark
+            aria-label={
+              optimisticSaved ? "Saved to Read later" : "Save to Read later"
+            }
+            fill={optimisticSaved ? "currentColor" : "none"}
+            size={19}
+            strokeWidth={2.5}
+          />
+        </button>
       </div>
 
       <a
         href={paper.url}
         target="_blank"
         rel="noreferrer"
-        className="flex h-11 items-center justify-center gap-2 border-t border-slate-100 bg-white text-sm font-black text-slate-700"
+        className="flex h-11 items-center justify-center gap-2 border-t border-slate-100 bg-white text-sm font-black text-slate-700 hover:bg-slate-50 hover:text-slate-950"
       >
         <ExternalLink aria-hidden="true" size={16} strokeWidth={2.4} />
         Read online

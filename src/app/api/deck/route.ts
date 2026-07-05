@@ -5,6 +5,7 @@ import {
   toggleFavorite,
   toggleReadLater,
 } from "@/lib/repositories/user-data";
+import { logger } from "@/lib/logging/logger";
 
 export async function POST(request: Request) {
   const ownerId = await requireOwnerId();
@@ -38,6 +39,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
   } catch (error) {
+    logger.error("deck_action_failed", {
+      ownerId,
+      action,
+      paperId,
+      error,
+    });
+
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

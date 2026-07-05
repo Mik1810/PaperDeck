@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   profiles,
@@ -30,6 +30,7 @@ import {
   removeFromOwnedPlaylist,
   reorderOwnedPlaylistItems,
 } from "@/lib/repositories/playlist-items";
+import { logger } from "@/lib/logging/logger";
 import {
   getSemanticPaperCandidates,
   type SemanticRetrievalDiagnostics,
@@ -45,6 +46,16 @@ type UserPaperState = {
   readLaterIds: Set<string>;
   seenIds: Set<string>;
   interactions: RankingInteraction[];
+};
+
+const ignoredInteractionActions = ["dismiss", "not_interested"] as const;
+
+type IgnoredInteractionAction = (typeof ignoredInteractionActions)[number];
+
+export type IgnoredPaperHistoryItem = {
+  paper: Paper;
+  ignoredAt: string;
+  action: IgnoredInteractionAction;
 };
 
 async function measureAsync<T>(
@@ -455,27 +466,25 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
     );
   }
 
-  console.info(
-    JSON.stringify({
-      event: "initial_feed_preload",
-      totalMs: Math.round(performance.now() - startedAt),
-      timings,
-      rankedCount: liveFeed.rankedPapers.length,
-      storedCount: batch.length,
-      semantic: {
-        used: Boolean(
-          liveFeed.semanticDiagnostics.candidateCount &&
-            !liveFeed.semanticFallbackReason,
-        ),
-        requestedCount: liveFeed.semanticDiagnostics.requestedCount,
-        rpcAttempted: liveFeed.semanticDiagnostics.rpcAttempted,
-        matchedCount: liveFeed.semanticDiagnostics.matchedCount,
-        candidateCount: liveFeed.semanticDiagnostics.candidateCount,
-        model: liveFeed.semanticDiagnostics.model,
-        fallbackReason: liveFeed.semanticFallbackReason,
-      },
-    }),
-  );
+  logger.info("initial_feed_preload", {
+    ownerId,
+    totalMs: Math.round(performance.now() - startedAt),
+    timings,
+    rankedCount: liveFeed.rankedPapers.length,
+    storedCount: batch.length,
+    semantic: {
+      used: Boolean(
+        liveFeed.semanticDiagnostics.candidateCount &&
+          !liveFeed.semanticFallbackReason,
+      ),
+      requestedCount: liveFeed.semanticDiagnostics.requestedCount,
+      rpcAttempted: liveFeed.semanticDiagnostics.rpcAttempted,
+      matchedCount: liveFeed.semanticDiagnostics.matchedCount,
+      candidateCount: liveFeed.semanticDiagnostics.candidateCount,
+      model: liveFeed.semanticDiagnostics.model,
+      fallbackReason: liveFeed.semanticFallbackReason,
+    },
+  });
 
   return {
     storedCount: batch.length,
@@ -503,38 +512,36 @@ export async function getFeedPageData(ownerId: string) {
     rankedPapers = liveFeed.rankedPapers;
   }
 
-  console.info(
-    JSON.stringify({
-      event: "feed_timing",
-      totalMs: Math.round(performance.now() - startedAt),
-      timings,
-      recommendationBatch: {
-        used: recommendationBatchUsed,
-        candidateCount: recommendationBatchUsed ? rankedPapers.length : 0,
-      },
-      semantic: {
-        used: Boolean(
-          liveFeed &&
-            liveFeed.semanticDiagnostics.candidateCount &&
-            !liveFeed.semanticFallbackReason &&
-            rankedPapers.length,
-        ),
-        requestedCount: liveFeed?.semanticDiagnostics.requestedCount ?? 0,
-        rpcAttempted: liveFeed?.semanticDiagnostics.rpcAttempted ?? false,
-        matchedCount: liveFeed?.semanticDiagnostics.matchedCount ?? 0,
-        candidateCount: liveFeed?.semanticDiagnostics.candidateCount ?? 0,
-        model: liveFeed?.semanticDiagnostics.model ?? null,
-        fallbackReason: liveFeed?.semanticFallbackReason ?? null,
-        profileRefreshStatus:
-          liveFeed?.semanticDiagnostics.profileRefreshStatus ?? null,
-        profileRefreshReason:
-          liveFeed?.semanticDiagnostics.profileRefreshReason ?? null,
-        profileRefreshError:
-          liveFeed?.semanticDiagnostics.profileRefreshError ?? null,
-      },
-      rankedCount: rankedPapers.length,
-    }),
-  );
+  logger.info("feed_timing", {
+    ownerId,
+    totalMs: Math.round(performance.now() - startedAt),
+    timings,
+    recommendationBatch: {
+      used: recommendationBatchUsed,
+      candidateCount: recommendationBatchUsed ? rankedPapers.length : 0,
+    },
+    semantic: {
+      used: Boolean(
+        liveFeed &&
+          liveFeed.semanticDiagnostics.candidateCount &&
+          !liveFeed.semanticFallbackReason &&
+          rankedPapers.length,
+      ),
+      requestedCount: liveFeed?.semanticDiagnostics.requestedCount ?? 0,
+      rpcAttempted: liveFeed?.semanticDiagnostics.rpcAttempted ?? false,
+      matchedCount: liveFeed?.semanticDiagnostics.matchedCount ?? 0,
+      candidateCount: liveFeed?.semanticDiagnostics.candidateCount ?? 0,
+      model: liveFeed?.semanticDiagnostics.model ?? null,
+      fallbackReason: liveFeed?.semanticFallbackReason ?? null,
+      profileRefreshStatus:
+        liveFeed?.semanticDiagnostics.profileRefreshStatus ?? null,
+      profileRefreshReason:
+        liveFeed?.semanticDiagnostics.profileRefreshReason ?? null,
+      profileRefreshError:
+        liveFeed?.semanticDiagnostics.profileRefreshError ?? null,
+    },
+    rankedCount: rankedPapers.length,
+  });
 
   return {
     activePaper: rankedPapers[0] ?? null,
@@ -543,6 +550,68 @@ export async function getFeedPageData(ownerId: string) {
     readLaterIds: state.readLaterIds,
     readLaterCount: state.readLaterIds.size,
   };
+}
+
+async function getIgnoredPaperHistory(
+  ownerId: string,
+  limit = 50,
+): Promise<IgnoredPaperHistoryItem[]> {
+  const rows = await db
+    .select({
+      paperId: userPaperInteractions.paperId,
+      action: userPaperInteractions.action,
+      ignoredAt: userPaperInteractions.createdAt,
+    })
+    .from(userPaperInteractions)
+    .where(
+      and(
+        eq(userPaperInteractions.ownerId, ownerId),
+        inArray(userPaperInteractions.action, ignoredInteractionActions),
+      ),
+    )
+    .orderBy(desc(userPaperInteractions.createdAt))
+    .limit(limit * 4);
+
+  const latestByPaperId = new Map<
+    string,
+    { action: IgnoredInteractionAction; ignoredAt: string }
+  >();
+
+  for (const row of rows) {
+    if (latestByPaperId.has(row.paperId)) {
+      continue;
+    }
+
+    latestByPaperId.set(row.paperId, {
+      action: row.action as IgnoredInteractionAction,
+      ignoredAt: row.ignoredAt,
+    });
+
+    if (latestByPaperId.size >= limit) {
+      break;
+    }
+  }
+
+  const paperIds = [...latestByPaperId.keys()];
+  const papers = await getPapersByIds(paperIds);
+  const papersById = new Map(papers.map((paper) => [paper.id, paper]));
+
+  return paperIds
+    .map((paperId) => {
+      const paper = papersById.get(paperId);
+      const ignored = latestByPaperId.get(paperId);
+
+      if (!paper || !ignored) {
+        return null;
+      }
+
+      return {
+        paper,
+        ignoredAt: ignored.ignoredAt,
+        action: ignored.action,
+      };
+    })
+    .filter((item): item is IgnoredPaperHistoryItem => item !== null);
 }
 
 export async function getLibraryPageData(ownerId: string) {
@@ -578,9 +647,10 @@ export async function getLibraryPageData(ownerId: string) {
 
   const favoriteIds = favoriteRows.map((r) => r.paperId);
 
-  const [favoritePapers, readLaterPapers] = await Promise.all([
+  const [favoritePapers, readLaterPapers, ignoredPapers] = await Promise.all([
     getPapersByIds(favoriteIds),
     getPapersByIds(readLaterIds),
+    getIgnoredPaperHistory(ownerId),
   ]);
 
   const playlistSummaries: Playlist[] = await Promise.all(
@@ -603,6 +673,7 @@ export async function getLibraryPageData(ownerId: string) {
     playlists: playlistSummaries,
     favoritePapers,
     readLaterPapers,
+    ignoredPapers,
     readLaterCount: readLaterIds.length,
   };
 }

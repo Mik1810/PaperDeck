@@ -31,7 +31,7 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
           Playlists
         </span>
         <button
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
           onClick={() => {
             setIsCreating(true);
             setEditingId(null);
@@ -59,13 +59,13 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
           />
           <div className="flex gap-2">
             <button
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white"
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
               type="submit"
             >
               Create
             </button>
             <button
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
               onClick={() => setIsCreating(false)}
               type="button"
             >
@@ -94,13 +94,13 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
               />
               <div className="flex gap-2">
                 <button
-                  className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white"
+                  className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
                   type="submit"
                 >
                   Save
                 </button>
                 <button
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500"
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
                   onClick={() => setEditingId(null)}
                   type="button"
                 >
@@ -117,7 +117,7 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
               }`}
             >
               <a
-                className="flex-1 font-black text-slate-900"
+                className="flex-1 rounded-md font-black text-slate-900 hover:text-teal-700"
                 href={`/library?playlist=${playlist.id}`}
               >
                 {playlist.name}
@@ -129,7 +129,7 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
                 <div className="flex gap-1">
                   <button
                     aria-label="Rename playlist"
-                    className="invisible rounded p-1 text-slate-400 hover:bg-slate-100 group-hover:visible"
+                    className="invisible rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900 group-hover:visible"
                     onClick={() => {
                       setEditingId(playlist.id);
                       setIsCreating(false);

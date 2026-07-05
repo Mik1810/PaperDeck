@@ -23,6 +23,7 @@ import {
 import {
   writeTopicSelectionProfileEmbedding,
 } from "@/lib/repositories/user-profile-embeddings";
+import { logger } from "@/lib/logging/logger";
 import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
 
 type OnboardingPersonalizationSource = "save" | "skip";
@@ -72,22 +73,18 @@ function scheduleOnboardingPersonalization(
       );
       const recommendationBatch = await preloadInitialFeedRecommendations(ownerId);
 
-      console.info(
-        JSON.stringify({
-          event: "onboarding_personalization_completed",
-          source,
-          profileEmbedding,
-          recommendationBatch,
-        }),
-      );
+      logger.info("onboarding_personalization_completed", {
+        ownerId,
+        source,
+        profileEmbedding,
+        recommendationBatch,
+      });
     } catch (error) {
-      console.error(
-        JSON.stringify({
-          event: "onboarding_personalization_failed",
-          source,
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      );
+      logger.error("onboarding_personalization_failed", {
+        ownerId,
+        source,
+        error,
+      });
     }
   });
 }

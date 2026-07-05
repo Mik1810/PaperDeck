@@ -77,7 +77,7 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
         </div>
 
         <h1 className="mt-5 text-3xl font-black leading-10 tracking-normal text-slate-950">
-          {paper.title}
+          <MathContent text={paper.title} />
         </h1>
 
         <p className="mt-4 text-sm font-bold text-slate-500">

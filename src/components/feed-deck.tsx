@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { MathContent } from "@/components/math-content";
 import { PaperCard } from "@/components/paper-card";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
 import {
@@ -166,7 +167,7 @@ export function FeedDeck({
             {visibleNextPapers.map((paper) => (
               <div key={paper.id} className="border-t border-slate-100 pt-3">
                 <p className="text-sm font-black leading-5 text-slate-900">
-                  {paper.title}
+                  <MathContent text={paper.title} />
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <PaperSourceBadge className="px-2 py-0.5" source={paper.source} />
