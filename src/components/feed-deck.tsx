@@ -182,6 +182,7 @@ export function FeedDeck({
 
         setTimeout(() => {
           if (direction === "right") {
+            setPaperDismissed(visibleActivePaper.id, true);
             submitDeckAction("read_later", visibleActivePaper.id, {
               recommendationImpressionId:
                 visibleActivePaper.recommendationImpressionId,
