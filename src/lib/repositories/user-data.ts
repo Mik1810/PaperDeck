@@ -492,55 +492,43 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
   };
 }
 
-export async function getFeedPageData(ownerId: string) {
-  const startedAt = performance.now();
+export async function getRankedFeedPapers(
+  ownerId: string,
+): Promise<Paper[]> {
   const timings: Record<string, number> = {};
   const [topics, feedState] = await Promise.all([
     measureAsync(timings, "topics", getTopics()),
     measureAsync(timings, "feed_state", getFeedState(ownerId)),
   ]);
   const state = feedState.userState;
+
   let rankedPapers = await measureAsync(
     timings,
     "recommendation_batch",
     getLatestInitialRecommendationBatch(ownerId, state),
   );
-  const recommendationBatchUsed = rankedPapers.length > 0;
-  let liveFeed: LiveRankedFeedResult | null = null;
 
   if (!rankedPapers.length) {
-    liveFeed = await buildLiveRankedFeed(ownerId, topics, feedState, timings);
+    const liveFeed = await buildLiveRankedFeed(ownerId, topics, feedState, timings);
     rankedPapers = liveFeed.rankedPapers;
   }
+
+  return rankedPapers;
+}
+
+export async function getFeedPageData(ownerId: string) {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+
+  const rankedPapers = await getRankedFeedPapers(ownerId);
+
+  const feedState = await getFeedState(ownerId);
+  const state = feedState.userState;
 
   logger.info("feed_timing", {
     ownerId,
     totalMs: Math.round(performance.now() - startedAt),
     timings,
-    recommendationBatch: {
-      used: recommendationBatchUsed,
-      candidateCount: recommendationBatchUsed ? rankedPapers.length : 0,
-    },
-    semantic: {
-      used: Boolean(
-        liveFeed &&
-          liveFeed.semanticDiagnostics.candidateCount &&
-          !liveFeed.semanticFallbackReason &&
-          rankedPapers.length,
-      ),
-      requestedCount: liveFeed?.semanticDiagnostics.requestedCount ?? 0,
-      rpcAttempted: liveFeed?.semanticDiagnostics.rpcAttempted ?? false,
-      matchedCount: liveFeed?.semanticDiagnostics.matchedCount ?? 0,
-      candidateCount: liveFeed?.semanticDiagnostics.candidateCount ?? 0,
-      model: liveFeed?.semanticDiagnostics.model ?? null,
-      fallbackReason: liveFeed?.semanticFallbackReason ?? null,
-      profileRefreshStatus:
-        liveFeed?.semanticDiagnostics.profileRefreshStatus ?? null,
-      profileRefreshReason:
-        liveFeed?.semanticDiagnostics.profileRefreshReason ?? null,
-      profileRefreshError:
-        liveFeed?.semanticDiagnostics.profileRefreshError ?? null,
-    },
     rankedCount: rankedPapers.length,
   });
 

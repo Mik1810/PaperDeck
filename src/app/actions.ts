@@ -19,6 +19,7 @@ import {
   getDefaultOnboardingTopicIds,
   clearInitialFeedRecommendations,
   preloadInitialFeedRecommendations,
+  getRankedFeedPapers,
 } from "@/lib/repositories/user-data";
 import {
   writeTopicSelectionProfileEmbedding,
@@ -257,4 +258,9 @@ export async function reorderPlaylistAction(formData: FormData) {
 
   await reorderPlaylistItems(ownerId, playlistId, paperIds);
   revalidatePath("/library");
+}
+
+export async function loadMoreDeckPapersAction() {
+  const ownerId = await requireOwnerId();
+  return await getRankedFeedPapers(ownerId);
 }

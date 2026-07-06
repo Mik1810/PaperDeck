@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MathContent } from "@/components/math-content";
 import { PaperCard } from "@/components/paper-card";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
@@ -8,6 +8,7 @@ import {
   deckMutationErrorMessage,
   submitDeckAction,
 } from "@/lib/client/deck-mutations";
+import { loadMoreDeckPapersAction } from "@/app/actions";
 import type { Paper } from "@/types/paper";
 
 type FeedDeckProps = {
@@ -39,6 +40,35 @@ export function FeedDeck({
     message: string;
     paperId: string;
   } | null>(null);
+  const [extraPapers, setExtraPapers] = useState<Paper[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreRequestedRef = useRef(false);
+
+  const fullQueue = useMemo(
+    () => [...paperQueue, ...extraPapers],
+    [paperQueue, extraPapers],
+  );
+  const queuedPaperIds = useMemo(
+    () => new Set(paperQueue.map((p) => p.id)),
+    [paperQueue],
+  );
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || loadMoreRequestedRef.current) return;
+    loadMoreRequestedRef.current = true;
+    setIsLoadingMore(true);
+
+    try {
+      const newPapers = await loadMoreDeckPapersAction();
+      const fresh = newPapers.filter((p) => !queuedPaperIds.has(p.id));
+      if (fresh.length) {
+        setExtraPapers((prev) => [...prev, ...fresh]);
+      }
+    } finally {
+      setIsLoadingMore(false);
+      loadMoreRequestedRef.current = false;
+    }
+  }, [isLoadingMore, queuedPaperIds]);
   const favoriteIds = useMemo(
     () => new Set(favoritePaperIds),
     [favoritePaperIds],
@@ -53,11 +83,26 @@ export function FeedDeck({
       ? dismissedState.paperIds
       : new Set<string>();
 
-  const visiblePapers = paperQueue.filter(
+  const visiblePapers = fullQueue.filter(
     (paper) => !dismissedPaperIds.has(paper.id),
   );
   const visibleActivePaper = visiblePapers[0] ?? null;
   const visibleNextPapers = visiblePapers.slice(1, 4);
+
+  const LOAD_MORE_THRESHOLD = 3;
+
+  const prevVisibleCount = useRef(visiblePapers.length);
+
+  useEffect(() => {
+    const wasAbove = prevVisibleCount.current > LOAD_MORE_THRESHOLD;
+    const nowBelow = visiblePapers.length <= LOAD_MORE_THRESHOLD;
+
+    prevVisibleCount.current = visiblePapers.length;
+
+    if (wasAbove && nowBelow && fullQueue.length > 0) {
+      loadMore();
+    }
+  }, [visiblePapers.length, fullQueue.length, loadMore]);
 
   function setPaperDismissed(paperId: string, isDismissed: boolean) {
     setDismissedState((current) => {
@@ -110,6 +155,12 @@ export function FeedDeck({
             onDismissSubmit={handleDismissSubmit}
             paper={visibleActivePaper}
           />
+        ) : isLoadingMore ? (
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">
+            <p className="text-sm font-semibold text-slate-500">
+              Loading more papers&hellip;
+            </p>
+          </div>
         ) : activePaper === null && nextPapers.length === 0 ? (
           <div className="w-full max-w-md rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">
             <h2 className="text-lg font-black text-slate-950">
