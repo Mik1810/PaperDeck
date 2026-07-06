@@ -14,6 +14,7 @@
     "generate:summaries:py": "uv run scripts/generate_summaries.py",
     "generate:chatgpt-prompt": "uv run scripts/dump_papers_for_chatgpt.py --limit 20 --output prompts/chatgpt_summary_prompt.txt",
     "import:chatgpt-summaries": "uv run scripts/import_chatgpt_summaries.py",
+    "review:triage": "uv run scripts/review_triage_summaries.py",
     "generate:icons": "node scripts/generate-icons.mjs",
     "start": "next start",
     "audit:service-role": "tsx scripts/audit-service-role.ts",

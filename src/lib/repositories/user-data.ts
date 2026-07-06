@@ -123,12 +123,6 @@ async function findReadLaterPlaylistId(ownerId: string) {
 }
 
 export async function ensureReadLaterPlaylist(ownerId: string) {
-  const existingId = await findReadLaterPlaylistId(ownerId);
-
-  if (existingId) {
-    return existingId;
-  }
-
   const [created] = await db
     .insert(playlists)
     .values({
@@ -137,13 +131,20 @@ export async function ensureReadLaterPlaylist(ownerId: string) {
       description: "Default private queue for papers to revisit.",
       isDefault: true,
     })
+    .onConflictDoNothing({ target: [playlists.ownerId, playlists.name] })
     .returning({ id: playlists.id });
 
-  if (!created) {
-    throw new Error("Create Read later playlist: missing saved row");
+  if (created) {
+    return created.id;
   }
 
-  return created.id;
+  const existingId = await findReadLaterPlaylistId(ownerId);
+
+  if (!existingId) {
+    throw new Error("Find Read later playlist after conflict: missing saved row");
+  }
+
+  return existingId;
 }
 
 export async function getSelectedTopicIds(ownerId: string) {

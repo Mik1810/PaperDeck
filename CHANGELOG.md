@@ -24,6 +24,7 @@ This project follows Semantic Versioning.
 - Source display mapping and badges for Crossref, manual, and unknown paper sources.
 - Unit tests for database-to-display paper source mapping.
 - Python summary generation script (`scripts/generate_summaries.py`) using Gemini via `uv`.
+- Interactive suspicious triage summary review script with CSV-driven uncertain review and a JSONL wrong-summary export.
 - Generated Supabase database types with repeatable generation and stale-check commands.
 - GitHub Actions check for stale generated database types.
 
@@ -35,6 +36,7 @@ This project follows Semantic Versioning.
 - Browser favicon generation now writes a real multi-size `.ico` file instead of a PNG payload renamed as `.ico`.
 - Root route `/` now sends completed or legacy-interest users to `/feed` and only fresh users to `/onboarding`.
 - Onboarding completion now redirects to `/feed` after saving interests, without blocking on profile embedding or recommendation preload failures.
+- Manual ChatGPT summary prompts now include each paper abstract instead of relying only on URLs/PDF links.
 - Database connections now default to a single Postgres client per runtime instance to avoid exhausting the Supabase session pool on Vercel.
 - The service worker now leaves dynamic Next.js data requests network-only and handles static fetch failures without rejected FetchEvent promises.
 - Onboarding route loading state now uses the same dark wizard shell, avoiding the old `Topics` app-shell flash.
@@ -49,6 +51,7 @@ This project follows Semantic Versioning.
 - Optimistic deck and playlist mutations now roll back and show visible errors when persistence fails.
 - Unit test command now resolves `server-only` repository imports through the React server condition.
 - Playlist item add, remove, and reorder mutations now verify playlist ownership before writing through the service-role Supabase client.
+- Default `Read later` playlist creation is now race-safe after Clerk sign-in, avoiding duplicate-key onboarding render failures.
 - Manual paper records no longer display as arXiv sources.
 - Summary generation retry delay capped to 300s to prevent hours-long waits on 429 responses from GitHub Models.
 - Repository queries now use generated Supabase table types instead of broad manual row casts.

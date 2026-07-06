@@ -174,6 +174,8 @@ def main() -> None:
             lines.append(f"URL: {url}")
         if pdf_url:
             lines.append(f"PDF: {pdf_url}")
+        lines.append("Abstract:")
+        lines.append(row["abstract"])
         lines.append("")
 
     output_text = "\n".join(lines)
