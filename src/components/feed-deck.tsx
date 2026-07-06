@@ -6,10 +6,14 @@ import { PaperCard } from "@/components/paper-card";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
 import {
   deckMutationErrorMessage,
+  recordOpenDetail,
   submitDeckAction,
 } from "@/lib/client/deck-mutations";
 import { loadMoreDeckPapersAction } from "@/app/actions";
 import type { Paper } from "@/types/paper";
+
+const SWIPE_THRESHOLD = 100;
+const EXIT_DURATION = 300;
 
 type FeedDeckProps = {
   activePaper: Paper | null;
@@ -93,16 +97,13 @@ export function FeedDeck({
 
   const prevVisibleCount = useRef(visiblePapers.length);
 
-  useEffect(() => {
-    const wasAbove = prevVisibleCount.current > LOAD_MORE_THRESHOLD;
-    const nowBelow = visiblePapers.length <= LOAD_MORE_THRESHOLD;
-
-    prevVisibleCount.current = visiblePapers.length;
-
-    if (wasAbove && nowBelow && fullQueue.length > 0) {
-      loadMore();
-    }
-  }, [visiblePapers.length, fullQueue.length, loadMore]);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
+  const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(null);
+  const dragStartX = useRef(0);
+  const currentDragX = useRef(0);
+  const isSwipeLocked = useRef(false);
 
   function setPaperDismissed(paperId: string, isDismissed: boolean) {
     setDismissedState((current) => {
@@ -124,7 +125,7 @@ export function FeedDeck({
     });
   }
 
-  async function handleDismissSubmit(paperId: string) {
+  const handleDismissSubmit = useCallback(async function (paperId: string) {
     setDismissError(null);
     setPaperDismissed(paperId, true);
 
@@ -137,24 +138,157 @@ export function FeedDeck({
         paperId,
       });
     }
-  }
+  }, [queueSignature]);
+
+  const pointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    setIsDragging(true);
+    isSwipeLocked.current = false;
+    dragStartX.current = e.clientX;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
+
+  const pointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartX.current;
+
+    if (!isSwipeLocked.current && Math.abs(dx) > 10) {
+      isSwipeLocked.current = true;
+    }
+
+    if (isSwipeLocked.current) {
+      currentDragX.current = dx;
+      setDragX(dx);
+    }
+  }, [isDragging]);
+
+  const pointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isDragging) return;
+      setIsDragging(false);
+      e.currentTarget.releasePointerCapture(e.pointerId);
+
+      const finalX = currentDragX.current;
+
+      if (Math.abs(finalX) >= SWIPE_THRESHOLD && visibleActivePaper) {
+        const direction = finalX > 0 ? "right" : "left";
+        setExitDirection(direction);
+        setIsExiting(true);
+
+        setTimeout(() => {
+          if (direction === "right") {
+            recordOpenDetail(visibleActivePaper.id);
+          } else {
+            handleDismissSubmit(visibleActivePaper.id);
+          }
+          setIsExiting(false);
+          setExitDirection(null);
+          setDragX(0);
+          currentDragX.current = 0;
+        }, EXIT_DURATION);
+      } else {
+        setDragX(0);
+        currentDragX.current = 0;
+      }
+    },
+    [isDragging, visibleActivePaper],
+  );
+
+  const exitTransform = exitDirection === "left"
+    ? "translateX(-150%) rotate(-15deg)"
+    : exitDirection === "right"
+    ? "translateX(150%) rotate(15deg)"
+    : "";
+
+  useEffect(() => {
+    const wasAbove = prevVisibleCount.current > LOAD_MORE_THRESHOLD;
+    const nowBelow = visiblePapers.length <= LOAD_MORE_THRESHOLD;
+
+    prevVisibleCount.current = visiblePapers.length;
+
+    if (wasAbove && nowBelow && fullQueue.length > 0) {
+      loadMore();
+    }
+  }, [visiblePapers.length, fullQueue.length, loadMore]);
+
+  const cardOpacity = isDragging ? (1 - Math.min(Math.abs(dragX) / SWIPE_THRESHOLD, 0.4)) : 1;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="lg:pr-0">
         {visibleActivePaper ? (
-          <PaperCard
-            key={`${visibleActivePaper.id}-${favoriteIds.has(visibleActivePaper.id)}-${readLaterIds.has(visibleActivePaper.id)}`}
-            isFavorite={favoriteIds.has(visibleActivePaper.id)}
-            isSaved={readLaterIds.has(visibleActivePaper.id)}
-            dismissErrorMessage={
-              dismissError?.paperId === visibleActivePaper.id
-                ? dismissError.message
-                : null
-            }
-            onDismissSubmit={handleDismissSubmit}
-            paper={visibleActivePaper}
-          />
+          <div className="relative" style={{ minHeight: "70vh" }}>
+            {/* Stacked next cards behind */}
+            {visiblePapers.slice(1, 3).map((paper, index) => (
+              <div
+                key={paper.id}
+                className="pointer-events-none absolute inset-0 rounded-2xl border border-slate-200 bg-white shadow-sm"
+                style={{
+                  transform: `scale(${0.97 - index * 0.03}) translateY(${(index + 1) * 6}px)`,
+                  opacity: 1 - index * 0.35,
+                  zIndex: 0,
+                  transition: "opacity 300ms ease",
+                }}
+              />
+            ))}
+
+            {/* Active card with swipe */}
+            <div
+              className="relative z-10 cursor-grab touch-none select-none active:cursor-grabbing"
+              style={{
+                transform: isExiting
+                  ? exitTransform
+                  : isDragging
+                  ? `translateX(${dragX}px) rotate(${dragX * 0.05}deg)`
+                  : "translateX(0) rotate(0deg)",
+                opacity: isExiting ? 0 : cardOpacity,
+                transition: isDragging ? "none" : `transform ${EXIT_DURATION}ms ease, opacity ${EXIT_DURATION}ms ease`,
+              }}
+              onPointerDown={pointerDown}
+              onPointerMove={pointerMove}
+              onPointerUp={pointerUp}
+              onPointerCancel={pointerUp}
+            >
+              {/* Swipe hint overlays */}
+              {isDragging && Math.abs(dragX) > 20 && (
+                <>
+                  <div
+                    className="absolute inset-0 z-20 flex items-center justify-start rounded-2xl px-8"
+                    style={{
+                      opacity: Math.min(Math.abs(Math.min(dragX, 0)) / SWIPE_THRESHOLD, 1),
+                    }}
+                  >
+                    <div className="rounded-2xl border-4 border-red-500 px-6 py-3">
+                      <span className="text-2xl font-black text-red-500">NOPE</span>
+                    </div>
+                  </div>
+                  <div
+                    className="absolute inset-0 z-20 flex items-center justify-end rounded-2xl px-8"
+                    style={{
+                      opacity: Math.min(Math.abs(Math.max(dragX, 0)) / SWIPE_THRESHOLD, 1),
+                    }}
+                  >
+                    <div className="rounded-2xl border-4 border-teal-500 px-6 py-3">
+                      <span className="text-2xl font-black text-teal-500">OPEN</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <PaperCard
+                key={`${visibleActivePaper.id}-${favoriteIds.has(visibleActivePaper.id)}-${readLaterIds.has(visibleActivePaper.id)}`}
+                isFavorite={favoriteIds.has(visibleActivePaper.id)}
+                isSaved={readLaterIds.has(visibleActivePaper.id)}
+                dismissErrorMessage={
+                  dismissError?.paperId === visibleActivePaper.id
+                    ? dismissError.message
+                    : null
+                }
+                onDismissSubmit={handleDismissSubmit}
+                paper={visibleActivePaper}
+              />
+            </div>
+          </div>
         ) : isLoadingMore ? (
           <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">
             <p className="text-sm font-semibold text-slate-500">

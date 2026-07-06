@@ -102,7 +102,11 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
             Abstract
           </h2>
           <div className="mt-4 text-sm leading-7 italic text-slate-600">
-            <MathContent text={paper.abstract} />
+            {paper.abstract ? (
+              <MathContent text={paper.abstract} />
+            ) : (
+              <span className="text-slate-400">No abstract available.</span>
+            )}
           </div>
         </section>
 

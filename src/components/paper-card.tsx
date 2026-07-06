@@ -110,21 +110,29 @@ export function PaperCard({
         ) : null}
 
         <div className={`mt-6 space-y-3 text-[15px] leading-7 text-slate-700`}>
-          <div className={isExpanded ? "" : "line-clamp-[10]"}>
-            <MathContent text={paper.abstract} />
-          </div>
-          <button
-            className="inline-flex items-center gap-1 rounded-md text-sm font-black text-teal-700 hover:text-teal-900"
-            type="button"
-            onClick={() => setIsExpanded((current) => !current)}
-          >
-            {isExpanded ? "less" : "more"}
-            {isExpanded ? (
-              <ChevronUp aria-hidden="true" size={16} strokeWidth={2.4} />
-            ) : (
-              <ChevronDown aria-hidden="true" size={16} strokeWidth={2.4} />
-            )}
-          </button>
+          {paper.abstract ? (
+            <>
+              <div className={isExpanded ? "" : "line-clamp-[10]"}>
+                <MathContent text={paper.abstract} />
+              </div>
+              <button
+                className="inline-flex items-center gap-1 rounded-md text-sm font-black text-teal-700 hover:text-teal-900"
+                type="button"
+                onClick={() => setIsExpanded((current) => !current)}
+              >
+                {isExpanded ? "less" : "more"}
+                {isExpanded ? (
+                  <ChevronUp aria-hidden="true" size={16} strokeWidth={2.4} />
+                ) : (
+                  <ChevronDown aria-hidden="true" size={16} strokeWidth={2.4} />
+                )}
+              </button>
+            </>
+          ) : (
+            <p className="text-sm italic text-slate-400">
+              No abstract available.
+            </p>
+          )}
         </div>
       </div>
 
