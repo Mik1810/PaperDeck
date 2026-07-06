@@ -36,7 +36,7 @@ function parseArgs() {
   return {
     limit: Number(args.find((a) => a.startsWith("--limit="))?.split("=")[1] ?? 50),
     dryRun: args.includes("--dry-run"),
-    requestDelayMs: 3100,
+    requestDelayMs: 1500,
   };
 }
 
@@ -63,13 +63,21 @@ async function fetchArxivAbstract(arxivId: string): Promise<string | null> {
 }
 
 async function fetchS2Abstract(semanticScholarId: string, apiKey?: string): Promise<string | null> {
-  const url = `https://api.semanticscholar.org/graph/v1/paper/${semanticScholarId}?fields=abstract`;
-  const res = await fetch(url, {
-    headers: apiKey ? { "x-api-key": apiKey } : {},
-  });
-  if (!res.ok) return null;
-  const data = await res.json() as { abstract?: string };
-  return data.abstract?.trim() || null;
+  const url = `https://api.semanticscholar.org/graph/v1/paper/${semanticScholarId}?fields=title,abstract`;
+  const headers: Record<string, string> = {};
+  if (apiKey) headers["x-api-key"] = apiKey;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(url, { headers });
+    if (res.status === 429 && attempt < 2) {
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      continue;
+    }
+    if (!res.ok) return null;
+    const data = await res.json() as { abstract?: string };
+    return data.abstract?.trim() || null;
+  }
+  return null;
 }
 
 async function fetchOpenAlexAbstract(doi: string): Promise<string | null> {
@@ -122,11 +130,13 @@ async function main() {
     if (paper.arxiv_id) {
       newAbstract = await fetchArxivAbstract(paper.arxiv_id);
       source = "arxiv";
+      await new Promise((r) => setTimeout(r, 500));
     }
 
     if (!newAbstract && paper.semantic_scholar_id) {
       newAbstract = await fetchS2Abstract(paper.semantic_scholar_id, s2Key);
       if (newAbstract) source = "semantic_scholar";
+      await new Promise((r) => setTimeout(r, 500));
     }
 
     if (!newAbstract && paper.doi) {
