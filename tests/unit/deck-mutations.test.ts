@@ -16,7 +16,7 @@ describe("submitDeckAction", () => {
       return Response.json({ action: "favorite", ok: true });
     };
 
-    await submitDeckAction("favorite", "paper-1", fetchImpl);
+    await submitDeckAction("favorite", "paper-1", {}, fetchImpl);
 
     assert.equal(calls.length, 1);
     assert.equal(calls[0].input, "/api/deck");
@@ -27,10 +27,31 @@ describe("submitDeckAction", () => {
     });
   });
 
+  test("posts recommendation impression ids when present", async () => {
+    const calls: Array<{ init?: RequestInit; input: RequestInfo | URL }> = [];
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ init, input });
+      return Response.json({ action: "dismiss", ok: true });
+    };
+
+    await submitDeckAction(
+      "dismiss",
+      "paper-1",
+      { recommendationImpressionId: "11111111-1111-4111-8111-111111111111" },
+      fetchImpl,
+    );
+
+    assert.deepEqual(JSON.parse(calls[0].init?.body as string), {
+      action: "dismiss",
+      paperId: "paper-1",
+      recommendationImpressionId: "11111111-1111-4111-8111-111111111111",
+    });
+  });
+
   test("rejects failed API responses", async () => {
     await assert.rejects(
       () =>
-        submitDeckAction("read_later", "paper-1", async () =>
+        submitDeckAction("read_later", "paper-1", {}, async () =>
           Response.json(
             { error: "Persistence failed", ok: false },
             { status: 500 },
@@ -43,7 +64,7 @@ describe("submitDeckAction", () => {
   test("rejects non-ok API responses without error field", async () => {
     await assert.rejects(
       () =>
-        submitDeckAction("dismiss", "paper-1", async () =>
+        submitDeckAction("dismiss", "paper-1", {}, async () =>
           Response.json({ ok: false }, { status: 500 }),
         ),
     );
@@ -52,7 +73,7 @@ describe("submitDeckAction", () => {
   test("throws on network error", async () => {
     await assert.rejects(
       () =>
-        submitDeckAction("favorite", "paper-1", async () => {
+        submitDeckAction("favorite", "paper-1", {}, async () => {
           throw new TypeError("fetch failed");
         }),
       /fetch failed/,
@@ -71,6 +92,7 @@ describe("recordOpenDetail", () => {
     const mode = recordOpenDetail("paper-2", {
       fetchImpl,
       navigatorImpl: { sendBeacon: () => false },
+      recommendationImpressionId: "22222222-2222-4222-8222-222222222222",
     });
 
     assert.equal(mode, "fetch");
@@ -80,24 +102,34 @@ describe("recordOpenDetail", () => {
     assert.deepEqual(JSON.parse(calls[0].init?.body as string), {
       action: "open_detail",
       paperId: "paper-2",
+      recommendationImpressionId: "22222222-2222-4222-8222-222222222222",
     });
   });
 
-  test("uses sendBeacon when available", () => {
-    const beaconCalls: Array<{ url: string; data: string }> = [];
+  test("uses sendBeacon when available", async () => {
+    const beaconCalls: Array<{ url: string; data: BodyInit | null }> = [];
     const mode = recordOpenDetail("paper-3", {
       fetchImpl: async () => Response.json({ ok: true }),
       navigatorImpl: {
-        sendBeacon: (url: string, data: string) => {
-          beaconCalls.push({ url, data });
+        sendBeacon: (url: string, data?: BodyInit | null) => {
+          beaconCalls.push({ url, data: data ?? null });
           return true;
         },
       } as Pick<Navigator, "sendBeacon">,
+      recommendationImpressionId: "33333333-3333-4333-8333-333333333333",
     });
 
     assert.equal(mode, "beacon");
     assert.equal(beaconCalls.length, 1);
     assert.equal(beaconCalls[0].url, "/api/deck");
+    assert.deepEqual(
+      JSON.parse(await (beaconCalls[0].data as Blob).text()),
+      {
+        action: "open_detail",
+        paperId: "paper-3",
+        recommendationImpressionId: "33333333-3333-4333-8333-333333333333",
+      },
+    );
   });
 });
 

@@ -12,6 +12,7 @@
     "enrich:unpaywall": "tsx scripts/enrich-unpaywall.ts",
     "enrich:abstracts": "tsx scripts/enrich-missing-abstracts.ts",
     "import:paraphrased": "tsx scripts/import-paraphrased-abstracts.ts",
+    "analytics:prune": "tsx scripts/prune-recommendation-impressions.ts",
     "discover:classics": "tsx scripts/discover-classic-papers.ts",
     "generate:summaries": "tsx scripts/generate-summaries.ts",
     "generate:summaries:py": "uv run scripts/generate_summaries.py",
@@ -23,8 +24,10 @@
     "audit:service-role": "tsx scripts/audit-service-role.ts",
     "issues:import": "tsx scripts/create-issues.ts",
     "lint": "eslint",
+    "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "node --conditions react-server --import tsx --test tests/unit/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.11",

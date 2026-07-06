@@ -8,7 +8,7 @@ const globalForDb = globalThis as unknown as {
 };
 
 function databaseMaxConnections() {
-  const value = Number(process.env.DATABASE_MAX_CONNECTIONS ?? 1);
+  const value = Number(process.env.DATABASE_MAX_CONNECTIONS ?? 3);
 
   if (!Number.isInteger(value) || value < 1) {
     return 1;

@@ -10,14 +10,14 @@ import {
   submitDeckAction,
 } from "@/lib/client/deck-mutations";
 import { loadMoreDeckPapersAction } from "@/app/actions";
-import type { Paper } from "@/types/paper";
+import type { FeedPaper } from "@/types/paper";
 
 const SWIPE_THRESHOLD = 100;
 const EXIT_DURATION = 300;
 
 type FeedDeckProps = {
-  activePaper: Paper | null;
-  nextPapers: Paper[];
+  activePaper: FeedPaper | null;
+  nextPapers: FeedPaper[];
   favoritePaperIds: string[];
   readLaterPaperIds: string[];
 };
@@ -44,7 +44,7 @@ export function FeedDeck({
     message: string;
     paperId: string;
   } | null>(null);
-  const [extraPapers, setExtraPapers] = useState<Paper[]>([]);
+  const [extraPapers, setExtraPapers] = useState<FeedPaper[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const loadMoreRequestedRef = useRef(false);
 
@@ -105,7 +105,7 @@ export function FeedDeck({
   const currentDragX = useRef(0);
   const isSwipeLocked = useRef(false);
 
-  function setPaperDismissed(paperId: string, isDismissed: boolean) {
+  const setPaperDismissed = useCallback((paperId: string, isDismissed: boolean) => {
     setDismissedState((current) => {
       const paperIds =
         current.queueSignature === queueSignature
@@ -123,14 +123,19 @@ export function FeedDeck({
         paperIds,
       };
     });
-  }
+  }, [queueSignature]);
 
-  const handleDismissSubmit = useCallback(async function (paperId: string) {
+  const handleDismissSubmit = useCallback(async function (
+    paperId: string,
+    recommendationImpressionId?: string,
+  ) {
     setDismissError(null);
     setPaperDismissed(paperId, true);
 
     try {
-      await submitDeckAction("dismiss", paperId);
+      await submitDeckAction("dismiss", paperId, {
+        recommendationImpressionId,
+      });
     } catch {
       setPaperDismissed(paperId, false);
       setDismissError({
@@ -138,7 +143,7 @@ export function FeedDeck({
         paperId,
       });
     }
-  }, [queueSignature]);
+  }, [setPaperDismissed]);
 
   const pointerDown = useCallback((e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -177,9 +182,15 @@ export function FeedDeck({
 
         setTimeout(() => {
           if (direction === "right") {
-            submitDeckAction("read_later", visibleActivePaper.id);
+            submitDeckAction("read_later", visibleActivePaper.id, {
+              recommendationImpressionId:
+                visibleActivePaper.recommendationImpressionId,
+            });
           } else {
-            handleDismissSubmit(visibleActivePaper.id);
+            handleDismissSubmit(
+              visibleActivePaper.id,
+              visibleActivePaper.recommendationImpressionId,
+            );
           }
           setIsExiting(false);
           setExitDirection(null);
@@ -191,7 +202,7 @@ export function FeedDeck({
         currentDragX.current = 0;
       }
     },
-    [isDragging, visibleActivePaper],
+    [handleDismissSubmit, isDragging, visibleActivePaper],
   );
 
   const exitTransform = exitDirection === "left"

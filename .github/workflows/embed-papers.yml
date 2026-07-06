@@ -23,6 +23,10 @@ on:
   schedule:
     - cron: "47 4 * * *"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   embed-vectors:
     runs-on: ubuntu-latest

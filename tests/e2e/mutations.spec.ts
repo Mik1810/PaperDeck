@@ -41,6 +41,7 @@ async function cleanupTestData() {
       await sql`delete from playlists where owner_id = ${id}`;
       await sql`delete from favorites where owner_id = ${id}`;
       await sql`delete from user_paper_interactions where owner_id = ${id}`;
+      await sql`delete from recommendation_impressions where owner_id = ${id}`;
       await sql`delete from user_interests where owner_id = ${id}`;
       await sql`delete from user_profile_embeddings where owner_id = ${id}`;
       await sql`delete from recommendations where owner_id = ${id}`;
@@ -70,6 +71,35 @@ async function seedTestProfile() {
     const topicId = await getSeedTopicId(sql);
     await sql`insert into profiles (owner_id, onboarding_completed_at) values (${devOwnerId}, now()) on conflict (owner_id) do update set onboarding_completed_at = now()`;
     await sql`insert into user_interests (owner_id, topic_id, selected_at) values (${devOwnerId}, ${topicId}, now()) on conflict (owner_id, topic_id) do nothing`;
+  });
+}
+
+async function getLatestRecommendationImpressions() {
+  return withDb(async (sql) => {
+    const latest = await sql<{ batch_id: string }[]>`
+      select batch_id
+      from recommendation_impressions
+      where owner_id = ${devOwnerId}
+      order by shown_at desc
+      limit 1
+    `;
+
+    if (!latest.length) return [];
+
+    return sql<{
+      id: string;
+      paper_id: string;
+      rank: number;
+      score: number;
+      score_components: unknown;
+      model_version: string;
+    }[]>`
+      select id, paper_id, rank, score, score_components, model_version
+      from recommendation_impressions
+      where owner_id = ${devOwnerId}
+        and batch_id = ${latest[0].batch_id}
+      order by rank asc
+    `;
   });
 }
 
@@ -230,6 +260,115 @@ test.describe("playlist authorization", () => {
       `;
       expect(stillExists.length).toBe(1);
     });
+  });
+});
+
+test.describe("recommendation analytics", () => {
+  test.beforeAll(async () => {
+    await cleanupTestData();
+    await seedTestProfile();
+  });
+
+  test("persists feed impressions and links a valid deck interaction", async ({
+    page,
+    request,
+  }) => {
+    test.skip(!devAuthEnabled, "Requires dev auth.");
+    test.skip(!hasDb, "Requires DATABASE_URL.");
+
+    const response = await page.goto("/feed");
+
+    expect(response?.status()).toBeLessThan(500);
+    await expect(
+      page.getByRole("heading", { exact: true, name: "Today" }),
+    ).toBeVisible();
+
+    const impressions = await getLatestRecommendationImpressions();
+    expect(impressions.length).toBeGreaterThan(0);
+    expect(impressions[0].rank).toBe(1);
+    expect(impressions[0].score).toEqual(expect.any(Number));
+    expect(impressions[0].model_version).toMatch(/paperdeck-.+-feed-v1/);
+    expect(typeof impressions[0].score_components).toBe("object");
+
+    const mutation = await request.post("/api/deck", {
+      data: {
+        action: "open_detail",
+        paperId: impressions[0].paper_id,
+        recommendationImpressionId: impressions[0].id,
+      },
+    });
+
+    expect(mutation.status()).toBe(200);
+
+    const interactions = await withDb((sql) =>
+      sql<{ recommendation_impression_id: string | null }[]>`
+        select recommendation_impression_id
+        from user_paper_interactions
+        where owner_id = ${devOwnerId}
+          and paper_id = ${impressions[0].paper_id}
+          and action = 'open_detail'
+        order by created_at desc
+        limit 1
+      `,
+    );
+
+    expect(interactions[0]?.recommendation_impression_id).toBe(
+      impressions[0].id,
+    );
+  });
+
+  test("ignores invalid or mismatched impression ids without failing mutations", async ({
+    request,
+  }) => {
+    test.skip(!devAuthEnabled, "Requires dev auth.");
+    test.skip(!hasDb, "Requires DATABASE_URL.");
+
+    const impressions = await getLatestRecommendationImpressions();
+    test.skip(impressions.length < 2, "Requires at least two feed impressions.");
+
+    const invalid = await request.post("/api/deck", {
+      data: {
+        action: "favorite",
+        paperId: impressions[0].paper_id,
+        recommendationImpressionId: "not-a-uuid",
+      },
+    });
+    expect(invalid.status()).toBe(200);
+
+    const mismatched = await request.post("/api/deck", {
+      data: {
+        action: "dismiss",
+        paperId: impressions[1].paper_id,
+        recommendationImpressionId: impressions[0].id,
+      },
+    });
+    expect(mismatched.status()).toBe(200);
+
+    const rows = await withDb((sql) =>
+      sql<{ action: string; recommendation_impression_id: string | null }[]>`
+        select action, recommendation_impression_id
+        from user_paper_interactions
+        where owner_id = ${devOwnerId}
+          and (
+            (paper_id = ${impressions[0].paper_id} and action = 'favorite')
+            or (paper_id = ${impressions[1].paper_id} and action = 'dismiss')
+          )
+        order by created_at desc
+      `,
+    );
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "favorite",
+          recommendation_impression_id: null,
+        }),
+        expect.objectContaining({
+          action: "dismiss",
+          recommendation_impression_id: null,
+        }),
+      ]),
+    );
   });
 });
 

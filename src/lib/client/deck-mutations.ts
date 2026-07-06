@@ -16,9 +16,14 @@ type FetchLike = (
 
 type BeaconLike = Pick<Navigator, "sendBeacon">;
 
+type DeckMutationOptions = {
+  recommendationImpressionId?: string;
+};
+
 type RecordOpenDetailOptions = {
   fetchImpl?: FetchLike;
   navigatorImpl?: BeaconLike;
+  recommendationImpressionId?: string;
 };
 
 function isDeckMutationPayload(value: unknown): value is DeckMutationPayload {
@@ -39,10 +44,17 @@ async function readDeckMutationPayload(
 export async function submitDeckAction(
   action: DeckMutationAction,
   paperId: string,
+  options: DeckMutationOptions = {},
   fetchImpl: FetchLike = fetch,
 ) {
   const response = await fetchImpl("/api/deck", {
-    body: JSON.stringify({ action, paperId }),
+    body: JSON.stringify({
+      action,
+      paperId,
+      ...(options.recommendationImpressionId
+        ? { recommendationImpressionId: options.recommendationImpressionId }
+        : {}),
+    }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
   });
@@ -57,7 +69,13 @@ export function recordOpenDetail(
   paperId: string,
   options: RecordOpenDetailOptions = {},
 ) {
-  const body = JSON.stringify({ action: "open_detail", paperId });
+  const body = JSON.stringify({
+    action: "open_detail",
+    paperId,
+    ...(options.recommendationImpressionId
+      ? { recommendationImpressionId: options.recommendationImpressionId }
+      : {}),
+  });
   const beaconTarget =
     options.navigatorImpl ??
     (typeof navigator !== "undefined" ? navigator : undefined);

@@ -26,14 +26,6 @@ Generato il 2026-07-06. Aggiornato dopo SESSION 18 (16 issue chiuse).
 
 `reorderOwnedPlaylistItems` esegue N UPDATE individuali. Per 50 item = 50 round trip. Usare un batch update o una singola transazione SQL.
 
-### 1.4 Connection pooling: default 1 connessione
-
-**File:** `src/db/index.ts:10`
-
-`DATABASE_MAX_CONNECTIONS` default a 1. Su Vercel Serverless, una singola richiesta blocca tutte le altre chiamate DB nella stessa istanza.
-
-**Fix:** alzare il default a 3-5 o renderlo configurabile con documentazione.
-
 ---
 
 ## 2. HIGH — CI e Test
@@ -59,12 +51,6 @@ Il path di retrieval semantico (pgvector match_papers_by_embedding) non ha test.
 **File:** `tests/e2e/app-smoke.spec.ts:38-40`
 
 `resetDevOwner()` cancella `profiles WHERE owner_id = ...` ma non pulisce le righe correlate in `playlists`, `user_interests`, `user_paper_interactions`, `user_profile_embeddings`, `recommendations`. Fallimenti lasciano il DB sporco.
-
-### 2.5 `concurrency` group assente in tutti i workflow CI
-
-Due `workflow_dispatch` simultanei dello stesso workflow possono corrompere cursori di ingestion o duplicare embedding.
-
-**Fix:** aggiungere `concurrency: ${{ github.workflow }}-${{ github.ref }}` a ogni workflow.
 
 ---
 
@@ -94,18 +80,6 @@ Due `workflow_dispatch` simultanei dello stesso workflow possono corrompere curs
 
 Doppio cast che bypassa il type system. Il tipo `SemanticMatchRow` dichiara `paper_id: string` ma la funzione RPC restituisce `uuid`.
 
-### 3.4 `paperFromRow` dichiarato `async` senza `await`
-
-**File:** `src/lib/repositories/catalog.ts:26-30`
-
-La funzione è marcata `async` ma non usa mai `await`. Rimuovere `async`.
-
-### 3.5 `render-latex.ts` non supporta display math `$$...$$`
-
-**File:** `src/lib/render-latex.ts:3-54`
-
-Supporta solo `$...$` inline. `$$...$$` (equazioni in blocco) sono comuni negli abstract CS.
-
 ### 3.6 Input non validato in API route
 
 **File:** `src/app/api/deck/route.ts:12`
@@ -130,14 +104,6 @@ La funzione `requirePaperId(formData)` viene riutilizzata per estrarre `playlist
 
 ## 4. MEDIUM — Accessibilità
 
-### 4.1 `aria-label` su icona invece che su button
-
-**File:** `src/components/paper-card.tsx:156,172-179,181,197-204`
-
-`aria-label` è su `<Heart>` e `<Bookmark>`, ma i `<button>` wrapper non hanno label. Screen reader annunciano pulsanti ambigui.
-
-**Fix:** spostare `aria-label` sul `<button>`.
-
 ### 4.2 Test dinamici con `for` loop
 
 **File:** `tests/e2e/app-smoke.spec.ts:229`
@@ -148,37 +114,9 @@ Generazione dinamica di test con `for` loop — in modalità `fullyParallel`, l'
 
 ## 5. MEDIUM — Configurazione
 
-### 5.1 `next.config.ts` quasi vuoto — header di sicurezza assenti
-
-**File:** `next.config.ts`
-
-Mancano: `Content-Security-Policy`, `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `poweredByHeader: false`.
-
-### 5.2 `tsconfig.json` target ES2017
-
-**File:** `tsconfig.json:3`
-
-ES2017 manca di `Promise.allSettled`, optional chaining in output, e `globalThis`. Portare a ES2020+.
-
-### 5.3 Nessuno script `typecheck` o `test` nel package.json
-
-`npm test` fallisce. Solo `test:unit` e `test:e2e` esistono. Manca `tsc --noEmit` dedicato.
-
-### 5.4 Hardcoded fallback Clerk keys in CI
-
-**File:** `.github/workflows/ci.yml:18-19`
-
-`pk_test_replace_me` e `sk_test_replace_me` come fallback. Usare stringhe vuote.
-
 ---
 
 ## 6. MEDIUM — Documentazione
-
-### 6.1 CHANGELOG `[Unreleased]` contiene lavoro già rilasciato
-
-**File:** `CHANGELOG.md:9-61`
-
-52 righe nella sezione `[Unreleased]` che sono state rilasciate nella 0.1.4.
 
 ### 6.2 `embeddings.md` — riferimento a commit/run specifici
 

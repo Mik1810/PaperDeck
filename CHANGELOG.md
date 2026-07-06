@@ -4,62 +4,51 @@ All notable changes to this project will be documented in this file.
 
 This project follows Semantic Versioning.
 
-## [Unreleased]
+## [0.1.5] - 2026-07-06
 
 ### Added
 
-- Structured server-side JSON logger for Vercel-readable app events and errors.
-- Library ignored-history section for dismissed and not-interested papers.
-- Three-step interest onboarding for macro areas, categories, and microcategories with a `Not now` skip path.
-- Onboarding now uses a standalone dark guided wizard instead of the authenticated app shell.
-- Onboarding controls now sit in a narrower separated right rail, and `Theoretical CS` appears before `Other CS`.
-- Wizard completion now schedules the first ranked feed batch into `recommendations` as best-effort personalization after the response.
-- Topic-only profile embedding generation for onboarding and settings writes, built from stored topic vectors without live model inference.
-- Settings interest editing now uses the same macro/category/microcategory grouping as onboarding.
-- Shared arXiv CS category display mapping so raw labels such as `cs.CV` render as human-readable names.
-- MIT License for PaperDeck source code and documentation, with README scope notes for branding and third-party paper metadata.
-- App CI workflow for service-role audit, lint, build, and Playwright smoke tests on pull requests and pushes to `main`.
-- Unit test script for focused repository regression tests.
-- Regression tests for playlist item add, remove, and reorder ownership checks.
-- Source display mapping and badges for Crossref, manual, and unknown paper sources.
-- Unit tests for database-to-display paper source mapping.
-- Python summary generation script (`scripts/generate_summaries.py`) using Gemini via `uv`.
-- Interactive suspicious triage summary review script with CSV-driven uncertain review and a JSONL wrong-summary export.
-- Generated Supabase database types with repeatable generation and stale-check commands.
-- GitHub Actions check for stale generated database types.
-- Semantic Scholar based automatic classic/high-impact paper discovery command.
-- Monthly GitHub Actions workflow for conservative classic/high-impact discovery plus follow-up embeddings.
-- Description-backed CS area profiles and `--categories` filtering for classic discovery.
-- Normalized-title fallback deduplication for classic discovery candidates missing strong external IDs.
+- Feed deck now loads more papers when the queue drops below 3 visible cards.
+- Swipe gestures with card stacking, visual affordances (✕ dismiss, Bookmark save), and exit animations.
+- Triage-deck product positioning and guardrails in README.md and ROADMAP.md.
+- Markdown-to-GitHub-issues importer (`npm run issues:import`).
+- Repository boundary audit: all 36 repository functions tagged `@user-scoped` or `@admin`.
+- `owner-guard.ts` utility for defense-in-depth owner id validation.
+- `enrich-missing-abstracts.ts`: backfills paper abstracts from arXiv, Semantic Scholar, and OpenAlex.
+- `import-paraphrased-abstracts.ts`: imports manually curated paper descriptions from JSON.
+- Cover image for onboarding wizard.
+- Security headers in `next.config.ts` (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy).
+- Concurrency groups on all 5 GitHub Actions workflows.
+- `$$...$$` display math support in KaTeX renderer.
+- `typecheck` and `test` npm scripts.
+- Recommendation impressions table and feed instrumentation.
+- Authorization and mutation regression tests (40 unit tests, E2E mutations spec).
 
 ### Fixed
 
-- Feed header no longer shows the redundant relevance-first subtitle.
-- Button-like controls now have consistent hover, focus, and active feedback.
-- Paper titles now render inline LaTeX in feed, detail, library, and playlist views.
-- Browser favicon generation now writes a real multi-size `.ico` file instead of a PNG payload renamed as `.ico`.
-- Root route `/` now sends completed or legacy-interest users to `/feed` and only fresh users to `/onboarding`.
-- Onboarding completion now redirects to `/feed` after saving interests, without blocking on profile embedding or recommendation preload failures.
-- Manual ChatGPT summary prompts now include each paper abstract instead of relying only on URLs/PDF links.
-- Database connections now default to a single Postgres client per runtime instance to avoid exhausting the Supabase session pool on Vercel.
-- The service worker now leaves dynamic Next.js data requests network-only and handles static fetch failures without rejected FetchEvent promises.
-- Onboarding route loading state now uses the same dark wizard shell, avoiding the old `Topics` app-shell flash.
-- `Not now` now defaults users into all broad non-micro CS interests, and settings prevents removing every active interest.
-- Onboarding no longer preselects saved/default interests or shows a duplicate selected summary; broad defaults are applied only by the server-side `Not now` action.
-- `/feed` now reads a fresh preloaded recommendation batch when available instead of generating missing profile embeddings lazily during render.
-- Authenticated app pages now redirect only users without completed onboarding or saved legacy interests back to `/onboarding`.
-- Clearing or skipping interests now removes stale user profile embeddings instead of leaving old semantic preferences active.
-- App CI now exposes `DATABASE_URL` to the build job and can be triggered manually.
-- Dev-auth app smoke tests now scope the `Local dev` badge assertion to the page banner to avoid strict locator ambiguity.
-- Paper detail navigation from the feed no longer waits for the `open_detail` tracking write before changing pages.
-- Optimistic deck and playlist mutations now roll back and show visible errors when persistence fails.
-- Unit test command now resolves `server-only` repository imports through the React server condition.
-- Playlist item add, remove, and reorder mutations now verify playlist ownership before writing through the service-role Supabase client.
-- Default `Read later` playlist creation is now race-safe after Clerk sign-in, avoiding duplicate-key onboarding render failures.
-- Manual paper records no longer display as arXiv sources.
-- Summary generation retry delay capped to 300s to prevent hours-long waits on 429 responses from GitHub Models.
-- Repository queries now use generated Supabase table types instead of broad manual row casts.
-- App CI Playwright smoke tests now run serially under shared dev-auth state, isolate each CI run with its own dev-auth owner id, and cover playlist creation through the real UI action path.
+- `profiles_select_own` and `profiles_update_own` RLS policies now have proper `using`/`withCheck` clauses.
+- Deck API error messages no longer leak internal details in production.
+- External paper links use `rel="noreferrer noopener"`.
+- Feed deck PaperCard/PlaylistPapers keys include state to force remount on prop changes.
+- Playlist creation form stays visible until server action succeeds (race condition fix).
+- Embedding model aligned across SQL function, TypeScript constant, and ROADMAP (all MiniLM).
+- `user_paper_interactions` now has unique constraint on `(owner_id, paper_id, action)`.
+- Playlist navigation uses Next.js `<Link>` instead of full-page `<a>`.
+- Playwright mobile viewport project added (skipped in CI to avoid DB race).
+- Profile embedding refreshed asynchronously after every deck/feedback mutation via `after()`.
+- arXiv ingestion hardened with retry/backoff (429/5xx), cursor tie-breaking by arxiv_id.
+- Classic paper discovery now prefers papers with abstracts (requests 3x, sorts abstract-first).
+- All 633 catalog papers now have abstracts (23 recovered from APIs, 9 imported as paraphrased).
+- CI workflows now write structured markdown job summaries.
+- `aria-label` moved from icons to their wrapping buttons.
+- `paperFromRow` no longer falsely marked `async`.
+- `tsconfig.json` target raised to ES2020.
+- Database connection pool default raised to 3.
+- `poweredByHeader` disabled.
+
+### Removed
+
+- 7 classic papers without abstracts (all books/treatises with no retrievable abstract).
 
 ## [0.1.4] - 2026-07-02
 

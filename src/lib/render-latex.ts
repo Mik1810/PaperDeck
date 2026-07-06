@@ -23,8 +23,26 @@ export function renderLatex(text: string): string {
     remaining = remaining.slice(dollarIdx + 1);
 
     if (remaining.startsWith("$")) {
-      parts.push(escapeHtml("$"));
       remaining = remaining.slice(1);
+      const endDisplay = remaining.indexOf("$$");
+      if (endDisplay !== -1) {
+        const math = remaining.slice(0, endDisplay);
+        remaining = remaining.slice(endDisplay + 2);
+        try {
+          parts.push(
+            katex.renderToString(math, {
+              throwOnError: false,
+              output: "html",
+              displayMode: true,
+              strict: false,
+            }),
+          );
+        } catch {
+          parts.push(escapeHtml("$$" + math + "$$"));
+        }
+        continue;
+      }
+      parts.push(escapeHtml("$"));
       continue;
     }
 

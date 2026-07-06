@@ -24,11 +24,11 @@ function topicFromRow(row: TopicRow): PaperTopic {
 }
 
 /** @admin */
-export async function paperFromRow(
+export function paperFromRow(
   row: PaperRow,
   authors: string[] = [],
   topics: TopicRow[] = [],
-): Promise<Paper> {
+): Paper {
   const paperTopics = topics.map(topicFromRow);
 
   return {

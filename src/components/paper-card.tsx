@@ -20,14 +20,17 @@ import {
   type DeckMutationAction,
   submitDeckAction,
 } from "@/lib/client/deck-mutations";
-import type { Paper } from "@/types/paper";
+import type { FeedPaper } from "@/types/paper";
 
 type PaperCardProps = {
   dismissErrorMessage?: string | null;
-  paper: Paper;
+  paper: FeedPaper;
   isFavorite?: boolean;
   isSaved?: boolean;
-  onDismissSubmit?: (paperId: string) => void | Promise<void>;
+  onDismissSubmit?: (
+    paperId: string,
+    recommendationImpressionId?: string,
+  ) => void | Promise<void>;
 };
 
 export function PaperCard({
@@ -55,7 +58,9 @@ export function PaperCard({
     setPendingAction(action);
 
     try {
-      await submitDeckAction(action, paper.id);
+      await submitDeckAction(action, paper.id, {
+        recommendationImpressionId: paper.recommendationImpressionId,
+      });
     } catch {
       rollback();
       setMutationErrorMessage(deckMutationErrorMessage(action));
@@ -143,7 +148,7 @@ export function PaperCard({
           onClick={() => {
             setMutationErrorMessage(null);
             if (onDismissSubmit) {
-              void onDismissSubmit(paper.id);
+              void onDismissSubmit(paper.id, paper.recommendationImpressionId);
               return;
             }
 
@@ -156,12 +161,17 @@ export function PaperCard({
         <Link
           className="col-span-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white hover:bg-slate-800"
           href={`/papers/${paper.id}`}
-          onClick={() => recordOpenDetail(paper.id)}
+          onClick={() =>
+            recordOpenDetail(paper.id, {
+              recommendationImpressionId: paper.recommendationImpressionId,
+            })
+          }
         >
           <MoveRight aria-hidden="true" size={18} strokeWidth={2.5} />
           Open
         </Link>
         <button
+          aria-label={optimisticFavorite ? "Remove favorite" : "Favorite paper"}
           className={`grid h-12 w-full place-items-center rounded-lg border ${
             optimisticFavorite
               ? "border-pink-300 bg-pink-50 text-pink-700"
@@ -178,15 +188,14 @@ export function PaperCard({
           type="button"
         >
           <Heart
-            aria-label={
-              optimisticFavorite ? "Remove favorite" : "Favorite paper"
-            }
+            aria-hidden="true"
             fill={optimisticFavorite ? "currentColor" : "none"}
             size={19}
             strokeWidth={2.5}
           />
         </button>
         <button
+          aria-label={optimisticSaved ? "Saved to Read later" : "Save to Read later"}
           className={`grid h-12 w-full place-items-center rounded-lg border ${
             optimisticSaved
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
@@ -203,9 +212,7 @@ export function PaperCard({
           type="button"
         >
           <Bookmark
-            aria-label={
-              optimisticSaved ? "Saved to Read later" : "Save to Read later"
-            }
+            aria-hidden="true"
             fill={optimisticSaved ? "currentColor" : "none"}
             size={19}
             strokeWidth={2.5}
