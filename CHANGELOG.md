@@ -59,7 +59,7 @@ This project follows Semantic Versioning.
 - Manual paper records no longer display as arXiv sources.
 - Summary generation retry delay capped to 300s to prevent hours-long waits on 429 responses from GitHub Models.
 - Repository queries now use generated Supabase table types instead of broad manual row casts.
-- App CI Playwright smoke tests now run serially under shared dev-auth state, and playlist creation coverage uses the real UI action path.
+- App CI Playwright smoke tests now run serially under shared dev-auth state, isolate each CI run with its own dev-auth owner id, and cover playlist creation through the real UI action path.
 
 ## [0.1.4] - 2026-07-02
 
