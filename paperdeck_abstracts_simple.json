@@ -1,0 +1,110 @@
+[
+  {
+    "id": "7e5b8d33-afdf-453e-a91d-9742f2c523e9",
+    "title": "A systematic review of systematic review process research in software engineering",
+    "abstract": "This paper reviews research about how systematic literature reviews are conducted in software engineering. It analyzes process issues such as planning, search, study selection, quality assessment, data extraction, synthesis, and reporting, with the goal of identifying methodological guidance and gaps for secondary studies in software engineering.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://doi.org/10.1016/j.infsof.2013.07.010",
+    "note": "Paraphrased abstract-level description; not a verbatim publisher abstract."
+  },
+  {
+    "id": "f16b102e-7a5c-4845-9c5c-d61e88707433",
+    "title": "Bitcoin: A Peer-to-Peer Electronic Cash System",
+    "abstract": "This white paper proposes a peer-to-peer electronic cash system that avoids reliance on trusted financial intermediaries. It combines digital signatures, a public timestamp server, proof-of-work, and network consensus to address double-spending and maintain a transaction history controlled by the majority of honest computational power.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://bitcoin.org/bitcoin.pdf",
+    "note": "Paraphrased from the white paper abstract."
+  },
+  {
+    "id": "06aad9df-518c-408d-b39b-1e4a667c3072",
+    "title": "Empirical studies of agile software development: A systematic review",
+    "abstract": "This systematic review surveys empirical evidence on agile software development. It classifies published studies, examines reported benefits and limitations of agile methods, and discusses the strength of available evidence, with attention to research design, context, and implications for software engineering practice.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://doi.org/10.1016/j.infsof.2008.01.006",
+    "note": "Paraphrased abstract-level description; not a verbatim publisher abstract."
+  },
+  {
+    "id": "a7f3122a-e534-48d1-9d35-8b12ee18cfba",
+    "title": "Experimentation in software engineering: an introduction",
+    "abstract": "This article introduces experimentation as a research method for software engineering. It discusses why controlled empirical evaluation is needed, how experiments can be planned and executed, and how measurement, validity, data analysis, and interpretation affect conclusions about software processes, methods, and tools.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://doi.org/10.1016/S0898-1221(00)90203-7",
+    "note": "Paraphrased abstract-level description; not a verbatim publisher abstract."
+  },
+  {
+    "id": "0c5b6009-1239-43a9-9619-c4b2045a00dd",
+    "title": "GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash Equilibrium",
+    "abstract": "This paper studies convergence in generative adversarial network training and proposes a two time-scale update rule that uses separate learning rates for the generator and discriminator. It analyzes convergence toward local Nash equilibria, relates Adam dynamics to heavy-ball behavior, and introduces the Fr\u00e9chet Inception Distance for evaluating generated images.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://arxiv.org/abs/1706.08500",
+    "note": "Paraphrased from the arXiv abstract."
+  },
+  {
+    "id": "1ac16ada-efee-42f1-a678-19f275ace5b2",
+    "title": "Mach: A New Kernel Foundation for UNIX Development",
+    "abstract": "This paper presents Mach as a kernel foundation for building UNIX-compatible and distributed operating systems. It emphasizes abstractions such as tasks, threads, ports, messages, and virtual memory, and argues that these mechanisms support multiprocessor execution, interprocess communication, and more flexible operating-system construction.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": null,
+    "note": "Paraphrased abstract-level description from bibliographic knowledge; source URL should be verified before database import."
+  },
+  {
+    "id": "1f108cbd-1bdc-4cad-a5f2-971554726887",
+    "title": "Practical Byzantine Fault Tolerance",
+    "abstract": "This paper presents a practical Byzantine fault-tolerant replication algorithm for asynchronous distributed systems. The protocol tolerates Byzantine faults while providing safety and liveness under standard assumptions, and it is engineered to reduce overhead enough to make Byzantine state-machine replication practical for real services.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://pmg.csail.mit.edu/papers/osdi99.pdf",
+    "note": "Paraphrased abstract-level description; not a verbatim paper abstract."
+  },
+  {
+    "id": "f8250f8d-ca4e-43f3-9c21-be26a3680e69",
+    "title": "Selecting Empirical Methods for Software Engineering Research",
+    "abstract": "This chapter discusses how to choose empirical research methods for software engineering questions. It compares method families such as experiments, case studies, surveys, and other observational approaches, emphasizing the relationship between research goals, available control, context, validity threats, and the type of evidence needed.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://doi.org/10.1007/978-1-84800-044-5_11",
+    "note": "Paraphrased abstract-level description; not a verbatim Springer abstract."
+  },
+  {
+    "id": "753005a8-6bba-4afb-905a-5519ad1404f8",
+    "title": "The Anatomy of a Large-Scale Hypertextual Web Search Engine",
+    "abstract": "This paper describes the architecture and design goals of Google, a large-scale web search engine. It explains crawling, indexing, storage, ranking, and query processing, with particular emphasis on exploiting hyperlink structure through PageRank to improve search quality and scalability on the rapidly growing Web.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://doi.org/10.1016/S0169-7552(98)00110-X",
+    "note": "Paraphrased abstract-level description; not a verbatim publisher abstract."
+  },
+  {
+    "id": "7af12010-fa44-498d-9ec7-923cd17c4fae",
+    "title": "The PageRank Citation Ranking: Bringing Order to the Web",
+    "abstract": "This technical report presents PageRank, a method for ranking web pages by analyzing the link structure of the Web. It models links as endorsements, defines a recursive importance score over the web graph, and argues that this citation-style ranking improves web search and navigation.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "http://ilpubs.stanford.edu:8090/422/",
+    "note": "Paraphrased abstract-level description; not a verbatim technical-report abstract."
+  },
+  {
+    "id": "3d252093-668f-4b97-ad5c-64defd8332cb",
+    "title": "TreadMarks: Distributed Shared Memory on Standard Workstations and Operating Systems",
+    "abstract": "This paper presents TreadMarks, a distributed shared memory system for networks of standard workstations. It aims to give programmers a shared-memory abstraction on distributed hardware, using software mechanisms to maintain consistency and support parallel applications without requiring specialized multiprocessor machines.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": null,
+    "note": "Paraphrased abstract-level description; source URL should be verified before database import."
+  },
+  {
+    "id": "0dffd7ad-e417-4efd-8c70-b2e8ad7eba49",
+    "title": "Wasserstein Generative Adversarial Networks",
+    "abstract": "This paper introduces Wasserstein GANs as an alternative objective for training generative adversarial networks. By optimizing a distance related to optimal transport, the method improves training stability, mitigates mode collapse, and provides learning curves that are more meaningful for debugging and model selection.",
+    "abstract_status": "found",
+    "abstract_kind": "non_verbatim_paraphrase",
+    "source_url": "https://arxiv.org/abs/1701.07875",
+    "note": "Paraphrased from the arXiv abstract."
+  }
+]

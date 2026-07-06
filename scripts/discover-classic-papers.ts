@@ -501,10 +501,11 @@ async function fetchSemanticScholarCandidates(
   profile: DiscoveryProfile,
   config: DiscoverConfig,
 ) {
+  const requestedLimit = config.perQuery * 3;
   const params = new URLSearchParams({
     query: profile.query,
     fields: S2_FIELDS,
-    limit: String(config.perQuery),
+    limit: String(requestedLimit),
     sort: "citationCount:desc",
     year: `1970-${config.maxYear}`,
   });
@@ -533,6 +534,7 @@ async function fetchSemanticScholarCandidates(
             (paper.citationCount ?? 0) >= profile.minCitations &&
             (paper.year ?? 9999) <= config.maxYear,
         )
+        .sort((a, b) => (a.abstract ? -1 : 1) - (b.abstract ? -1 : 1))
         .slice(0, config.perQuery);
     }
 
