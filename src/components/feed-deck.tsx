@@ -365,7 +365,7 @@ export function FeedDeck({
           <div className="mt-4 space-y-3">
             {visibleNextPapers.map((paper) => (
               <div key={paper.id} className="border-t border-slate-100 pt-3">
-                <p className="text-sm font-black leading-5 text-slate-900">
+                <p className="text-sm font-black leading-5 text-slate-900 line-clamp-2">
                   <MathContent text={paper.title} />
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
