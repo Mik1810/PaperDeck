@@ -66,7 +66,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const content = isDevAuthEnabled() ? children : <ClerkProvider>{children}</ClerkProvider>;
+  const content = isDevAuthEnabled() ? children : <ClerkProvider afterSignOutUrl="/sign-in">{children}</ClerkProvider>;
 
   return (
     <html
