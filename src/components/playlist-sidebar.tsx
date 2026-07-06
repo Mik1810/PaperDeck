@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createPlaylistAction,
@@ -131,12 +132,12 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
                   : "border-slate-200 bg-white"
               }`}
             >
-              <a
+              <Link
                 className="flex-1 rounded-md font-black text-slate-900 hover:text-teal-700"
                 href={`/library?playlist=${playlist.id}`}
               >
                 {playlist.name}
-              </a>
+              </Link>
               <span className="mr-2 rounded-md bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">
                 {playlist.paperIds.length}
               </span>
