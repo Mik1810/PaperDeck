@@ -24,6 +24,7 @@ async function requireOwnedPlaylist(
   }
 }
 
+/** @user-scoped */
 export async function addToOwnedPlaylist(
   ownerId: string,
   playlistId: string,
@@ -53,6 +54,7 @@ export async function addToOwnedPlaylist(
     });
 }
 
+/** @user-scoped */
 export async function removeFromOwnedPlaylist(
   ownerId: string,
   playlistId: string,
@@ -70,6 +72,7 @@ export async function removeFromOwnedPlaylist(
     );
 }
 
+/** @user-scoped */
 export async function reorderOwnedPlaylistItems(
   ownerId: string,
   playlistId: string,

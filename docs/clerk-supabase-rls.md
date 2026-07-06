@@ -55,8 +55,31 @@ Server Action → auth().getToken({ template: 'supabase' })
 
 1. ✅ `createClerkAuthenticatedClient()` implemented
 2. ✅ `verifyClerkRlsAction` smoke test added
-3. 🔲 Migration: transition user-scoped repository functions from service role to clerk-authenticated client
-4. 🔲 Keep service role for admin/ingestion/embedding workers
+3. 🔲 Transition user-scoped repository functions to clerk-authenticated client (see boundary below)
+4. ✅ Service role kept for admin/ingestion/embedding workers — documented in per-function JSDoc tags
+
+### Repository boundary (2026-07-06)
+
+All repository functions are tagged with `/** @user-scoped */` or `/** @admin */` in the source.
+Run `npm run audit:service-role` to see the breakdown.
+
+| Scope | Count | Description | Current Client |
+|-------|-------|-------------|---------------|
+| `@user-scoped` | 27 | Reads/writes user-owned data (profile, favorites, interactions, playlists) | Drizzle `db` (service-role) — owner checks in app code |
+| `@admin` | 9 | Shared catalog reads, ranking, embedding refreshes, topic taxonomy | Drizzle `db` (service-role) |
+
+**Current state (MVP):** Both `@user-scoped` and `@admin` functions use the Drizzle direct connection via `DATABASE_URL`. Owner-id is validated in application code (`requireOwnerId()`). This is acceptable for MVP because:
+- Every user-scoped query includes `WHERE owner_id = ?` or equivalent
+- The audit script (`scripts/audit-service-role.ts`) verifies no service-role key leaks to client bundles
+- RLS policies in `supabase/schema.sql` are written and ready for activation
+
+**Migration plan:**
+1. Move user-scoped writes (toggleFavorite, toggleReadLater, recordPaperInteraction, etc.) to `createClerkAuthenticatedClient()` 
+2. Move user-scoped reads (getFeedState, getLibraryPageData, etc.) to Clerk client
+3. Activate RLS policies in production
+4. Keep admin functions (getAllPapers, getSemanticPaperCandidates, preloadRecommendations) on service role
+
+The `requireOwnerId()` utility in `src/lib/repositories/owner-guard.ts` provides defense-in-depth for all service-role operations that touch user-owned data.
 
 ## Files
 

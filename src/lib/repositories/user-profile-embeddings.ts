@@ -84,6 +84,7 @@ function stableSignature(payload: unknown) {
   return JSON.stringify(payload);
 }
 
+/** @user-scoped */
 export async function clearUserProfileEmbedding(ownerId: string) {
   await db
     .delete(userProfileEmbeddings)
@@ -161,6 +162,7 @@ async function upsertUserProfileEmbedding(
     });
 }
 
+/** @user-scoped */
 export async function writeTopicSelectionProfileEmbedding(
   ownerId: string,
   topicIds: string[],
@@ -244,6 +246,7 @@ export async function writeTopicSelectionProfileEmbedding(
   };
 }
 
+/** @user-scoped */
 export async function refreshUserProfileEmbedding(
   ownerId: string,
 ): Promise<ProfileEmbeddingRefreshResult> {

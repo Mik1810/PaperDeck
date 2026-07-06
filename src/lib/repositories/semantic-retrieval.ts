@@ -73,6 +73,7 @@ async function matchPapersByEmbedding(
   return (result as unknown as SemanticMatchRow[]) ?? [];
 }
 
+/** @admin */
 export async function getSemanticPaperCandidates(
   ownerId: string,
   matchCount = 100,

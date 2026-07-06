@@ -82,6 +82,7 @@ function measureSync<T>(
   return result;
 }
 
+/** @user-scoped Reads and writes user-owned profile data. */
 export async function ensureUserProfile(user: AuthenticatedUserContext) {
   const now = new Date().toISOString();
 
@@ -105,6 +106,7 @@ export async function ensureUserProfile(user: AuthenticatedUserContext) {
   await ensureReadLaterPlaylist(user.ownerId);
 }
 
+/** @user-scoped Creates a minimal profile for an owner id. */
 export async function ensureUserProfileForOwner(ownerId: string) {
   await db
     .insert(profiles)
@@ -122,6 +124,7 @@ async function findReadLaterPlaylistId(ownerId: string) {
   return rows[0]?.id;
 }
 
+/** @user-scoped Ensures the default Read later playlist exists. */
 export async function ensureReadLaterPlaylist(ownerId: string) {
   const [created] = await db
     .insert(playlists)
@@ -147,6 +150,7 @@ export async function ensureReadLaterPlaylist(ownerId: string) {
   return existingId;
 }
 
+/** @user-scoped */
 export async function getSelectedTopicIds(ownerId: string) {
   const rows = await db
     .select({ topicId: userInterests.topicId })
@@ -156,6 +160,7 @@ export async function getSelectedTopicIds(ownerId: string) {
   return new Set(rows.map((r) => r.topicId));
 }
 
+/** @user-scoped */
 export async function hasUsableOnboardingState(ownerId: string) {
   const rows = await db
     .select({
@@ -191,6 +196,7 @@ function userInterestFromTopic(topic: TopicRow, selectedTopicIds: Set<string>) {
   };
 }
 
+/** @user-scoped */
 export async function saveSelectedTopics(ownerId: string, topicIds: string[]) {
   const uniqueTopicIds = [...new Set(topicIds)];
 
@@ -219,6 +225,7 @@ export async function saveSelectedTopics(ownerId: string, topicIds: string[]) {
     .where(eq(profiles.ownerId, ownerId));
 }
 
+/** @admin */
 export async function getDefaultOnboardingTopicIds() {
   const topics = await getTopics();
 
@@ -227,6 +234,7 @@ export async function getDefaultOnboardingTopicIds() {
     .map((topic: TopicRow) => topic.id);
 }
 
+/** @user-scoped */
 export async function getOnboardingData(ownerId: string) {
   const [topics, feedState] = await Promise.all([
     getTopics(),
@@ -426,6 +434,7 @@ async function getLatestInitialRecommendationBatch(
     .filter((paper): paper is Paper => paper !== null);
 }
 
+/** @user-scoped */
 export async function clearInitialFeedRecommendations(ownerId: string) {
   await db
     .delete(recommendations)
@@ -440,6 +449,7 @@ export async function clearInitialFeedRecommendations(ownerId: string) {
     );
 }
 
+/** @admin */
 export async function preloadInitialFeedRecommendations(ownerId: string) {
   const startedAt = performance.now();
   const timings: Record<string, number> = {};
@@ -492,6 +502,7 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
   };
 }
 
+/** @admin */
 export async function getRankedFeedPapers(
   ownerId: string,
 ): Promise<Paper[]> {
@@ -516,6 +527,7 @@ export async function getRankedFeedPapers(
   return rankedPapers;
 }
 
+/** @user-scoped */
 export async function getFeedPageData(ownerId: string) {
   const startedAt = performance.now();
   const timings: Record<string, number> = {};
@@ -603,6 +615,7 @@ async function getIgnoredPaperHistory(
     .filter((item): item is IgnoredPaperHistoryItem => item !== null);
 }
 
+/** @user-scoped */
 export async function getLibraryPageData(ownerId: string) {
   const playlistRows = await db
     .select({
@@ -667,6 +680,7 @@ export async function getLibraryPageData(ownerId: string) {
   };
 }
 
+/** @user-scoped */
 export async function getSettingsPageData(ownerId: string) {
   const [topics, feedState] = await Promise.all([
     getTopics(),
@@ -681,6 +695,7 @@ export async function getSettingsPageData(ownerId: string) {
   };
 }
 
+/** @user-scoped */
 export async function getPaperDetailData(ownerId: string, paperId: string) {
   const [papers, state] = await Promise.all([
     getPapersByIds([paperId]),
@@ -753,6 +768,7 @@ async function getPaperDetailState(ownerId: string, paperId: string) {
   };
 }
 
+/** @user-scoped */
 export async function recordPaperInteraction(
   ownerId: string,
   paperId: string,
@@ -767,6 +783,7 @@ export async function recordPaperInteraction(
   });
 }
 
+/** @user-scoped */
 export async function toggleFavorite(ownerId: string, paperId: string) {
   const existing = await db
     .select({ paperId: favorites.paperId })
@@ -795,6 +812,7 @@ export async function toggleFavorite(ownerId: string, paperId: string) {
   await recordPaperInteraction(ownerId, paperId, "favorite");
 }
 
+/** @user-scoped */
 export async function toggleReadLater(ownerId: string, paperId: string) {
   const playlistId = await ensureReadLaterPlaylist(ownerId);
 
@@ -836,6 +854,7 @@ export async function toggleReadLater(ownerId: string, paperId: string) {
   await recordPaperInteraction(ownerId, paperId, "save_to_playlist");
 }
 
+/** @user-scoped */
 export async function createPlaylist(ownerId: string, name: string) {
   const [row] = await db
     .insert(playlists)
@@ -845,6 +864,7 @@ export async function createPlaylist(ownerId: string, name: string) {
   return row;
 }
 
+/** @user-scoped */
 export async function renamePlaylist(
   ownerId: string,
   playlistId: string,
@@ -862,6 +882,7 @@ export async function renamePlaylist(
     );
 }
 
+/** @user-scoped */
 export async function deletePlaylist(ownerId: string, playlistId: string) {
   await db
     .delete(playlists)
@@ -874,6 +895,7 @@ export async function deletePlaylist(ownerId: string, playlistId: string) {
     );
 }
 
+/** @user-scoped */
 export async function addToPlaylist(
   ownerId: string,
   playlistId: string,
@@ -882,6 +904,7 @@ export async function addToPlaylist(
   await addToOwnedPlaylist(ownerId, playlistId, paperId);
 }
 
+/** @user-scoped */
 export async function removeFromPlaylist(
   ownerId: string,
   playlistId: string,
@@ -890,6 +913,7 @@ export async function removeFromPlaylist(
   await removeFromOwnedPlaylist(ownerId, playlistId, paperId);
 }
 
+/** @user-scoped */
 export async function reorderPlaylistItems(
   ownerId: string,
   playlistId: string,

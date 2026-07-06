@@ -254,6 +254,90 @@ for (const clientFile of clientFiles) {
   }
 }
 
+function parseScopeAnnotations(
+  filePath: string,
+  text: string,
+): Array<{ name: string; scope: "user-scoped" | "admin" }> {
+  const results: Array<{ name: string; scope: "user-scoped" | "admin" }> = [];
+
+  // Match: /** @user-scoped ... */ \n export async function name(...)
+  // or:   /** @admin */ \n export async function name(...)
+  const pattern = /\/\*\*\s*@(user-scoped|admin)\b[^*]*\*\/\s*\n\s*export\s+(?:async\s+)?function\s+(\w+)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    results.push({
+      name: match[2],
+      scope: match[1] as "user-scoped" | "admin",
+    });
+  }
+
+  return results;
+}
+
+// Phase: Repository boundary audit
+console.log("\nRepository scope analysis:");
+
+const repositoryFiles = srcFiles.filter((file) =>
+  toRepoPath(file).startsWith("src/lib/repositories/"),
+);
+
+let userScopedTotal = 0;
+let adminTotal = 0;
+const boundaryIssues: string[] = [];
+
+for (const file of repositoryFiles) {
+  const fileInfo = sourceByFile.get(file);
+  if (!fileInfo) continue;
+
+  const tags = parseScopeAnnotations(file, fileInfo.text);
+  if (!tags.length) continue;
+
+  const userScoped = tags.filter((t: { scope: string }) => t.scope === "user-scoped");
+  const admin = tags.filter((t: { scope: string }) => t.scope === "admin");
+
+  userScopedTotal += userScoped.length;
+  adminTotal += admin.length;
+
+  const usesServiceRole = fileInfo.text.includes("createServiceRoleClient");
+  const usesDrizzleDb = fileInfo.text.includes("import { db }");
+
+  if (userScoped.length && (usesServiceRole || usesDrizzleDb)) {
+    const scopedNames = userScoped.map((f: { name: string }) => f.name).join(", ");
+
+    boundaryIssues.push(
+      `${toRepoPath(file)}: ${userScoped.length} @user-scoped function(s) [${scopedNames}] — uses ${usesServiceRole ? "service-role client" : "Drizzle direct connection"} (RLS not enforced at DB level). Owner checks are enforced in application code.`,
+    );
+  }
+
+  console.log(
+    `  ${toRepoPath(file)}: ${userScoped.length} user-scoped, ${admin.length} admin`,
+  );
+}
+
+console.log(
+  `\nTotal: ${userScopedTotal} @user-scoped, ${adminTotal} @admin across ${repositoryFiles.length} repository files`,
+);
+
+if (boundaryIssues.length) {
+  console.log(
+    `\nℹ️  ${boundaryIssues.length} file(s) have @user-scoped functions without DB-level RLS:`,
+  );
+
+  for (const issue of boundaryIssues) {
+    console.log(`  - ${issue}`);
+  }
+
+  console.log(
+    "\n  This is expected for MVP: owner-id is verified in application code.",
+  );
+  console.log(
+    "  Migration to Clerk JWT + RLS is tracked in docs/clerk-supabase-rls.md.",
+  );
+} else {
+  console.log("  ✅ All @user-scoped functions are protected by DB-level RLS.");
+}
+
 if (errors.length) {
   console.error("Service-role audit failed:");
   for (const error of errors) {

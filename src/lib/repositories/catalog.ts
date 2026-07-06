@@ -23,6 +23,7 @@ function topicFromRow(row: TopicRow): PaperTopic {
   };
 }
 
+/** @admin */
 export async function paperFromRow(
   row: PaperRow,
   authors: string[] = [],
@@ -59,6 +60,7 @@ function buildRecommendationReason(topics: PaperTopic[]) {
   return `Matches your ${topicLabels.join(" and ")} interests.`;
 }
 
+/** @admin */
 export async function getTopics() {
   return db
     .select()
@@ -66,6 +68,7 @@ export async function getTopics() {
     .orderBy(asc(taxonomyTopics.depth), asc(taxonomyTopics.sortOrder));
 }
 
+/** @admin */
 export async function getPapersByIds(
   paperIds: string[],
 ) {
@@ -136,6 +139,7 @@ export async function getPapersByIds(
   );
 }
 
+/** @admin */
 export async function getAllPapers() {
   const paperRows = await db
     .select()
@@ -190,6 +194,7 @@ export async function getAllPapers() {
   );
 }
 
+/** @admin */
 export async function getPaperById(paperId: string) {
   const paperRows = await db
     .select()
