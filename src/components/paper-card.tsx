@@ -40,6 +40,7 @@ export function PaperCard({
   isSaved = false,
   onDismissSubmit,
 }: PaperCardProps) {
+  console.debug("PaperCard render:", paper.id, { isFavorite, isSaved });
   const [isExpanded, setIsExpanded] = useState(false);
   const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
   const [optimisticSaved, setOptimisticSaved] = useState(isSaved);
@@ -147,6 +148,7 @@ export function PaperCard({
           className="grid h-12 w-full place-items-center rounded-lg border border-rose-200 bg-white text-rose-700 hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={isMutationPending}
           onClick={() => {
+            console.debug("PaperCard: dismiss clicked", paper.id);
             setMutationErrorMessage(null);
             if (onDismissSubmit) {
               void onDismissSubmit(paper.id, paper.recommendationImpressionId);
@@ -180,6 +182,7 @@ export function PaperCard({
           } hover:border-pink-300 hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-50`}
           disabled={isMutationPending}
           onClick={() => {
+            console.debug("PaperCard: favorite clicked", paper.id);
             const previousFavorite = optimisticFavorite;
             setOptimisticFavorite(!previousFavorite);
             void commitDeckMutation("favorite", () =>
