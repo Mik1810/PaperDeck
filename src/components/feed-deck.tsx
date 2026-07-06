@@ -204,7 +204,7 @@ export function FeedDeck({
 
             {/* Active card with swipe */}
             <div
-              className="relative z-10 cursor-grab touch-none select-none active:cursor-grabbing"
+              className={`relative z-10 select-none ${isDragging ? "cursor-grabbing" : ""}`}
               style={{
                 transform: isExiting
                   ? exitTransform
