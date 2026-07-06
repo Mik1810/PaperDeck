@@ -67,6 +67,7 @@ Aggiornato al 2026-07-03:
   - Script `scripts/ingest-arxiv.ts` con 10 categorie CS di default.
   - Workflow GitHub Actions giornaliero/manuale.
   - Modalita' backfill storico con `--backfill` e `--backfill-pages`.
+  - Discovery automatica mensile di paper classici/alto impatto tramite Semantic Scholar, separata dal worker incrementale.
   - 447 paper arXiv nel database, 0 duplicati `arxiv_id`.
 - Enrichment esterno: completato.
   - Semantic Scholar: 277 paper con citation count, venue corretta, DOI, S2 ID.

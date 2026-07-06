@@ -126,6 +126,14 @@ Historical backfill:
 npm run ingest:arxiv -- --backfill --max-results=25 --backfill-pages=5
 ```
 
+Automatic classic/high-impact discovery:
+
+```bash
+npm run discover:classics -- --dry-run --per-query=3 --max-new-per-query=1
+```
+
+The same discovery path is scheduled monthly in GitHub Actions with conservative write caps.
+
 Enrichment workers:
 
 ```bash

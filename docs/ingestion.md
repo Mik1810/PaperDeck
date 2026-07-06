@@ -150,6 +150,42 @@ Total arxiv papers in DB after both runs: 447
 Cursors: all 10 backfill cursors created, incremental cursors untouched
 ```
 
+## Automatic Classic Paper Discovery
+
+PaperDeck can discover older high-impact papers automatically through Semantic Scholar citation-ranked search:
+
+```bash
+npm run discover:classics
+```
+
+It:
+
+- runs topic-specific search profiles for CS areas;
+- asks Semantic Scholar for pre-2021 candidates sorted by `citationCount:desc`;
+- applies per-profile title guards so broad citation search does not import off-topic papers;
+- inserts missing papers or updates matching `semantic_scholar_id`, `arxiv_id`, or DOI rows;
+- marks imported and matched rows with `is_classic = true`;
+- links authors, curated CS topics, and external IDs;
+- supports `--dry-run`, `--per-query=N`, `--max-new-per-query=N`, `--max-year=YYYY`, and `--only="query text"`.
+
+For a non-writing smoke test:
+
+```bash
+npm run discover:classics -- --dry-run --per-query=3 --max-new-per-query=1
+```
+
+The worker is intentionally conservative: use small caps first, inspect dry-run output, then run write mode.
+
+The scheduled workflow is:
+
+```text
+.github/workflows/discover-classics.yml
+```
+
+It runs monthly and can also be started manually with `workflow_dispatch`. Scheduled runs use conservative defaults (`per_query=5`, `max_new_per_query=1`, `max_year=2020`) and then embed newly eligible topic and paper vectors so imported classics are immediately available to semantic retrieval. Manual dispatch supports `dry_run=true` for candidate inspection.
+
+The scheduled arXiv worker remains incremental and only imports new arXiv papers. Older classic/high-impact records enter through the separate discovery worker, not through a committed JSON seed.
+
 The worker follows the official arXiv guidance:
 
 - use `https://export.arxiv.org/api/query`;
@@ -404,6 +440,7 @@ LLM_API_KEY        # only for Gemini fallback
 
 ## Next Ingestion Work
 
+- Keep the automatic classic discovery caps small and topic-balanced so classic/high-impact papers remain a capped discovery slice, not the whole feed.
 - Keep the scheduled MiniLM embedding workflow healthy after ingestion, following [`docs/embeddings.md`](./embeddings.md).
 
 ## See also

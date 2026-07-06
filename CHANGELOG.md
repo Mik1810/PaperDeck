@@ -27,6 +27,8 @@ This project follows Semantic Versioning.
 - Interactive suspicious triage summary review script with CSV-driven uncertain review and a JSONL wrong-summary export.
 - Generated Supabase database types with repeatable generation and stale-check commands.
 - GitHub Actions check for stale generated database types.
+- Semantic Scholar based automatic classic/high-impact paper discovery command.
+- Monthly GitHub Actions workflow for conservative classic/high-impact discovery plus follow-up embeddings.
 
 ### Fixed
 
