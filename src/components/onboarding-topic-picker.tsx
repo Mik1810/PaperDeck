@@ -288,17 +288,17 @@ export function OnboardingTopicPicker({
 
               <div className="mt-7">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-normal text-zinc-500">
+                  <p className="text-xs font-black uppercase tracking-normal text-zinc-500 lg:text-sm">
                     Step {stepIndex + 1} of {steps.length}
                   </p>
-                  <h2 className="mt-2 text-3xl font-black tracking-normal text-zinc-50">
+                  <h2 className="mt-2 text-3xl font-black tracking-normal text-zinc-50 lg:text-4xl">
                     {currentTitle}
                   </h2>
                 </div>
               </div>
 
               {currentOptions === "macro" ? (
-                <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {macroChoices.map((choice) => {
                     const isSelected =
                       choice.kind === "group"
@@ -327,7 +327,7 @@ export function OnboardingTopicPicker({
               ) : null}
 
               {currentOptions === "category" ? (
-                <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {categoryTopics.map((topic) => {
                     const isSelected = selectedTopicIds.has(topic.id);
 

@@ -225,8 +225,8 @@ export function FeedDeck({
   const cardOpacity = isDragging ? (1 - Math.min(Math.abs(dragX) / SWIPE_THRESHOLD, 0.4)) : 1;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <section className="lg:pr-0">
+    <div className="grid gap-6 md:grid-cols-[1fr_280px] lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="md:pr-0">
         {visibleActivePaper ? (
           <div className="relative" style={{ minHeight: "70vh" }}>
             {/* Stacked next cards behind */}
@@ -301,13 +301,13 @@ export function FeedDeck({
             </div>
           </div>
         ) : isLoadingMore ? (
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm md:max-w-xl lg:max-w-none">
             <p className="text-sm font-semibold text-slate-500">
               Loading more papers&hellip;
             </p>
           </div>
         ) : activePaper === null && nextPapers.length === 0 ? (
-          <div className="w-full max-w-md rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">
+          <div className="w-full max-w-md rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm md:max-w-xl lg:max-w-none">
             <h2 className="text-lg font-black text-slate-950">
               No papers yet
             </h2>
@@ -317,7 +317,7 @@ export function FeedDeck({
             </p>
           </div>
         ) : (
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm lg:max-w-none">
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm md:max-w-xl lg:max-w-none">
             <h2 className="text-lg font-black text-slate-950">
               No papers left in this deck
             </h2>
@@ -328,7 +328,7 @@ export function FeedDeck({
         )}
       </section>
 
-      <aside className="space-y-5">
+      <aside className="space-y-5 lg:sticky lg:top-20 lg:self-start">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
             Mix

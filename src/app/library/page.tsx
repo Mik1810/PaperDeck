@@ -60,7 +60,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
       subtitle="Favorites and private reading lists stay separate from lightweight open signals."
       readLaterCount={readLaterCount}
     >
-      <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid gap-5 md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)]">
         <PlaylistSidebar
           playlists={playlists}
           selectedId={selectedPlaylistId ?? null}
@@ -69,7 +69,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
         <section className="space-y-5">
           {selectedPlaylist && selectedPlaylistId ? (
             <div>
-              <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
+              <h2 className="text-sm font-black uppercase tracking-normal text-slate-500 lg:text-base">
                 {selectedPlaylist.name}
               </h2>
               <div className="mt-3">
@@ -88,7 +88,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
                 <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
                   Favorites
                 </h2>
-                <div className="mt-3 space-y-3">
+                <div className="mt-3 space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
                   {favoritePapers.length ? (
                     favoritePapers.map((paper) => (
                       <PaperListItem key={paper.id} paper={paper} />
@@ -111,7 +111,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
                 <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
                   Read later
                 </h2>
-                <div className="mt-3 space-y-3">
+                <div className="mt-3 space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
                   {readLaterPapers.length ? (
                     readLaterPapers.map((paper) => (
                       <PaperListItem
@@ -159,7 +159,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
                 <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
                   Ignored
                 </h2>
-                <div className="mt-3 space-y-3">
+                <div className="mt-3 space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
                   {ignoredPapers.length ? (
                     ignoredPapers.map((item) => (
                       <PaperListItem

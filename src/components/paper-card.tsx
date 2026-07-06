@@ -72,13 +72,13 @@ export function PaperCard({
   const visibleErrorMessage = dismissErrorMessage ?? mutationErrorMessage;
 
   return (
-    <article className="flex h-[min(760px,calc(100dvh-150px))] min-h-[360px] w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] sm:min-h-[560px] lg:max-w-none">
+    <article className="flex h-[min(760px,calc(100dvh-150px))] min-h-[360px] w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] sm:min-h-[560px] md:max-w-2xl lg:h-auto lg:max-h-[calc(100vh-180px)] lg:max-w-none lg:rounded-xl">
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-normal text-teal-700">
+          <p className="text-xs font-black uppercase tracking-normal text-teal-700 lg:text-sm">
             {paper.recommendationReason}
           </p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">
+          <p className="mt-1 text-xs font-semibold text-slate-500 lg:text-sm">
             {paper.isClassic ? "Classic paper" : "Fresh recommendation"}
             {paper.citationCount ? ` - ${paper.citationCount} citations` : ""}
           </p>
@@ -93,31 +93,31 @@ export function PaperCard({
           {paper.topics.map((topic) => (
             <span
               key={topic.id}
-              className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700"
+              className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 lg:text-sm"
             >
               {topic.label}
             </span>
           ))}
         </div>
 
-        <h2 className="text-2xl font-black leading-8 tracking-normal text-slate-950">
+        <h2 className="text-2xl font-black leading-8 tracking-normal text-slate-950 lg:text-3xl">
           <MathContent text={paper.title} />
         </h2>
 
-        <p className="mt-3 text-sm font-bold text-slate-500">
+        <p className="mt-3 text-sm font-bold text-slate-500 lg:text-base">
           {paper.authors.join(", ")} - {paper.year}
         </p>
 
         {paper.venue ? (
-          <p className="mt-1 text-sm font-semibold text-slate-500">
+          <p className="mt-1 text-sm font-semibold text-slate-500 lg:text-base">
             {paper.venue}
           </p>
         ) : null}
 
-        <div className={`mt-6 space-y-3 text-[15px] leading-7 text-slate-700`}>
+        <div className={`mt-6 space-y-3 text-[15px] leading-7 text-slate-700 md:text-base`}>
           {paper.abstract ? (
             <>
-              <div className={isExpanded ? "" : "line-clamp-[10]"}>
+              <div className={isExpanded ? "" : "line-clamp-[10] lg:line-clamp-[18]"}>
                 <MathContent text={paper.abstract} />
               </div>
               <button
@@ -224,7 +224,7 @@ export function PaperCard({
         href={paper.url}
         target="_blank"
         rel="noreferrer noopener"
-        className="flex h-11 items-center justify-center gap-2 border-t border-slate-100 bg-white text-sm font-black text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+        className="flex h-11 items-center justify-center gap-2 border-t border-slate-100 bg-white text-sm font-black text-slate-700 hover:bg-slate-50 hover:text-slate-950 lg:text-base"
       >
         <ExternalLink aria-hidden="true" size={16} strokeWidth={2.4} />
         Read online

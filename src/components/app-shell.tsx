@@ -89,11 +89,11 @@ export function AppShell({
       <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 md:pb-10 lg:px-8">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black tracking-normal text-slate-950">
+            <h1 className="text-2xl font-black tracking-normal text-slate-950 lg:text-3xl">
               {title}
             </h1>
             {subtitle ? (
-              <p className="mt-1 max-w-2xl text-sm font-medium leading-6 text-slate-600">
+              <p className="mt-1 max-w-2xl text-sm font-medium leading-6 text-slate-600 lg:text-base">
                 {subtitle}
               </p>
             ) : null}
@@ -105,7 +105,7 @@ export function AppShell({
       </main>
 
       {typeof readLaterCount === "number" ? (
-        <aside className="fixed bottom-20 right-4 hidden rounded-lg border border-slate-200 bg-white p-3 shadow-lg lg:block">
+        <aside className="fixed bottom-20 right-4 hidden rounded-lg border border-slate-200 bg-white p-3 shadow-lg md:bottom-6 md:block lg:bottom-10">
           <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
             <BookOpenCheck aria-hidden="true" size={18} strokeWidth={2.4} />
             Read later: {readLaterCount}

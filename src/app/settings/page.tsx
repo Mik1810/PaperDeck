@@ -24,9 +24,9 @@ export default async function SettingsPage() {
       subtitle="Account, ranking preferences, digest cadence, and source controls."
       readLaterCount={readLaterCount}
     >
-      <div className="grid gap-5 lg:grid-cols-2">
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
+      <div className="grid gap-5 md:grid-cols-2">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:p-5 lg:p-6">
+          <h2 className="text-sm font-black uppercase tracking-normal text-slate-500 md:text-base">
             Profile
           </h2>
           <dl className="mt-4 space-y-3">

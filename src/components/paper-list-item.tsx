@@ -13,19 +13,19 @@ type PaperListItemProps = {
 
 export function PaperListItem({ paper, action, meta }: PaperListItemProps) {
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <PaperSourceBadge source={paper.source} />
-            <span className="text-xs font-black text-slate-500">
+            <span className="text-xs font-black text-slate-500 lg:text-sm">
               {paper.year}
             </span>
           </div>
-          <h2 className="mt-2 text-base font-black leading-6 text-slate-950">
+          <h2 className="mt-2 text-base font-black leading-6 text-slate-950 md:text-lg">
             <MathContent text={paper.title} />
           </h2>
-          <p className="mt-2 text-sm font-semibold text-slate-500">
+          <p className="mt-2 text-sm font-semibold text-slate-500 md:text-base">
             {paper.authors.join(", ")}
           </p>
           {meta ? <div className="mt-3">{meta}</div> : null}
