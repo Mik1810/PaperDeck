@@ -27,7 +27,6 @@ export function FeedDeck({
   favoritePaperIds,
   readLaterPaperIds,
 }: FeedDeckProps) {
-  console.log("FeedDeck render:", activePaper?.id ?? "null", "next:", nextPapers.length);
   const paperQueue = useMemo(
     () => (activePaper ? [activePaper, ...nextPapers] : []),
     [activePaper, nextPapers],
