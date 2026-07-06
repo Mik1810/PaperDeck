@@ -29,6 +29,8 @@ This project follows Semantic Versioning.
 - GitHub Actions check for stale generated database types.
 - Semantic Scholar based automatic classic/high-impact paper discovery command.
 - Monthly GitHub Actions workflow for conservative classic/high-impact discovery plus follow-up embeddings.
+- Description-backed CS area profiles and `--categories` filtering for classic discovery.
+- Normalized-title fallback deduplication for classic discovery candidates missing strong external IDs.
 
 ### Fixed
 

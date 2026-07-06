@@ -68,6 +68,7 @@ Aggiornato al 2026-07-03:
   - Workflow GitHub Actions giornaliero/manuale.
   - Modalita' backfill storico con `--backfill` e `--backfill-pages`.
   - Discovery automatica mensile di paper classici/alto impatto tramite Semantic Scholar, separata dal worker incrementale.
+  - Discovery classici organizzata per aree CS descritte, con query seed mirate e filtro opzionale per categoria.
   - 447 paper arXiv nel database, 0 duplicati `arxiv_id`.
 - Enrichment esterno: completato.
   - Semantic Scholar: 277 paper con citation count, venue corretta, DOI, S2 ID.

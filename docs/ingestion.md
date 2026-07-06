@@ -160,18 +160,21 @@ npm run discover:classics
 
 It:
 
-- runs topic-specific search profiles for CS areas;
+- runs described CS area profiles backed by focused Semantic Scholar query seeds;
 - asks Semantic Scholar for pre-2021 candidates sorted by `citationCount:desc`;
 - applies per-profile title guards so broad citation search does not import off-topic papers;
-- inserts missing papers or updates matching `semantic_scholar_id`, `arxiv_id`, or DOI rows;
+- inserts missing papers or updates matching `semantic_scholar_id`, `arxiv_id`, DOI, or normalized-title fallback rows;
 - marks imported and matched rows with `is_classic = true`;
 - links authors, curated CS topics, and external IDs;
-- supports `--dry-run`, `--per-query=N`, `--max-new-per-query=N`, `--max-year=YYYY`, and `--only="query text"`.
+- supports `--dry-run`, `--per-query=N`, `--max-new-per-query=N`, `--max-year=YYYY`, `--categories=cs.DB,cs.OS`, and `--only="query seed text"`. `--per-query` caps accepted candidates after title/citation/year guardrails.
+
+The category descriptions live with the arXiv category labels, while the classic discovery worker maps selected categories to query seeds and title guards. For example, `cs.OS` is represented by an operating-systems description plus seeds for Unix, kernels, virtual memory, and file systems. The category code remains the internal topic identifier; the description is what keeps the search profiles understandable and maintainable.
 
 For a non-writing smoke test:
 
 ```bash
 npm run discover:classics -- --dry-run --per-query=3 --max-new-per-query=1
+npm run discover:classics -- --dry-run --categories=cs.DB,cs.OS --per-query=5
 ```
 
 The worker is intentionally conservative: use small caps first, inspect dry-run output, then run write mode.
@@ -182,7 +185,7 @@ The scheduled workflow is:
 .github/workflows/discover-classics.yml
 ```
 
-It runs monthly and can also be started manually with `workflow_dispatch`. Scheduled runs use conservative defaults (`per_query=5`, `max_new_per_query=1`, `max_year=2020`) and then embed newly eligible topic and paper vectors with MiniLM so imported classics are immediately available to semantic retrieval. Manual dispatch supports `dry_run=true` for candidate inspection.
+It runs monthly and can also be started manually with `workflow_dispatch`. Scheduled runs use conservative defaults (`per_query=5`, `max_new_per_query=1`, `max_year=2020`) and then embed newly eligible topic and paper vectors with MiniLM so imported classics are immediately available to semantic retrieval. Manual dispatch supports `dry_run=true` for candidate inspection and `categories` for comma-separated area/category filters.
 
 The scheduled arXiv worker remains incremental and only imports new arXiv papers. Older classic/high-impact records enter through the separate discovery worker, not through a committed JSON seed.
 
@@ -441,6 +444,7 @@ LLM_API_KEY        # only for Gemini fallback
 ## Next Ingestion Work
 
 - Keep the automatic classic discovery caps small and topic-balanced so classic/high-impact papers remain a capped discovery slice, not the whole feed.
+- Prefer category descriptions plus focused query seeds over raw `cs.*` codes when expanding classic discovery coverage.
 - Keep the scheduled MiniLM embedding workflow healthy after ingestion, following [`docs/embeddings.md`](./embeddings.md).
 
 ## See also

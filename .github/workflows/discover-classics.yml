@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       per_query:
-        description: "Maximum Semantic Scholar candidates to inspect per query"
+        description: "Maximum accepted Semantic Scholar candidates to inspect per query seed"
         required: false
         default: "5"
       max_new_per_query:
@@ -15,8 +15,12 @@ on:
         description: "Latest publication year eligible for classic discovery"
         required: false
         default: "2020"
+      categories:
+        description: "Optional area categories or labels to run, comma-separated (for example cs.DB,cs.OS)"
+        required: false
+        default: ""
       only:
-        description: "Optional exact discovery query to run"
+        description: "Optional exact discovery query seed to run"
         required: false
         default: ""
       dry_run:
@@ -42,6 +46,7 @@ jobs:
       CLASSIC_DISCOVERY_RETRIES: ${{ vars.CLASSIC_DISCOVERY_RETRIES || '5' }}
       CLASSIC_DISCOVERY_RETRY_DELAY_MS: ${{ vars.CLASSIC_DISCOVERY_RETRY_DELAY_MS || '10000' }}
       CLASSIC_DISCOVERY_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      CLASSIC_DISCOVERY_CATEGORIES: ${{ github.event.inputs.categories || vars.CLASSIC_DISCOVERY_CATEGORIES || '' }}
       CLASSIC_DISCOVERY_ONLY: ${{ github.event.inputs.only || '' }}
       EMBEDDING_MODEL: ${{ vars.CLASSIC_DISCOVERY_EMBEDDING_MODEL || 'sentence-transformers/all-MiniLM-L6-v2' }}
       EMBEDDING_LIMIT: ${{ vars.CLASSIC_DISCOVERY_EMBEDDING_LIMIT || '96' }}
@@ -75,6 +80,10 @@ jobs:
 
           if [ -n "$CLASSIC_DISCOVERY_ONLY" ]; then
             cmd+=(--only="$CLASSIC_DISCOVERY_ONLY")
+          fi
+
+          if [ -n "$CLASSIC_DISCOVERY_CATEGORIES" ]; then
+            cmd+=(--categories="$CLASSIC_DISCOVERY_CATEGORIES")
           fi
 
           if [ "$CLASSIC_DISCOVERY_DRY_RUN" = "true" ]; then

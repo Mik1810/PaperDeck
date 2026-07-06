@@ -1,14 +1,35 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { arxivCategoryLabels } from "../src/lib/arxiv-categories";
+import {
+  arxivCategoryDescriptions,
+  arxivCategoryLabels,
+} from "../src/lib/arxiv-categories";
+
+type DiscoveryQuerySeed = {
+  query: string;
+  topics?: string[];
+  minCitations?: number;
+  titleAll?: string[];
+  titleAny?: string[];
+};
 
 type DiscoveryProfile = {
+  category: string;
+  areaLabel: string;
+  areaDescription: string;
   query: string;
   topics: string[];
   minCitations: number;
   titleAll?: string[];
   titleAny?: string[];
+};
+
+type ClassicDiscoveryArea = {
+  category: string;
+  relatedCategories?: string[];
+  minCitations: number;
+  querySeeds: DiscoveryQuerySeed[];
 };
 
 type DiscoverConfig = {
@@ -17,6 +38,7 @@ type DiscoverConfig = {
   maxNewPerQuery: number;
   maxYear: number;
   requestDelayMs: number;
+  categories: Set<string> | null;
   only: Set<string> | null;
 };
 
@@ -44,6 +66,7 @@ type S2SearchResponse = {
 
 type ExistingPaper = {
   id: string;
+  title: string;
   abstract: string | null;
   url: string;
   pdf_url: string | null;
@@ -62,93 +85,158 @@ type ExistingPaper = {
 const S2_BASE = "https://api.semanticscholar.org/graph/v1";
 const S2_FIELDS =
   "paperId,externalIds,title,abstract,authors,citationCount,year,venue,url,publicationDate,openAccessPdf";
+const EXISTING_PAPER_SELECT =
+  "id,title,abstract,url,pdf_url,doi,arxiv_id,semantic_scholar_id,source,venue,citation_count,year,published_at,is_open_access,access";
 
-const discoveryProfiles: DiscoveryProfile[] = [
+const classicDiscoveryAreas: ClassicDiscoveryArea[] = [
   {
-    query: "transformer neural machine translation",
-    topics: ["cs.CL", "cs.LG"],
+    category: "cs.CL",
+    relatedCategories: ["cs.LG"],
     minCitations: 2000,
-    titleAny: ["attention", "transformer"],
+    querySeeds: [
+      {
+        query: "transformer neural machine translation",
+        titleAny: ["attention", "transformer"],
+      },
+      {
+        query: "language representation pretraining",
+        titleAny: ["bert", "pre-trained", "pretraining", "representation"],
+      },
+    ],
   },
   {
-    query: "language representation pretraining",
-    topics: ["cs.CL", "cs.LG"],
-    minCitations: 2000,
-    titleAny: ["bert", "pre-trained", "pretraining", "representation"],
-  },
-  {
-    query: "deep residual learning image recognition",
-    topics: ["cs.CV", "cs.LG"],
+    category: "cs.CV",
+    relatedCategories: ["cs.LG"],
     minCitations: 5000,
-    titleAny: ["residual", "resnet", "image recognition"],
+    querySeeds: [
+      {
+        query: "deep residual learning image recognition",
+        titleAny: ["residual", "resnet", "image recognition"],
+      },
+    ],
   },
   {
-    query: "generative adversarial networks",
-    topics: ["cs.LG"],
-    minCitations: 5000,
-    titleAny: ["generative adversarial", "gan", "gans"],
-  },
-  {
-    query: "diffusion probabilistic models",
-    topics: ["cs.LG", "cs.CV"],
+    category: "cs.LG",
+    relatedCategories: ["cs.CV"],
     minCitations: 2000,
-    titleAny: ["diffusion"],
+    querySeeds: [
+      {
+        query: "generative adversarial networks",
+        topics: ["cs.LG"],
+        minCitations: 5000,
+        titleAny: ["generative adversarial", "gan", "gans"],
+      },
+      {
+        query: "diffusion probabilistic models",
+        titleAny: ["diffusion"],
+      },
+    ],
   },
   {
-    query: "distributed storage key value store consensus",
-    topics: ["cs.DC", "cs.DB"],
+    category: "cs.DC",
+    relatedCategories: ["cs.DB"],
     minCitations: 500,
-    titleAny: ["mapreduce", "bigtable", "dynamo", "paxos", "raft", "spanner", "cassandra", "consensus", "distributed"],
+    querySeeds: [
+      {
+        query: "distributed storage key value store consensus",
+        titleAny: [
+          "mapreduce",
+          "bigtable",
+          "dynamo",
+          "paxos",
+          "raft",
+          "spanner",
+          "cassandra",
+          "consensus",
+          "distributed",
+        ],
+      },
+    ],
   },
   {
-    query: "database relational model",
-    topics: ["cs.DB"],
+    category: "cs.DB",
     minCitations: 500,
-    titleAll: ["relational", "database"],
-    titleAny: ["model", "management", "system", "systems"],
+    querySeeds: [
+      {
+        query: "database relational model",
+        titleAll: ["relational", "database"],
+        titleAny: ["model", "management", "system", "systems"],
+      },
+    ],
   },
   {
-    query: "web search pagerank information retrieval",
-    topics: ["cs.IR", "cs.SI"],
+    category: "cs.IR",
+    relatedCategories: ["cs.SI"],
     minCitations: 500,
-    titleAny: ["pagerank", "web search", "search engine", "information retrieval"],
+    querySeeds: [
+      {
+        query: "web search pagerank information retrieval",
+        titleAny: ["pagerank", "web search", "search engine", "information retrieval"],
+      },
+    ],
   },
   {
-    query: "byzantine fault tolerance distributed systems",
-    topics: ["cs.DC", "cs.CR"],
+    category: "cs.CR",
+    relatedCategories: ["cs.DC"],
     minCitations: 500,
-    titleAny: ["byzantine", "fault tolerance"],
+    querySeeds: [
+      {
+        query: "byzantine fault tolerance distributed systems",
+        topics: ["cs.CR", "cs.DC"],
+        titleAny: ["byzantine", "fault tolerance"],
+      },
+      {
+        query: "authentication logic cryptographic protocols",
+        topics: ["cs.CR"],
+        titleAny: ["authentication", "cryptographic", "protocol"],
+      },
+    ],
   },
   {
-    query: "authentication logic cryptographic protocols",
-    topics: ["cs.CR"],
+    category: "cs.PL",
+    relatedCategories: ["cs.DC"],
     minCitations: 500,
-    titleAny: ["authentication", "cryptographic", "protocol"],
+    querySeeds: [
+      {
+        query: "communicating sequential processes programming languages",
+        titleAny: ["communicating sequential processes", "sequential processes"],
+      },
+    ],
   },
   {
-    query: "communicating sequential processes programming languages",
-    topics: ["cs.PL", "cs.DC"],
+    category: "cs.CC",
     minCitations: 500,
-    titleAny: ["communicating sequential processes", "sequential processes"],
+    querySeeds: [
+      {
+        query: "computational complexity interactive proofs",
+        titleAny: ["interactive proof", "interactive proofs", "complexity"],
+      },
+    ],
   },
   {
-    query: "computational complexity interactive proofs",
-    topics: ["cs.CC"],
+    category: "cs.OS",
     minCitations: 500,
-    titleAny: ["interactive proof", "interactive proofs", "complexity"],
+    querySeeds: [
+      {
+        query: "unix time sharing system operating systems",
+        titleAny: ["unix", "operating system", "operating systems"],
+      },
+      {
+        query: "operating system kernels virtual memory file systems",
+        titleAny: ["kernel", "kernels", "virtual memory", "file system", "file systems"],
+      },
+    ],
   },
   {
-    query: "unix operating system",
-    topics: ["cs.OS"],
+    category: "cs.SE",
     minCitations: 500,
-    titleAny: ["unix", "operating system", "operating systems"],
-  },
-  {
-    query: "empirical software engineering",
-    topics: ["cs.SE"],
-    minCitations: 500,
-    titleAll: ["software"],
-    titleAny: ["empirical", "systematic", "case study", "metrics", "engineering"],
+    querySeeds: [
+      {
+        query: "empirical software engineering",
+        titleAll: ["software"],
+        titleAny: ["empirical", "systematic", "case study", "metrics", "engineering"],
+      },
+    ],
   },
 ];
 
@@ -181,6 +269,17 @@ function loadLocalEnv() {
   }
 }
 
+function splitArgList(value: string | null | undefined) {
+  return value
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean) ?? [];
+}
+
+function selectorKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 function parseArgs(): DiscoverConfig {
   const args = process.argv.slice(2);
   const argValue = (name: string) => {
@@ -188,6 +287,10 @@ function parseArgs(): DiscoverConfig {
     return args.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
   };
   const only = argValue("only");
+  const categories =
+    argValue("categories") ??
+    argValue("areas") ??
+    process.env.CLASSIC_DISCOVERY_CATEGORIES;
 
   return {
     dryRun: args.includes("--dry-run"),
@@ -201,9 +304,10 @@ function parseArgs(): DiscoverConfig {
     requestDelayMs: Number(
       process.env.CLASSIC_DISCOVERY_REQUEST_DELAY_MS ?? 1100,
     ),
-    only: only
-      ? new Set(only.split(",").map((query) => query.trim()).filter(Boolean))
+    categories: categories
+      ? new Set(splitArgList(categories).map(selectorKey))
       : null,
+    only: only ? new Set(splitArgList(only)) : null,
   };
 }
 
@@ -294,6 +398,16 @@ function normalizedTitle(paper: S2Paper) {
   return paper.title?.toLowerCase().replace(/\s+/g, " ").trim() ?? "";
 }
 
+function titleFingerprint(value: string | null | undefined) {
+  return value
+    ?.normalize("NFKD")
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ") ?? "";
+}
+
 function matchesTitleGuard(paper: S2Paper, profile: DiscoveryProfile) {
   const title = normalizedTitle(paper);
 
@@ -308,12 +422,79 @@ function matchesTitleGuard(paper: S2Paper, profile: DiscoveryProfile) {
   return true;
 }
 
-function discoveryProfilesFor(config: DiscoverConfig) {
-  if (!config.only) {
-    return discoveryProfiles;
+function categoryLabel(category: string) {
+  return arxivCategoryLabels[category] ?? category;
+}
+
+function categoryDescription(category: string) {
+  return arxivCategoryDescriptions[category] ?? categoryLabel(category);
+}
+
+function categoryTopics(area: ClassicDiscoveryArea, seed: DiscoveryQuerySeed) {
+  return seed.topics ?? [area.category, ...(area.relatedCategories ?? [])];
+}
+
+function areaMatchesSelection(area: ClassicDiscoveryArea, selectedCategories: Set<string>) {
+  return [
+    area.category,
+    categoryLabel(area.category),
+    slugForCategory(area.category),
+  ].some((value) => selectedCategories.has(selectorKey(value)));
+}
+
+function discoveryAreasFor(config: DiscoverConfig) {
+  if (!config.categories) {
+    return classicDiscoveryAreas;
   }
 
-  return discoveryProfiles.filter((profile) => config.only?.has(profile.query));
+  return classicDiscoveryAreas.filter((area) =>
+    areaMatchesSelection(area, config.categories as Set<string>),
+  );
+}
+
+function profileForSeed(area: ClassicDiscoveryArea, seed: DiscoveryQuerySeed) {
+  return {
+    category: area.category,
+    areaLabel: categoryLabel(area.category),
+    areaDescription: categoryDescription(area.category),
+    query: seed.query,
+    topics: categoryTopics(area, seed),
+    minCitations: seed.minCitations ?? area.minCitations,
+    titleAll: seed.titleAll,
+    titleAny: seed.titleAny,
+  } satisfies DiscoveryProfile;
+}
+
+function discoveryProfilesFor(areas: ClassicDiscoveryArea[], config: DiscoverConfig) {
+  const profiles = areas.flatMap((area) =>
+    area.querySeeds.map((seed) => profileForSeed(area, seed)),
+  );
+
+  if (!config.only) {
+    return profiles;
+  }
+
+  return profiles.filter((profile) => config.only?.has(profile.query));
+}
+
+function discoveryAreaSummaries(profiles: DiscoveryProfile[]) {
+  const summaries = new Map<
+    string,
+    { category: string; label: string; description: string; queryCount: number }
+  >();
+
+  for (const profile of profiles) {
+    const existing = summaries.get(profile.category);
+
+    summaries.set(profile.category, {
+      category: profile.category,
+      label: profile.areaLabel,
+      description: profile.areaDescription,
+      queryCount: (existing?.queryCount ?? 0) + 1,
+    });
+  }
+
+  return [...summaries.values()];
 }
 
 async function fetchSemanticScholarCandidates(
@@ -343,14 +524,16 @@ async function fetchSemanticScholarCandidates(
     if (response.ok) {
       const body = (await response.json()) as S2SearchResponse;
 
-      return (body.data ?? []).filter(
-        (paper) =>
-          paper.paperId &&
-          paper.title &&
-          matchesTitleGuard(paper, profile) &&
-          (paper.citationCount ?? 0) >= profile.minCitations &&
-          (paper.year ?? 9999) <= config.maxYear,
-      );
+      return (body.data ?? [])
+        .filter(
+          (paper) =>
+            paper.paperId &&
+            paper.title &&
+            matchesTitleGuard(paper, profile) &&
+            (paper.citationCount ?? 0) >= profile.minCitations &&
+            (paper.year ?? 9999) <= config.maxYear,
+        )
+        .slice(0, config.perQuery);
     }
 
     const retryable = [429, 500, 502, 503, 504].includes(response.status);
@@ -439,9 +622,7 @@ async function findExistingPaper(
 
     const { data, error } = await supabase
       .from("papers")
-      .select(
-        "id,abstract,url,pdf_url,doi,arxiv_id,semantic_scholar_id,source,venue,citation_count,year,published_at,is_open_access,access",
-      )
+      .select(EXISTING_PAPER_SELECT)
       .eq(column, value)
       .limit(1)
       .maybeSingle();
@@ -455,7 +636,43 @@ async function findExistingPaper(
     }
   }
 
-  return null;
+  const title = paper.title?.trim();
+  const fingerprint = titleFingerprint(title);
+
+  if (!title || !fingerprint) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("papers")
+    .select(EXISTING_PAPER_SELECT)
+    .ilike("title", title)
+    .limit(10);
+
+  if (error) {
+    throw error;
+  }
+
+  return (
+    (data ?? []).find((existing) => titleFingerprint(existing.title) === fingerprint) ??
+    null
+  ) as ExistingPaper | null;
+}
+
+function plannedCandidate(
+  profile: DiscoveryProfile,
+  action: "insert" | "skip_new_cap" | "update",
+  paper: S2Paper,
+) {
+  return {
+    area: profile.areaLabel,
+    category: profile.category,
+    query: profile.query,
+    action,
+    title: paper.title,
+    citationCount: paper.citationCount ?? 0,
+    year: paper.year ?? null,
+  };
 }
 
 async function writeExternalIds(
@@ -612,7 +829,14 @@ async function main() {
   loadLocalEnv();
   const config = parseArgs();
   const supabase = createSupabaseClient();
-  const profiles = discoveryProfilesFor(config);
+  const areas = discoveryAreasFor(config);
+  const profiles = discoveryProfilesFor(areas, config);
+
+  if (!profiles.length) {
+    throw new Error("No classic discovery profiles matched the selected categories or queries");
+  }
+
+  const selectedAreas = discoveryAreaSummaries(profiles);
   const topicIdsByCategory = await ensureCategoryTopics(
     supabase,
     profiles.flatMap((profile) => profile.topics),
@@ -636,23 +860,11 @@ async function main() {
       const action = existing ? "update" : "insert";
 
       if (!existing && newForProfile >= config.maxNewPerQuery) {
-        planned.push({
-          query: profile.query,
-          action: "skip_new_cap",
-          title: paper.title,
-          citationCount: paper.citationCount ?? 0,
-          year: paper.year ?? null,
-        });
+        planned.push(plannedCandidate(profile, "skip_new_cap", paper));
         continue;
       }
 
-      planned.push({
-        query: profile.query,
-        action,
-        title: paper.title,
-        citationCount: paper.citationCount ?? 0,
-        year: paper.year ?? null,
-      });
+      planned.push(plannedCandidate(profile, action, paper));
 
       if (existing) {
         existingCandidates++;
@@ -679,7 +891,9 @@ async function main() {
       {
         mode: config.dryRun ? "dry-run" : "write",
         source: "semantic_scholar",
+        areas: selectedAreas.length,
         profiles: profiles.length,
+        selectedAreas,
         perQuery: config.perQuery,
         maxNewPerQuery: config.maxNewPerQuery,
         maxYear: config.maxYear,

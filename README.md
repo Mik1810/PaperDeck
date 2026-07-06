@@ -130,9 +130,10 @@ Automatic classic/high-impact discovery:
 
 ```bash
 npm run discover:classics -- --dry-run --per-query=3 --max-new-per-query=1
+npm run discover:classics -- --dry-run --categories=cs.DB,cs.OS --per-query=5
 ```
 
-The same discovery path is scheduled monthly in GitHub Actions with conservative write caps.
+The same discovery path is scheduled monthly in GitHub Actions with conservative write caps. Classic discovery is organized by described CS areas, with focused Semantic Scholar query seeds under each area.
 
 Enrichment workers:
 
