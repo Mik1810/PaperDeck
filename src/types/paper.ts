@@ -50,6 +50,10 @@ export type Paper = {
   triageSummary?: TriageSummary;
 };
 
+export type FeedPaper = Paper & {
+  recommendationImpressionId?: string;
+};
+
 export type UserInterest = {
   id: string;
   label: string;

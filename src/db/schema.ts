@@ -37,16 +37,45 @@ export const playlists = pgTable("playlists", {
 	pgPolicy("playlists_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
 ]);
 
+export const recommendationImpressions = pgTable("recommendation_impressions", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	ownerId: text("owner_id").notNull(),
+	paperId: uuid("paper_id").notNull(),
+	batchId: uuid("batch_id").notNull(),
+	rank: integer().notNull(),
+	score: real().notNull(),
+	scoreComponents: jsonb("score_components").default(sql`'{}'::jsonb`).notNull(),
+	modelVersion: text("model_version").notNull(),
+	shownAt: timestamp("shown_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("recommendation_impressions_owner_batch_rank_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.batchId.asc().nullsLast().op("uuid_ops"), table.rank.asc().nullsLast().op("int4_ops")),
+	index("recommendation_impressions_owner_shown_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.shownAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.ownerId],
+			foreignColumns: [profiles.ownerId],
+			name: "recommendation_impressions_owner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.paperId],
+			foreignColumns: [papers.id],
+			name: "recommendation_impressions_paper_id_fkey"
+		}).onDelete("cascade"),
+	unique("recommendation_impressions_owner_id_paper_id_batch_id_key").on(table.ownerId, table.paperId, table.batchId),
+	pgPolicy("recommendation_impressions_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
+]);
+
 export const userPaperInteractions = pgTable("user_paper_interactions", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	ownerId: text("owner_id").notNull(),
 	paperId: uuid("paper_id").notNull(),
+	recommendationImpressionId: uuid("recommendation_impression_id"),
 	action: interactionType().notNull(),
 	context: text().default('feed').notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("user_paper_interactions_owner_created_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.createdAt.desc().nullsFirst().op("text_ops")),
 	index("user_paper_interactions_owner_paper_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.paperId.asc().nullsLast().op("uuid_ops")),
+	index("user_paper_interactions_recommendation_impression_idx").using("btree", table.recommendationImpressionId.asc().nullsLast().op("uuid_ops")),
 	uniqueIndex("user_paper_interactions_owner_paper_action_key").on(table.ownerId, table.paperId, table.action),
 	foreignKey({
 			columns: [table.ownerId],
@@ -58,6 +87,11 @@ export const userPaperInteractions = pgTable("user_paper_interactions", {
 			foreignColumns: [papers.id],
 			name: "user_paper_interactions_paper_id_fkey"
 		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.recommendationImpressionId],
+			foreignColumns: [recommendationImpressions.id],
+			name: "user_paper_interactions_recommendation_impression_id_fkey"
+		}).onDelete("set null"),
 	pgPolicy("user_paper_interactions_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
 ]);
 

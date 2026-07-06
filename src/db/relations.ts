@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { profiles, playlists, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors } from "./schema";
+import { profiles, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors } from "./schema";
 
 export const playlistsRelations = relations(playlists, ({one, many}) => ({
 	profile: one(profiles, {
@@ -11,12 +11,25 @@ export const playlistsRelations = relations(playlists, ({one, many}) => ({
 
 export const profilesRelations = relations(profiles, ({many}) => ({
 	playlists: many(playlists),
+	recommendationImpressions: many(recommendationImpressions),
 	userPaperInteractions: many(userPaperInteractions),
 	recommendations: many(recommendations),
 	digests: many(digests),
 	favorites: many(favorites),
 	userInterests: many(userInterests),
 	userProfileEmbeddings: many(userProfileEmbeddings),
+}));
+
+export const recommendationImpressionsRelations = relations(recommendationImpressions, ({one, many}) => ({
+	profile: one(profiles, {
+		fields: [recommendationImpressions.ownerId],
+		references: [profiles.ownerId]
+	}),
+	paper: one(papers, {
+		fields: [recommendationImpressions.paperId],
+		references: [papers.id]
+	}),
+	userPaperInteractions: many(userPaperInteractions),
 }));
 
 export const userPaperInteractionsRelations = relations(userPaperInteractions, ({one}) => ({
@@ -28,9 +41,14 @@ export const userPaperInteractionsRelations = relations(userPaperInteractions, (
 		fields: [userPaperInteractions.paperId],
 		references: [papers.id]
 	}),
+	recommendationImpression: one(recommendationImpressions, {
+		fields: [userPaperInteractions.recommendationImpressionId],
+		references: [recommendationImpressions.id]
+	}),
 }));
 
 export const papersRelations = relations(papers, ({many}) => ({
+	recommendationImpressions: many(recommendationImpressions),
 	userPaperInteractions: many(userPaperInteractions),
 	recommendations: many(recommendations),
 	paperAuthors: many(paperAuthors),

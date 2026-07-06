@@ -173,10 +173,24 @@ create table favorites (
   primary key (owner_id, paper_id)
 );
 
+create table recommendation_impressions (
+  id uuid primary key default gen_random_uuid(),
+  owner_id text not null references profiles(owner_id) on delete cascade,
+  paper_id uuid not null references papers(id) on delete cascade,
+  batch_id uuid not null,
+  rank integer not null check (rank > 0),
+  score real not null,
+  score_components jsonb not null default '{}'::jsonb,
+  model_version text not null,
+  shown_at timestamptz not null default now(),
+  unique (owner_id, paper_id, batch_id)
+);
+
 create table user_paper_interactions (
   id uuid primary key default gen_random_uuid(),
   owner_id text not null references profiles(owner_id) on delete cascade,
   paper_id uuid not null references papers(id) on delete cascade,
+  recommendation_impression_id uuid references recommendation_impressions(id) on delete set null,
   action interaction_type not null,
   context text not null default 'feed',
   created_at timestamptz not null default now()
@@ -249,6 +263,9 @@ create index topic_embeddings_model_idx on topic_embeddings(embedding_model);
 create index user_profile_embeddings_generated_idx on user_profile_embeddings(owner_id, generated_at desc);
 create index playlist_items_paper_idx on playlist_items(paper_id);
 create index user_paper_interactions_owner_created_idx on user_paper_interactions(owner_id, created_at desc);
+create index user_paper_interactions_recommendation_impression_idx on user_paper_interactions(recommendation_impression_id);
+create index recommendation_impressions_owner_shown_idx on recommendation_impressions(owner_id, shown_at desc);
+create index recommendation_impressions_owner_batch_rank_idx on recommendation_impressions(owner_id, batch_id, rank);
 create index recommendations_owner_model_generated_idx on recommendations(owner_id, model_version, generated_at desc);
 create index recommendations_owner_score_idx on recommendations(owner_id, score desc);
 create index digests_owner_generated_idx on digests(owner_id, generated_at desc);
@@ -263,6 +280,7 @@ alter table user_interests enable row level security;
 alter table playlists enable row level security;
 alter table playlist_items enable row level security;
 alter table favorites enable row level security;
+alter table recommendation_impressions enable row level security;
 alter table user_paper_interactions enable row level security;
 alter table recommendations enable row level security;
 alter table digests enable row level security;
@@ -327,6 +345,11 @@ with check (
 
 create policy "favorites_own"
 on favorites for all
+using (owner_id = auth.jwt() ->> 'sub')
+with check (owner_id = auth.jwt() ->> 'sub');
+
+create policy "recommendation_impressions_own"
+on recommendation_impressions for all
 using (owner_id = auth.jwt() ->> 'sub')
 with check (owner_id = auth.jwt() ->> 'sub');
 

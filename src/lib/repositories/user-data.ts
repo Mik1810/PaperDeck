@@ -1,11 +1,13 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   profiles,
   playlists,
   playlistItems,
+  recommendationImpressions,
   recommendations,
   userInterests,
   favorites,
@@ -23,6 +25,7 @@ import { isDefaultOnboardingTopic } from "@/lib/topic-taxonomy";
 import {
   INITIAL_FEED_RECOMMENDATION_COUNT,
   INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+  LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
   isFreshRecommendationBatch,
 } from "@/lib/recommendation-batches";
 import {
@@ -37,7 +40,7 @@ import {
   type SemanticRetrievalFallbackReason,
 } from "@/lib/repositories/semantic-retrieval";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
-import type { InteractionType, Paper, Playlist } from "@/types/paper";
+import type { FeedPaper, InteractionType, Paper, Playlist } from "@/types/paper";
 
 type TopicRow = Awaited<ReturnType<typeof getTopics>>[number];
 
@@ -48,9 +51,21 @@ type UserPaperState = {
   interactions: RankingInteraction[];
 };
 
+type InteractionRecordOptions = {
+  recommendationImpressionId?: string | null;
+};
+
+type RecommendationImpressionBatch = {
+  batchId: string | null;
+  impressionIdsByPaperId: Map<string, string>;
+};
+
 const ignoredInteractionActions = ["dismiss", "not_interested"] as const;
 
 type IgnoredInteractionAction = (typeof ignoredInteractionActions)[number];
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type IgnoredPaperHistoryItem = {
   paper: Paper;
@@ -80,6 +95,81 @@ function measureSync<T>(
   timings[label] = Math.round(performance.now() - startedAt);
 
   return result;
+}
+
+function isUuid(value: string) {
+  return uuidPattern.test(value);
+}
+
+function recommendationModelVersionFor(paper: RankedPaper) {
+  return paper.rankingScoreComponents.source === "initial_batch"
+    ? INITIAL_FEED_RECOMMENDATION_MODEL_VERSION
+    : LIVE_FEED_RECOMMENDATION_MODEL_VERSION;
+}
+
+async function recordRecommendationImpressions(
+  ownerId: string,
+  papers: RankedPaper[],
+): Promise<RecommendationImpressionBatch> {
+  if (!papers.length) {
+    return {
+      batchId: null,
+      impressionIdsByPaperId: new Map(),
+    };
+  }
+
+  const batchId = randomUUID();
+  const shownAt = new Date().toISOString();
+  const modelVersion = recommendationModelVersionFor(papers[0]);
+  const rows = await db
+    .insert(recommendationImpressions)
+    .values(
+      papers.map((paper, index) => ({
+        ownerId,
+        paperId: paper.id,
+        batchId,
+        rank: index + 1,
+        score: paper.rankingScore,
+        scoreComponents: paper.rankingScoreComponents,
+        modelVersion,
+        shownAt,
+      })),
+    )
+    .returning({
+      id: recommendationImpressions.id,
+      paperId: recommendationImpressions.paperId,
+    });
+
+  return {
+    batchId,
+    impressionIdsByPaperId: new Map(
+      rows.map((row) => [row.paperId, row.id]),
+    ),
+  };
+}
+
+export async function resolveRecommendationImpressionId(
+  ownerId: string,
+  paperId: string,
+  recommendationImpressionId: string | null | undefined,
+) {
+  if (!recommendationImpressionId || !isUuid(recommendationImpressionId)) {
+    return null;
+  }
+
+  const rows = await db
+    .select({ id: recommendationImpressions.id })
+    .from(recommendationImpressions)
+    .where(
+      and(
+        eq(recommendationImpressions.id, recommendationImpressionId),
+        eq(recommendationImpressions.ownerId, ownerId),
+        eq(recommendationImpressions.paperId, paperId),
+      ),
+    )
+    .limit(1);
+
+  return rows[0]?.id ?? null;
 }
 
 /** @user-scoped Reads and writes user-owned profile data. */
@@ -429,9 +519,20 @@ async function getLatestInitialRecommendationBatch(
       return {
         ...paper,
         recommendationReason: row.reason ?? paper.recommendationReason,
+        rankingScore: row.score,
+        rankingScoreComponents: {
+          semantic: 0,
+          topic: 0,
+          feedback: 0,
+          citation: 0,
+          recency: 0,
+          classic: 0,
+          total: row.score,
+          source: "initial_batch",
+        },
       };
     })
-    .filter((paper): paper is Paper => paper !== null);
+    .filter((paper): paper is RankedPaper => paper !== null);
 }
 
 /** @user-scoped */
@@ -505,7 +606,7 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
 /** @admin */
 export async function getRankedFeedPapers(
   ownerId: string,
-): Promise<Paper[]> {
+): Promise<RankedPaper[]> {
   const timings: Record<string, number> = {};
   const [topics, feedState] = await Promise.all([
     measureAsync(timings, "topics", getTopics()),
@@ -533,20 +634,33 @@ export async function getFeedPageData(ownerId: string) {
   const timings: Record<string, number> = {};
 
   const rankedPapers = await getRankedFeedPapers(ownerId);
+  const visiblePapers = rankedPapers.slice(0, INITIAL_FEED_RECOMMENDATION_COUNT);
+  const impressionBatch = await measureAsync(
+    timings,
+    "recommendation_impressions",
+    recordRecommendationImpressions(ownerId, visiblePapers),
+  );
 
   const feedState = await getFeedState(ownerId);
   const state = feedState.userState;
+  const feedPapers: FeedPaper[] = visiblePapers.map((paper) => ({
+    ...paper,
+    recommendationImpressionId:
+      impressionBatch.impressionIdsByPaperId.get(paper.id),
+  }));
 
   logger.info("feed_timing", {
     ownerId,
     totalMs: Math.round(performance.now() - startedAt),
     timings,
     rankedCount: rankedPapers.length,
+    recommendationImpressionBatchId: impressionBatch.batchId,
+    recommendationImpressionCount: impressionBatch.impressionIdsByPaperId.size,
   });
 
   return {
-    activePaper: rankedPapers[0] ?? null,
-    nextPapers: rankedPapers.slice(1, INITIAL_FEED_RECOMMENDATION_COUNT),
+    activePaper: feedPapers[0] ?? null,
+    nextPapers: feedPapers.slice(1),
     favoriteIds: state.favoriteIds,
     readLaterIds: state.readLaterIds,
     readLaterCount: state.readLaterIds.size,
@@ -774,17 +888,23 @@ export async function recordPaperInteraction(
   paperId: string,
   action: InteractionType,
   context = "feed",
+  options: InteractionRecordOptions = {},
 ) {
   await db.insert(userPaperInteractions).values({
     ownerId,
     paperId,
+    recommendationImpressionId: options.recommendationImpressionId ?? null,
     action,
     context,
   });
 }
 
 /** @user-scoped */
-export async function toggleFavorite(ownerId: string, paperId: string) {
+export async function toggleFavorite(
+  ownerId: string,
+  paperId: string,
+  options: InteractionRecordOptions = {},
+) {
   const existing = await db
     .select({ paperId: favorites.paperId })
     .from(favorites)
@@ -809,11 +929,15 @@ export async function toggleFavorite(ownerId: string, paperId: string) {
   }
 
   await db.insert(favorites).values({ ownerId, paperId });
-  await recordPaperInteraction(ownerId, paperId, "favorite");
+  await recordPaperInteraction(ownerId, paperId, "favorite", "feed", options);
 }
 
 /** @user-scoped */
-export async function toggleReadLater(ownerId: string, paperId: string) {
+export async function toggleReadLater(
+  ownerId: string,
+  paperId: string,
+  options: InteractionRecordOptions = {},
+) {
   const playlistId = await ensureReadLaterPlaylist(ownerId);
 
   const existing = await db
@@ -851,7 +975,13 @@ export async function toggleReadLater(ownerId: string, paperId: string) {
       set: { position: 0 },
     });
 
-  await recordPaperInteraction(ownerId, paperId, "save_to_playlist");
+  await recordPaperInteraction(
+    ownerId,
+    paperId,
+    "save_to_playlist",
+    "feed",
+    options,
+  );
 }
 
 /** @user-scoped */

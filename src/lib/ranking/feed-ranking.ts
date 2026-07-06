@@ -15,8 +15,20 @@ export type UserPaperRankingState = {
   interactions: RankingInteraction[];
 };
 
+export type RankingScoreComponents = {
+  semantic: number;
+  topic: number;
+  feedback: number;
+  citation: number;
+  recency: number;
+  classic: number;
+  total: number;
+  source: "live" | "initial_batch";
+};
+
 export type RankedPaper = Paper & {
   rankingScore: number;
+  rankingScoreComponents: RankingScoreComponents;
 };
 
 type RankingContext = {
@@ -129,7 +141,7 @@ function buildFeedbackTopicWeights(
   return weights;
 }
 
-function scorePaper(paper: Paper, context: RankingContext) {
+function scorePaper(paper: Paper, context: RankingContext): RankingScoreComponents {
   const semanticScore = (context.semanticScores?.get(paper.id) ?? 0) * 120;
   const topicScore = paper.topics.reduce(
     (score, topic) => score + (context.topicAffinity.get(topic.id) ?? 0) * 90,
@@ -143,15 +155,24 @@ function scorePaper(paper: Paper, context: RankingContext) {
   const citationScore = Math.log1p(paper.citationCount ?? 0) * 2;
   const recencyScore = Math.max(0, paper.year - 2020) * 0.4;
   const classicScore = paper.isClassic ? 8 : 0;
-
-  return (
+  const total =
     semanticScore +
     topicScore +
     feedbackScore +
     citationScore +
     recencyScore +
-    classicScore
-  );
+    classicScore;
+
+  return {
+    semantic: semanticScore,
+    topic: topicScore,
+    feedback: feedbackScore,
+    citation: citationScore,
+    recency: recencyScore,
+    classic: classicScore,
+    total,
+    source: "live",
+  };
 }
 
 function buildPersonalizedReason(paper: Paper, context: RankingContext) {
@@ -202,11 +223,16 @@ export function rankFeedPapers(
   return papers
     .filter((paper) => !state.seenIds.has(paper.id))
     .map(
-      (paper): RankedPaper => ({
-        ...paper,
-        recommendationReason: buildPersonalizedReason(paper, context),
-        rankingScore: scorePaper(paper, context),
-      }),
+      (paper): RankedPaper => {
+        const scoreComponents = scorePaper(paper, context);
+
+        return {
+          ...paper,
+          recommendationReason: buildPersonalizedReason(paper, context),
+          rankingScore: scoreComponents.total,
+          rankingScoreComponents: scoreComponents,
+        };
+      },
     )
     .sort((a, b) => b.rankingScore - a.rankingScore);
 }
