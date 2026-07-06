@@ -68,6 +68,7 @@ jobs:
         run: npm ci
 
       - name: Discover classic papers
+        id: discover
         shell: bash
         run: |
           cmd=(
@@ -90,7 +91,8 @@ jobs:
             cmd+=(--dry-run)
           fi
 
-          "${cmd[@]}"
+          output=$("${cmd[@]}" 2>&1 | tee /dev/stderr | tail -1)
+          echo "output=$output" >> "$GITHUB_OUTPUT"
 
       - name: Setup Python
         if: env.CLASSIC_DISCOVERY_DRY_RUN != 'true'
@@ -130,3 +132,25 @@ jobs:
             --batch-size "$EMBEDDING_BATCH_SIZE" \
             --limit "$EMBEDDING_LIMIT" \
             --quiet
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          mode="$([ "$CLASSIC_DISCOVERY_DRY_RUN" = "true" ] && echo "🔍 Dry run" || echo "📚 Discovery")"
+          echo "## Classic Papers · $mode" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Per query:** $CLASSIC_DISCOVERY_PER_QUERY · **Max new:** $CLASSIC_DISCOVERY_MAX_NEW_PER_QUERY · **Max year:** $CLASSIC_DISCOVERY_MAX_YEAR" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$CLASSIC_DISCOVERY_ONLY" ]; then echo "**Only:** \`$CLASSIC_DISCOVERY_ONLY\`" >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -n "$CLASSIC_DISCOVERY_CATEGORIES" ]; then echo "**Categories:** \`$CLASSIC_DISCOVERY_CATEGORIES\`" >> "$GITHUB_STEP_SUMMARY"; fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          output='${{ steps.discover.outputs.output }}'
+          if [ -n "$output" ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            echo "$output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d, indent=2))" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "$output" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "_Classic papers discovered via Semantic Scholar citation-based ranking._" >> "$GITHUB_STEP_SUMMARY"

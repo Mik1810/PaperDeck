@@ -69,6 +69,7 @@ jobs:
         run: npm ci
 
       - name: Generate summaries
+        id: summaries
         shell: bash
         run: |
           cmd=(npm run generate:summaries)
@@ -77,4 +78,26 @@ jobs:
             cmd+=(-- --dry-run)
           fi
 
-          "${cmd[@]}"
+          output=$("${cmd[@]}" 2>&1 | tee /dev/stderr | tail -1)
+          echo "output=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          mode="$([ "$LLM_DRY_RUN" = "true" ] && echo "🔍 Dry run" || echo "🤖 Live")"
+          echo "## LLM Summaries · $mode" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Provider:** \`$LLM_PROVIDER\` · **Model:** \`$LLM_MODEL\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Limit:** $LLM_LIMIT · **Batch:** $LLM_BATCH_SIZE" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          output='${{ steps.summaries.outputs.output }}'
+          if [ -n "$output" ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            echo "$output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d, indent=2))" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "$output" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "_Triage summaries have 4 structured sections: why it matters, main contribution, prerequisites, read if you care about._" >> "$GITHUB_STEP_SUMMARY"

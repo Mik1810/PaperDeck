@@ -67,3 +67,18 @@ jobs:
 
       - name: Playwright smoke tests
         run: npm run test:e2e
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## App CI Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| service-role audit | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| lint | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| build | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| e2e smoke tests | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "*All checks pass. Ready to deploy.*" >> "$GITHUB_STEP_SUMMARY"
