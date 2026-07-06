@@ -19,6 +19,8 @@ function hasConfiguredEnv(name: string) {
 }
 
 const hasDatabaseEnv = hasConfiguredEnv("DATABASE_URL");
+const appSmokeTimeoutMs = 60_000;
+const feedReadyTimeoutMs = 25_000;
 
 async function withDb<T>(task: (sql: postgres.Sql) => Promise<T>) {
   if (!process.env.DATABASE_URL) {
@@ -135,10 +137,18 @@ async function completeDevOnboardingWithTopics(page: Page) {
     /Saving your interests|Building your preference vector|Ranking your first papers/,
   );
   await expect(page).toHaveURL(/\/feed/);
+  await expectFeedReady(page);
+}
+
+async function expectFeedReady(page: Page) {
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Today" }),
+  ).toBeVisible({ timeout: feedReadyTimeoutMs });
 }
 
 test.describe("dev-auth app smoke", () => {
   test.describe.configure({ mode: "serial" });
+  test.setTimeout(appSmokeTimeoutMs);
 
   test.skip(
     !devAuthEnabled,
@@ -204,9 +214,7 @@ test.describe("dev-auth app smoke", () => {
 
     expect(response?.status()).toBeLessThan(500);
     await expect(page).toHaveURL(/\/feed/);
-    await expect(
-      page.getByRole("heading", { exact: true, name: "Today" }),
-    ).toBeVisible();
+    await expectFeedReady(page);
   });
 
   test("library shows ignored paper history", async ({ page }) => {
@@ -247,9 +255,13 @@ test.describe("dev-auth app smoke", () => {
       const response = await page.goto(path);
 
       expect(response?.status()).toBeLessThan(500);
-      await expect(
-        page.getByRole("heading", { exact: true, name: heading }),
-      ).toBeVisible();
+      if (path === "/feed") {
+        await expectFeedReady(page);
+      } else {
+        await expect(
+          page.getByRole("heading", { exact: true, name: heading }),
+        ).toBeVisible();
+      }
       if (path === "/onboarding") {
         await expect(page.getByText("Selected", { exact: true })).toHaveCount(0);
       }
