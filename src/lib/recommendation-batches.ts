@@ -1,8 +1,8 @@
 export const INITIAL_FEED_RECOMMENDATION_COUNT = 20;
 export const INITIAL_FEED_RECOMMENDATION_MODEL_VERSION =
-  "paperdeck-initial-feed-v1";
+  "paperdeck-initial-feed-v2";
 export const LIVE_FEED_RECOMMENDATION_MODEL_VERSION = "paperdeck-live-feed-v1";
-export const INITIAL_FEED_RECOMMENDATION_MAX_AGE_MS = 30 * 60 * 1000;
+export const INITIAL_FEED_RECOMMENDATION_MAX_AGE_MS = 5 * 60 * 1000;
 
 export function isFreshRecommendationBatch(
   generatedAt: string,

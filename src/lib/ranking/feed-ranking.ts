@@ -55,6 +55,8 @@ const feedHiddenActions = new Set<InteractionType>([
   "not_interested",
   "read",
   "already_read",
+  "save_to_playlist",
+  "favorite",
 ]);
 
 export function isFeedHiddenAction(action: InteractionType) {
