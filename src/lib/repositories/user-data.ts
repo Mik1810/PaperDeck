@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -635,27 +636,27 @@ export async function getFeedPageData(ownerId: string) {
 
   const rankedPapers = await getRankedFeedPapers(ownerId);
   const visiblePapers = rankedPapers.slice(0, INITIAL_FEED_RECOMMENDATION_COUNT);
-  const impressionBatch = await measureAsync(
-    timings,
-    "recommendation_impressions",
-    recordRecommendationImpressions(ownerId, visiblePapers),
-  );
 
   const feedState = await getFeedState(ownerId);
   const state = feedState.userState;
   const feedPapers: FeedPaper[] = visiblePapers.map((paper) => ({
     ...paper,
-    recommendationImpressionId:
-      impressionBatch.impressionIdsByPaperId.get(paper.id),
+    recommendationImpressionId: undefined,
   }));
+
+  after(async () => {
+    try {
+      await recordRecommendationImpressions(ownerId, visiblePapers);
+    } catch (error) {
+      logger.error("feed_impressions_failed", { ownerId, error });
+    }
+  });
 
   logger.info("feed_timing", {
     ownerId,
     totalMs: Math.round(performance.now() - startedAt),
     timings,
     rankedCount: rankedPapers.length,
-    recommendationImpressionBatchId: impressionBatch.batchId,
-    recommendationImpressionCount: impressionBatch.impressionIdsByPaperId.size,
   });
 
   return {
