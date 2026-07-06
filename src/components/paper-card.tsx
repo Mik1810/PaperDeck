@@ -61,7 +61,8 @@ export function PaperCard({
       await submitDeckAction(action, paper.id, {
         recommendationImpressionId: paper.recommendationImpressionId,
       });
-    } catch {
+    } catch (error) {
+      console.error(`Deck mutation ${action} failed:`, error);
       rollback();
       setMutationErrorMessage(deckMutationErrorMessage(action));
     } finally {
