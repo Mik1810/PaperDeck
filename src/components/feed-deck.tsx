@@ -117,7 +117,6 @@ export function FeedDeck({
     setIsDragging(true);
     isSwipeLocked.current = false;
     dragStartX.current = e.clientX;
-    e.currentTarget.setPointerCapture(e.pointerId);
   }, []);
 
   const pointerMove = useCallback((e: React.PointerEvent) => {
@@ -126,6 +125,7 @@ export function FeedDeck({
 
     if (!isSwipeLocked.current && Math.abs(dx) > 10) {
       isSwipeLocked.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
     }
 
     if (isSwipeLocked.current) {
@@ -138,7 +138,9 @@ export function FeedDeck({
     (e: React.PointerEvent) => {
       if (!isDragging) return;
       setIsDragging(false);
-      e.currentTarget.releasePointerCapture(e.pointerId);
+      if (isSwipeLocked.current) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
 
       const finalX = currentDragX.current;
 
