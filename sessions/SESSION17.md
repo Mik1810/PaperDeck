@@ -10,6 +10,7 @@ Extend PaperDeck ingestion beyond daily-new arXiv papers by adding automatic cla
 
 - Added `scripts/discover-classic-papers.ts`, a Semantic Scholar citation-ranked discovery worker with per-topic query profiles and conservative title guards.
 - Added `.github/workflows/discover-classics.yml`, a monthly/manual workflow that runs conservative classic discovery and then embeds newly eligible topics/papers when not in dry-run mode.
+- Kept the classic discovery workflow on MiniLM by default instead of inheriting the legacy global `EMBEDDING_MODEL` repository variable.
 - Added `npm run discover:classics`.
 - Removed the bootstrap JSON/importer path so ongoing classic ingestion is automatic, not driven by committed seed data.
 - Kept classic discovery separate from the scheduled arXiv worker, which remains incremental-new only.

@@ -182,7 +182,7 @@ The scheduled workflow is:
 .github/workflows/discover-classics.yml
 ```
 
-It runs monthly and can also be started manually with `workflow_dispatch`. Scheduled runs use conservative defaults (`per_query=5`, `max_new_per_query=1`, `max_year=2020`) and then embed newly eligible topic and paper vectors so imported classics are immediately available to semantic retrieval. Manual dispatch supports `dry_run=true` for candidate inspection.
+It runs monthly and can also be started manually with `workflow_dispatch`. Scheduled runs use conservative defaults (`per_query=5`, `max_new_per_query=1`, `max_year=2020`) and then embed newly eligible topic and paper vectors with MiniLM so imported classics are immediately available to semantic retrieval. Manual dispatch supports `dry_run=true` for candidate inspection.
 
 The scheduled arXiv worker remains incremental and only imports new arXiv papers. Older classic/high-impact records enter through the separate discovery worker, not through a committed JSON seed.
 

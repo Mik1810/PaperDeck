@@ -43,7 +43,7 @@ jobs:
       CLASSIC_DISCOVERY_RETRY_DELAY_MS: ${{ vars.CLASSIC_DISCOVERY_RETRY_DELAY_MS || '10000' }}
       CLASSIC_DISCOVERY_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
       CLASSIC_DISCOVERY_ONLY: ${{ github.event.inputs.only || '' }}
-      EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL || 'sentence-transformers/all-MiniLM-L6-v2' }}
+      EMBEDDING_MODEL: ${{ vars.CLASSIC_DISCOVERY_EMBEDDING_MODEL || 'sentence-transformers/all-MiniLM-L6-v2' }}
       EMBEDDING_LIMIT: ${{ vars.CLASSIC_DISCOVERY_EMBEDDING_LIMIT || '96' }}
       EMBEDDING_TOPIC_LIMIT: ${{ vars.CLASSIC_DISCOVERY_TOPIC_EMBEDDING_LIMIT || '64' }}
       EMBEDDING_BATCH_SIZE: ${{ vars.EMBEDDING_BATCH_SIZE || '64' }}
