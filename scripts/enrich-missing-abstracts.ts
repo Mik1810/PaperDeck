@@ -87,7 +87,6 @@ async function fetchOpenAlexAbstract(doi: string): Promise<string | null> {
   const data = await res.json() as { abstract_inverted_index?: Record<string, number[]> };
   const index = data.abstract_inverted_index;
   if (!index) return null;
-  // Reconstruct abstract from inverted index
   const words: Array<{ position: number; word: string }> = [];
   for (const [word, positions] of Object.entries(index)) {
     for (const pos of positions) {
@@ -96,6 +95,38 @@ async function fetchOpenAlexAbstract(doi: string): Promise<string | null> {
   }
   words.sort((a, b) => a.position - b.position);
   return words.map((w) => w.word).join(" ").trim() || null;
+}
+
+async function searchArxivByTitle(title: string): Promise<{ arxivId: string; abstract: string } | null> {
+  const clean = title.replace(/[^a-zA-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const keywords = clean.split(" ").filter((w) => w.length > 3).slice(0, 8).join("+AND+");
+  if (!keywords) return null;
+
+  const params = new URLSearchParams({
+    search_query: `ti:${keywords}`,
+    max_results: "3",
+    sortBy: "relevance",
+  });
+  const url = `https://export.arxiv.org/api/query?${params}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "PaperDeck/0.1.0 (https://paperdeck.michaelpiccirilli.it)" },
+  });
+  if (!res.ok) return null;
+
+  const text = await res.text();
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+  const parsed = parser.parse(text) as { feed?: { entry?: Record<string, unknown> | Record<string, unknown>[] } };
+  const entries = [parsed.feed?.entry].flat().filter(Boolean) as Record<string, unknown>[];
+
+  if (!entries.length) return null;
+
+  const entry = entries[0];
+  const idUrl = String(entry.id ?? "");
+  const arxivId = idUrl.split("/abs/").at(-1)?.replace(/v\d+$/i, "").trim();
+  const summary = String(entry.summary ?? "").replace(/\s+/g, " ").trim();
+
+  if (!arxivId || !summary) return null;
+  return { arxivId, abstract: summary };
 }
 
 async function main() {
@@ -142,6 +173,21 @@ async function main() {
     if (!newAbstract && paper.doi) {
       newAbstract = await fetchOpenAlexAbstract(paper.doi);
       if (newAbstract) source = "openalex";
+    }
+
+    if (!newAbstract) {
+      const arxivResult = await searchArxivByTitle(paper.title!);
+      if (arxivResult) {
+        newAbstract = arxivResult.abstract;
+        source = "arxiv_title_search";
+
+        if (!dryRun && !paper.arxiv_id) {
+          await supabase
+            .from("papers")
+            .update({ arxiv_id: arxivResult.arxivId })
+            .eq("id", paper.id);
+        }
+      }
     }
 
     if (!newAbstract) {
