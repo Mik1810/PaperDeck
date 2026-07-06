@@ -28,6 +28,7 @@ type TopicRow = {
 type IngestionCursor = {
   cursor_value: string | null;
   last_seen_published_at: string | null;
+  last_seen_external_id: string | null;
 };
 
 type IngestionConfig = {
@@ -228,6 +229,48 @@ function parseEntry(entry: Record<string, unknown>): ArxivPaper {
   };
 }
 
+const ARXIV_MAX_RETRIES = 3;
+const ARXIV_RETRY_BASE_MS = 2000;
+
+function isRetryableStatus(status: number) {
+  return status === 429 || status >= 500;
+}
+
+function isNetworkError(error: unknown) {
+  return error instanceof TypeError && error.message.includes("fetch");
+}
+
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = ARXIV_MAX_RETRIES) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+
+      if (isRetryableStatus(response.status) && attempt < maxRetries) {
+        const waitMs = Math.pow(2, attempt + 1) * ARXIV_RETRY_BASE_MS;
+        console.error(
+          `arXiv HTTP ${response.status} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${waitMs / 1000}s...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      if (attempt < maxRetries && isNetworkError(error)) {
+        const waitMs = Math.pow(2, attempt + 1) * ARXIV_RETRY_BASE_MS;
+        console.error(
+          `Network error (attempt ${attempt + 1}/${maxRetries + 1}): ${error instanceof Error ? error.message : String(error)}, retrying in ${waitMs / 1000}s...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error(`Max arXiv retries (${maxRetries}) exceeded for ${url}`);
+}
+
 async function fetchArxivPapersForCategory(
   config: IngestionConfig,
   category: string,
@@ -239,7 +282,7 @@ async function fetchArxivPapersForCategory(
     sortBy: "submittedDate",
     sortOrder: "descending",
   });
-  const response = await fetch(`https://export.arxiv.org/api/query?${params}`, {
+  const response = await fetchWithRetry(`https://export.arxiv.org/api/query?${params}`, {
     headers: {
       "User-Agent": config.userAgent,
     },
@@ -297,7 +340,7 @@ async function getBackfillCursor(
 ) {
   const { data, error } = await supabase
     .from("ingestion_cursors")
-    .select("cursor_value, last_seen_published_at")
+    .select("cursor_value, last_seen_published_at, last_seen_external_id")
     .eq("source", "arxiv")
     .eq("cursor_key", backfillCursorKey(category))
     .maybeSingle();
@@ -349,7 +392,7 @@ async function getCategoryCursor(
 ) {
   const { data, error } = await supabase
     .from("ingestion_cursors")
-    .select("cursor_value, last_seen_published_at")
+    .select("cursor_value, last_seen_published_at, last_seen_external_id")
     .eq("source", "arxiv")
     .eq("cursor_key", cursorKey(category))
     .maybeSingle();
@@ -366,8 +409,17 @@ function isAfterCursor(paper: ArxivPaper, cursor: IngestionCursor | null) {
     return true;
   }
 
-  return new Date(paper.publishedAt).getTime() >
-    new Date(cursor.last_seen_published_at).getTime();
+  const paperTime = new Date(paper.publishedAt).getTime();
+  const cursorTime = new Date(cursor.last_seen_published_at).getTime();
+
+  if (paperTime > cursorTime) return true;
+  if (paperTime < cursorTime) return false;
+
+  if (cursor.last_seen_external_id) {
+    return paper.arxivId > cursor.last_seen_external_id;
+  }
+
+  return false;
 }
 
 async function updateCategoryCursor(
@@ -722,6 +774,16 @@ async function main() {
       }
     }
 
+    const categoryBreakdown = fetchedByCategory.map((item) => ({
+      category: item.category,
+      fetched: item.fetchedPapers.length,
+      importable: item.importablePapers.length,
+      skipped: item.fetchedPapers.length - item.importablePapers.length,
+      cursorHint: item.cursor?.last_seen_published_at ?? null,
+      firstFetched: item.fetchedPapers[0]?.publishedAt ?? null,
+      lastFetched: item.fetchedPapers[item.fetchedPapers.length - 1]?.publishedAt ?? null,
+    }));
+
     const papers = uniquePapersByArxivId(
       fetchedByCategory.flatMap((item) => item.importablePapers),
     );
@@ -739,6 +801,7 @@ async function main() {
           firstPaper:
             fetchedByCategory.flatMap((item) => item.fetchedPapers)[0]
               ?.arxivId ?? null,
+          categoryBreakdown,
         }),
       );
       return;
@@ -801,6 +864,7 @@ async function main() {
           (total, item) => total + item.fetchedPapers.length,
           0,
         ),
+        categoryBreakdown,
       }),
     );
   } catch (error) {
