@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bookmark, X } from "lucide-react";
 import { MathContent } from "@/components/math-content";
 import { PaperCard } from "@/components/paper-card";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
 import {
   deckMutationErrorMessage,
-  recordOpenDetail,
   submitDeckAction,
 } from "@/lib/client/deck-mutations";
 import { loadMoreDeckPapersAction } from "@/app/actions";
@@ -177,7 +177,7 @@ export function FeedDeck({
 
         setTimeout(() => {
           if (direction === "right") {
-            recordOpenDetail(visibleActivePaper.id);
+            submitDeckAction("read_later", visibleActivePaper.id);
           } else {
             handleDismissSubmit(visibleActivePaper.id);
           }
@@ -258,8 +258,8 @@ export function FeedDeck({
                       opacity: Math.min(Math.abs(Math.min(dragX, 0)) / SWIPE_THRESHOLD, 1),
                     }}
                   >
-                    <div className="rounded-2xl border-4 border-red-500 px-6 py-3">
-                      <span className="text-2xl font-black text-red-500">NOPE</span>
+                    <div className="rounded-2xl border-4 border-red-500 p-3">
+                      <X className="text-red-500" size={36} strokeWidth={3} />
                     </div>
                   </div>
                   <div
@@ -268,8 +268,8 @@ export function FeedDeck({
                       opacity: Math.min(Math.abs(Math.max(dragX, 0)) / SWIPE_THRESHOLD, 1),
                     }}
                   >
-                    <div className="rounded-2xl border-4 border-teal-500 px-6 py-3">
-                      <span className="text-2xl font-black text-teal-500">OPEN</span>
+                    <div className="rounded-2xl border-4 border-emerald-500 p-3">
+                      <Bookmark className="text-emerald-500" size={36} strokeWidth={3} />
                     </div>
                   </div>
                 </>
