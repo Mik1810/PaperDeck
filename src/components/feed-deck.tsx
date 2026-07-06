@@ -65,12 +65,12 @@ export function FeedDeck({
   const visibleNextPapers = visiblePapers.slice(1, 4);
 
   const [dragX, setDragX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(null);
   const dragStartX = useRef(0);
   const currentDragX = useRef(0);
   const isSwipeLocked = useRef(false);
+  const isPointerDown = useRef(false);
 
   const setPaperDismissed = useCallback((paperId: string, isDismissed: boolean) => {
     setDismissedState((current) => {
@@ -114,13 +114,13 @@ export function FeedDeck({
 
   const pointerDown = useCallback((e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    setIsDragging(true);
+    isPointerDown.current = true;
     isSwipeLocked.current = false;
     dragStartX.current = e.clientX;
   }, []);
 
   const pointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (!isPointerDown.current) return;
     const dx = e.clientX - dragStartX.current;
 
     if (!isSwipeLocked.current && Math.abs(dx) > 10) {
@@ -132,12 +132,12 @@ export function FeedDeck({
       currentDragX.current = dx;
       setDragX(dx);
     }
-  }, [isDragging]);
+  }, []);
 
   const pointerUp = useCallback(
     (e: React.PointerEvent) => {
-      if (!isDragging) return;
-      setIsDragging(false);
+      if (!isPointerDown.current) return;
+      isPointerDown.current = false;
       if (isSwipeLocked.current) {
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
@@ -172,7 +172,7 @@ export function FeedDeck({
         currentDragX.current = 0;
       }
     },
-    [handleDismissSubmit, isDragging, visibleActivePaper],
+    [handleDismissSubmit, visibleActivePaper],
   );
 
   const exitTransform = exitDirection === "left"
@@ -181,7 +181,7 @@ export function FeedDeck({
     ? "translateX(150%) rotate(15deg)"
     : "";
 
-  const cardOpacity = isDragging ? (1 - Math.min(Math.abs(dragX) / SWIPE_THRESHOLD, 0.4)) : 1;
+  const cardOpacity = dragX !== 0 ? (1 - Math.min(Math.abs(dragX) / SWIPE_THRESHOLD, 0.4)) : 1;
 
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_280px] lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -204,15 +204,15 @@ export function FeedDeck({
 
             {/* Active card with swipe */}
             <div
-              className={`relative z-10 select-none ${isDragging ? "cursor-grabbing" : ""}`}
+              className={`relative z-10 select-none ${dragX !== 0 ? "cursor-grabbing" : ""}`}
               style={{
                 transform: isExiting
                   ? exitTransform
-                  : isDragging
+                  : dragX !== 0
                   ? `translateX(${dragX}px) rotate(${dragX * 0.05}deg)`
                   : "translateX(0) rotate(0deg)",
                 opacity: isExiting ? 0 : cardOpacity,
-                transition: isDragging ? "none" : `transform ${EXIT_DURATION}ms ease, opacity ${EXIT_DURATION}ms ease`,
+                transition: dragX !== 0 ? "none" : `transform ${EXIT_DURATION}ms ease, opacity ${EXIT_DURATION}ms ease`,
               }}
               onPointerDown={pointerDown}
               onPointerMove={pointerMove}
@@ -220,7 +220,7 @@ export function FeedDeck({
               onPointerCancel={pointerUp}
             >
               {/* Swipe hint overlays */}
-              {isDragging && Math.abs(dragX) > 20 && (
+              {dragX !== 0 && Math.abs(dragX) > 20 && (
                 <>
                   <div
                     className="absolute inset-0 z-20 flex items-center justify-start rounded-2xl px-8"
