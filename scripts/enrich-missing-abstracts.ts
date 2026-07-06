@@ -50,7 +50,7 @@ async function fetchArxivAbstract(arxivId: string): Promise<string | null> {
     headers: { "User-Agent": "PaperDeck/0.1.0 (https://paperdeck.michaelpiccirilli.it)" },
   });
   if (!response.ok) {
-    console.error(`arXiv fetch failed for ${arxivId}: ${response.status}`);
+    console.error(`  arXiv fetch failed for ${arxivId}: ${response.status}`);
     return null;
   }
   const text = await response.text();
@@ -62,6 +62,34 @@ async function fetchArxivAbstract(arxivId: string): Promise<string | null> {
   return summary.replace(/\s+/g, " ").trim() || null;
 }
 
+async function fetchS2Abstract(semanticScholarId: string, apiKey?: string): Promise<string | null> {
+  const url = `https://api.semanticscholar.org/graph/v1/paper/${semanticScholarId}?fields=abstract`;
+  const res = await fetch(url, {
+    headers: apiKey ? { "x-api-key": apiKey } : {},
+  });
+  if (!res.ok) return null;
+  const data = await res.json() as { abstract?: string };
+  return data.abstract?.trim() || null;
+}
+
+async function fetchOpenAlexAbstract(doi: string): Promise<string | null> {
+  const url = `https://api.openalex.org/works/doi:${encodeURIComponent(doi)}?select=abstract_inverted_index`;
+  const res = await fetch(url, { headers: { "User-Agent": "mailto:paperdeck@michaelpiccirilli.it" } });
+  if (!res.ok) return null;
+  const data = await res.json() as { abstract_inverted_index?: Record<string, number[]> };
+  const index = data.abstract_inverted_index;
+  if (!index) return null;
+  // Reconstruct abstract from inverted index
+  const words: Array<{ position: number; word: string }> = [];
+  for (const [word, positions] of Object.entries(index)) {
+    for (const pos of positions) {
+      words.push({ position: pos, word });
+    }
+  }
+  words.sort((a, b) => a.position - b.position);
+  return words.map((w) => w.word).join(" ").trim() || null;
+}
+
 async function main() {
   loadLocalEnv();
   const { limit, dryRun, requestDelayMs } = parseArgs();
@@ -69,7 +97,7 @@ async function main() {
 
   const { data: papers, error } = await supabase
     .from("papers")
-    .select("id, arxiv_id, doi, title, abstract")
+    .select("id, arxiv_id, doi, semantic_scholar_id, title, abstract")
     .or("abstract.is.null,abstract.eq.")
     .order("ingested_at", { ascending: false })
     .limit(limit);
@@ -89,15 +117,26 @@ async function main() {
   for (const paper of papers) {
     let newAbstract: string | null = null;
     let source = "";
+    const s2Key = process.env.SEMANTIC_SCHOLAR_API_KEY;
 
     if (paper.arxiv_id) {
       newAbstract = await fetchArxivAbstract(paper.arxiv_id);
       source = "arxiv";
     }
 
+    if (!newAbstract && paper.semantic_scholar_id) {
+      newAbstract = await fetchS2Abstract(paper.semantic_scholar_id, s2Key);
+      if (newAbstract) source = "semantic_scholar";
+    }
+
+    if (!newAbstract && paper.doi) {
+      newAbstract = await fetchOpenAlexAbstract(paper.doi);
+      if (newAbstract) source = "openalex";
+    }
+
     if (!newAbstract) {
       skipped++;
-      console.log(`  SKIP: ${paper.title?.slice(0, 60)}... (no arxiv_id or fetch failed)`);
+      console.log(`  SKIP: ${paper.title?.slice(0, 60)}... (no source had abstract)`);
       continue;
     }
 
