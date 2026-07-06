@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { requireOwnerId } from "@/lib/auth/session";
 import { recordPaperInteraction } from "@/lib/repositories/user-data";
+import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
+import { logger } from "@/lib/logging/logger";
 
 const detailFeedbackActions = ["already_read", "not_interested"] as const;
 
@@ -28,6 +31,14 @@ export async function POST(
 
   const ownerId = await requireOwnerId();
   await recordPaperInteraction(ownerId, paperId, action, "detail");
+
+  after(async () => {
+    try {
+      await refreshUserProfileEmbedding(ownerId);
+    } catch (error) {
+      logger.error("feedback_profile_refresh_failed", { ownerId, error });
+    }
+  });
 
   return NextResponse.redirect(new URL("/feed", request.url), { status: 303 });
 }

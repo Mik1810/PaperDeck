@@ -53,3 +53,7 @@ Build, lint, and all 22 unit tests pass.
 - **#63**: `playwright.config.ts` — Added `mobile-chrome` project using `Pixel 5` device profile.
 
 All 9 issues from this session are now closed.
+
+### Fixes applied (round 3 — #42)
+
+- **#42**: `src/app/api/deck/route.ts` + `src/app/papers/[paperId]/feedback/route.ts` — Added `after(() => refreshUserProfileEmbedding(ownerId))` after every deck interaction (favorite, read_later, dismiss, open_detail) and detail feedback (already_read, not_interested). Runs asynchronously after the response is sent, so mutations stay fast. Underlying function has signature-based idempotency to avoid redundant writes.
