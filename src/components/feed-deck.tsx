@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Bookmark, X } from "lucide-react";
 import { MathContent } from "@/components/math-content";
 import { PaperCard } from "@/components/paper-card";
@@ -9,7 +9,6 @@ import {
   deckMutationErrorMessage,
   submitDeckAction,
 } from "@/lib/client/deck-mutations";
-import { loadMoreDeckPapersAction } from "@/app/actions";
 import type { FeedPaper } from "@/types/paper";
 
 const SWIPE_THRESHOLD = 100;
@@ -44,35 +43,7 @@ export function FeedDeck({
     message: string;
     paperId: string;
   } | null>(null);
-  const [extraPapers, setExtraPapers] = useState<FeedPaper[]>([]);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const loadMoreRequestedRef = useRef(false);
 
-  const fullQueue = useMemo(
-    () => [...paperQueue, ...extraPapers],
-    [paperQueue, extraPapers],
-  );
-  const queuedPaperIds = useMemo(
-    () => new Set(paperQueue.map((p) => p.id)),
-    [paperQueue],
-  );
-
-  const loadMore = useCallback(async () => {
-    if (isLoadingMore || loadMoreRequestedRef.current) return;
-    loadMoreRequestedRef.current = true;
-    setIsLoadingMore(true);
-
-    try {
-      const newPapers = await loadMoreDeckPapersAction();
-      const fresh = newPapers.filter((p) => !queuedPaperIds.has(p.id));
-      if (fresh.length) {
-        setExtraPapers((prev) => [...prev, ...fresh]);
-      }
-    } finally {
-      setIsLoadingMore(false);
-      loadMoreRequestedRef.current = false;
-    }
-  }, [isLoadingMore, queuedPaperIds]);
   const favoriteIds = useMemo(
     () => new Set(favoritePaperIds),
     [favoritePaperIds],
@@ -87,15 +58,11 @@ export function FeedDeck({
       ? dismissedState.paperIds
       : new Set<string>();
 
-  const visiblePapers = fullQueue.filter(
+  const visiblePapers = paperQueue.filter(
     (paper) => !dismissedPaperIds.has(paper.id),
   );
   const visibleActivePaper = visiblePapers[0] ?? null;
   const visibleNextPapers = visiblePapers.slice(1, 4);
-
-  const LOAD_MORE_THRESHOLD = 3;
-
-  const prevVisibleCount = useRef(visiblePapers.length);
 
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -212,19 +179,6 @@ export function FeedDeck({
     ? "translateX(150%) rotate(15deg)"
     : "";
 
-  useEffect(() => {
-    const wasAbove = prevVisibleCount.current > LOAD_MORE_THRESHOLD;
-    const nowBelow = visiblePapers.length <= LOAD_MORE_THRESHOLD;
-
-    prevVisibleCount.current = visiblePapers.length;
-
-    if ((wasAbove && nowBelow) || visiblePapers.length === 0) {
-      if (fullQueue.length > 0) {
-        loadMore();
-      }
-    }
-  }, [visiblePapers.length, fullQueue.length, loadMore]);
-
   const cardOpacity = isDragging ? (1 - Math.min(Math.abs(dragX) / SWIPE_THRESHOLD, 0.4)) : 1;
 
   return (
@@ -302,12 +256,6 @@ export function FeedDeck({
                 paper={visibleActivePaper}
               />
             </div>
-          </div>
-        ) : isLoadingMore ? (
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm md:max-w-xl lg:max-w-none">
-            <p className="text-sm font-semibold text-slate-500">
-              Loading more papers&hellip;
-            </p>
           </div>
         ) : activePaper === null && nextPapers.length === 0 ? (
           <div className="w-full max-w-md rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm md:max-w-xl lg:max-w-none">

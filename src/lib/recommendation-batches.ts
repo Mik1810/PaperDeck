@@ -1,4 +1,4 @@
-export const INITIAL_FEED_RECOMMENDATION_COUNT = 20;
+export const INITIAL_FEED_RECOMMENDATION_COUNT = 50;
 export const INITIAL_FEED_RECOMMENDATION_MODEL_VERSION =
   "paperdeck-initial-feed-v2";
 export const LIVE_FEED_RECOMMENDATION_MODEL_VERSION = "paperdeck-live-feed-v1";
