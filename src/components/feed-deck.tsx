@@ -217,8 +217,10 @@ export function FeedDeck({
 
     prevVisibleCount.current = visiblePapers.length;
 
-    if (wasAbove && nowBelow && fullQueue.length > 0) {
-      loadMore();
+    if ((wasAbove && nowBelow) || visiblePapers.length === 0) {
+      if (fullQueue.length > 0) {
+        loadMore();
+      }
     }
   }, [visiblePapers.length, fullQueue.length, loadMore]);
 
