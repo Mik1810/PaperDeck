@@ -40,7 +40,7 @@ export function PaperCard({
   isSaved = false,
   onDismissSubmit,
 }: PaperCardProps) {
-  console.debug("PaperCard render:", paper.id, { isFavorite, isSaved });
+  console.log("PaperCard render:", paper.id, { isFavorite, isSaved });
   const [isExpanded, setIsExpanded] = useState(false);
   const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
   const [optimisticSaved, setOptimisticSaved] = useState(isSaved);
