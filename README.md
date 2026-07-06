@@ -4,9 +4,9 @@
 
 # PaperDeck
 
-Mobile-first academic paper discovery for computer science, with swipe-based recommendations, private reading lists, and open-source semantic ranking.
+**Not another reference manager. A daily paper deck for CS researchers.**
 
-PaperDeck is a planned web app for discovering computer science papers through a social-style, full-screen card deck. Users choose academic interests, browse paper cards, open details with a swipe, save favorites, and build private reading lists.
+PaperDeck is a mobile-first paper triage deck for computer science researchers: discover, skim, and shortlist relevant papers in minutes. The app is designed around a fast daily triage loop — open the deck, swipe through cards, and walk away with a shortlist of papers worth reading.
 
 ## Project Status
 
@@ -14,18 +14,29 @@ PaperDeck is currently at `0.1.4`: an early MVP foundation with production auth,
 
 ## MVP Scope
 
+PaperDeck focuses on three things: fast discovery, quick triage, and a shortlist workflow. Every feature must make the daily 3-minute CS triage loop faster or more accurate.
+
+**What PaperDeck does (MVP):**
+
 - Google login through Clerk.
 - Hierarchical computer science interest onboarding.
-- Mobile-first full-screen paper deck.
-- Abstract preview with expandable text.
-- Swipe left to dismiss a paper.
-- Swipe right to open the paper detail view.
+- Mobile-first full-screen paper deck with swipe interactions.
+- Abstract preview with expandable text and inline LaTeX rendering.
+- Swipe left to dismiss a paper, swipe right to open the paper detail view.
 - Heart button for favorites.
 - Bookmark button to add/remove papers from private playlists.
 - Detail actions for `Already read` and `Not interested` signals.
 - External links to arXiv, DOI, publisher pages, or legal PDFs when available.
 - In-app digest.
-- Private favorites and playlists.
+- Private favorites and playlists with drag-and-drop ordering.
+
+**What PaperDeck does not do (post-MVP):**
+
+- PDF chat or audio summaries.
+- Full-text RAG on publisher PDFs.
+- Universal search for authors, journals, or institutions.
+- Full reference manager replacement.
+- Public or social reading lists.
 
 ## Planned Data Sources
 

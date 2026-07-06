@@ -17,7 +17,7 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 - Database access MVP: user-specific queries should go through server-side code until Clerk JWT and Supabase RLS are configured end to end.
 - Hosting: Vercel for app and lightweight APIs.
 - Worker: GitHub Actions daily schedule plus manual dispatch.
-- Embeddings: start with `BAAI/bge-small-en-v1.5`.
+- Embeddings: `sentence-transformers/all-MiniLM-L6-v2` (selected via offline benchmark, +17% vs BGE-small).
 - Ranking: semantic relevance is more important than recency or citation count.
 - Feed: full-screen mobile card deck.
 - Heart: favorite.
@@ -48,6 +48,39 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 - Do not import or republish full text unless the license and source clearly allow it.
 - Preserve LaTeX/math notation in abstracts and render it later with KaTeX or MathJax.
 - After working on a Github issue, update the issue with a summary of what was done and any next steps in correct markdown style. Eventually, close it when the work is complete.
+- Use `npm run issues:import` to batch-create issues from a Markdown file. The format is documented below.
+
+## Issue Import Format
+
+Create a `.md` file (e.g., in `issues/`) with `---` separated blocks. Each block has a `## Title`, an optional `labels:` line, and a markdown body:
+
+```
+---
+## Issue Title Here
+labels: area:security, priority:p1, type:bug
+
+**File:** src/file.ts:123
+
+Body content with full markdown support.
+
+---
+## Next Issue Title
+labels: area:frontend, priority:p2, type:enhancement
+
+Body content...
+
+---
+```
+
+Usage:
+- `npm run issues:import -- --file issues/my-issues.md --dry-run` to preview
+- `npm run issues:import -- --file issues/my-issues.md` to create
+- `--label=area:security` to add default labels to all issues
+- `--verbose` / `-v` to see full issue bodies
+
+The script also parses `### N.N Title` blocks in existing docs like `ANALYSIS.md`.
+- Detects duplicate open issues by title.
+- Auto-creates missing labels.
 
 ## Validation Expectations
 

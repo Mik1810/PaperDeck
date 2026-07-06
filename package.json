@@ -19,6 +19,7 @@
     "generate:icons": "node scripts/generate-icons.mjs",
     "start": "next start",
     "audit:service-role": "tsx scripts/audit-service-role.ts",
+    "issues:import": "tsx scripts/create-issues.ts",
     "lint": "eslint",
     "test:unit": "node --conditions react-server --import tsx --test tests/unit/*.test.ts",
     "test:e2e": "playwright test"

@@ -89,7 +89,7 @@ Aggiornato al 2026-07-03:
 - Clerk JWT + Supabase RLS: configurato.
   - `createClerkAuthenticatedClient()` per query Supabase con JWT Clerk + anon key.
   - RLS policy attive, verificate con smoke test.
-- MathJax 3: rendering LaTeX in abstract e summary su detail page e feed card.
+- KaTeX: rendering LaTeX in abstract e summary su detail page e feed card (scelto dopo aver scartato MathJax per via della dimensione bundle e complessita' CDN).
 - Sicurezza: audit service-role completato, checklist rotazione secret documentata.
 - Test: suite Playwright smoke con 5 test dev-auth.
 - Osservabilita': logger JSON strutturato con `feed_timing`, preload feed, personalizzazione onboarding ed errori API deck.
@@ -123,6 +123,32 @@ La prima versione deve rimanere il piu' possibile gratuita:
 - valutare embeddings locali/open-source prima di usare API cloud a consumo.
 
 Se una funzionalita' richiede costi ricorrenti, deve essere marcata come post-MVP o opzionale.
+
+## Product guardrails
+
+PaperDeck is a **daily CS triage deck**, not a generalist research suite. Every decision should make the 3-minute daily triage loop faster or more accurate.
+
+Regole operative:
+
+1. **Scope check:** any proposed MVP feature must pass the question: *"Does this help a CS researcher discover, skim, and shortlist relevant papers in under 3 minutes?"*
+2. **Avoid scope creep:** features that turn PaperDeck into a reference manager, PDF reader, AI chat assistant, or universal search engine are post-MVP by default.
+3. **Vertical focus:** CS only for MVP. Broadening to other disciplines requires explicit discussion.
+4. **Privacy-first:** user reading behavior and personal data stay private. No public profiles, shared playlists, or social surfaces until privacy and moderation choices are clear.
+5. **Free-first architecture:** every component must work within free tiers (Vercel, Supabase, GitHub Actions). Paid services require prior approval.
+6. **Content respect:** never import or republish full text unless the license and source clearly allow it. Always preserve LaTeX/math notation in abstracts.
+
+Features valutate e rimandate:
+
+| Categoria | Keep/Copy per MVP | Avoid per MVP |
+|-----------|-------------------|---------------|
+| Feed | personalized feed, card deck, swipe triage | infinite scroll, social trending |
+| Bookmarks | bookmark/read-later, private playlists | public/social reading lists, collaborative collections |
+| Digest | daily alert/digest in-app | email digest, push notifications |
+| Summaries | triage summary (why it matters, contribution, prerequisites) | audio summaries, full translation workflow |
+| Access | open-access link preference | PDF viewer, full-text RAG on publisher PDFs |
+| Search | topic/category-based filtering | universal author/journal/institution search |
+| Reference mgmt | future minimal Zotero export | full reference manager replacement, Mendeley sync |
+| AI | ranking and semantic matching (local, free) | PDF chat, AI reading assistant, cloud API costs |
 
 ## Naming
 
@@ -373,7 +399,7 @@ Nell'MVP la app deve mostrare l'abstract cosi' come arriva dalla sorgente, prese
 Per una buona resa su mobile:
 
 - Usare rendering Markdown/HTML controllato solo se la fonte e' affidabile.
-- Rendere formule LaTeX con KaTeX o MathJax quando compaiono pattern tipo `$...$`, `\\(...\\)` o `\\[...\\]`.
+- Rendere formule LaTeX con KaTeX quando compaiono pattern tipo `$...$`, `\\(...\\)` o `\\[...\\]`.
 - Non tentare di ricostruire il layout PDF dell'articolo nella prima versione.
 - Linkare sempre la pagina originale o il PDF originale quando disponibile.
 
@@ -644,7 +670,7 @@ Funzioni utili:
 - UI: React mobile-first.
 - Auth: Clerk con Google OAuth.
 - Database: Supabase Postgres.
-- ORM: Prisma o Drizzle.
+- ORM: Drizzle (scelto su Prisma per peso minore e migliore compatibilita' pgvector).
 - Vector search: pgvector.
 - Jobs: worker schedulato separato.
 - Deploy: Vercel per frontend/backend iniziale, Supabase per database gestito.
@@ -987,7 +1013,10 @@ Decisione proposta:
 - Penalizzare paper visti/scartati.
 - Non usare citation count come segnale dominante.
 
+## Migrazione RLS completata (ex domanda aperta)
+
+La configurazione Clerk JWT + Supabase RLS e' stata completata (vedi `docs/clerk-supabase-rls.md`). Resta da completare il passaggio 3: migrare le repository function user-scoped dal service role al clerk-authenticated client. Tracciato in issue #47.
+
 ## Domande aperte
 
-1. Configurare e testare Clerk JWT per far rispettare le RLS policy direttamente da Supabase.
-2. Verificare in produzione il backfill MiniLM e monitorare `feed_timing` per eventuali fallback dovuti a profili o paper non ancora re-embedded.
+1. Verificare in produzione il backfill MiniLM e monitorare `feed_timing` per eventuali fallback dovuti a profili o paper non ancora re-embedded.
