@@ -165,29 +165,19 @@ test.describe("playlist authorization", () => {
     await seedTestProfile();
   });
 
-  const buildForm = (data: Record<string, string>) => {
-    const form = new URLSearchParams();
-    for (const [key, value] of Object.entries(data)) {
-      form.append(key, value);
-    }
-    return form.toString();
-  };
-
   let createdPlaylistId: string | null = null;
 
-  test("creates a private playlist via server action", async ({ request }) => {
+  test("creates a private playlist via server action", async ({ page }) => {
     test.skip(!devAuthEnabled, "Requires dev auth.");
     test.skip(!hasDb, "Requires DATABASE_URL.");
 
-    const body = buildForm({ name: "Test Playlist" });
-    const response = await fetch(`${request}feed`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "Next-Action": "createPlaylistAction" },
-      body,
-      redirect: "manual",
-    } as RequestInit);
+    const response = await page.goto("/library");
 
-    expect(response.status).toBeLessThan(500);
+    expect(response?.status()).toBeLessThan(500);
+    await page.getByRole("button", { name: "Create playlist" }).click();
+    await page.getByPlaceholder("Playlist name").fill("Test Playlist");
+    await page.getByRole("button", { exact: true, name: "Create" }).click();
+    await expect(page.getByPlaceholder("Playlist name")).toHaveCount(0);
 
     const playlist = await withDb(async (sql) => {
       const rows = await sql<{ id: string; name: string; owner_id: string }[]>`

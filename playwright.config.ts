@@ -14,7 +14,9 @@ process.env.PAPERDECK_DEV_OWNER_ID = devOwnerId;
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  fullyParallel: true,
+  fullyParallel: devAuth === "false",
+  // Dev-auth uses one shared owner id, so DB-mutating smoke tests must not race.
+  workers: devAuth !== "false" ? 1 : undefined,
   timeout: 30_000,
   expect: {
     timeout: 10_000,
