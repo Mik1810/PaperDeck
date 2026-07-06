@@ -15,8 +15,8 @@ export const profiles = pgTable("profiles", {
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, () => [
 	pgPolicy("profiles_insert_own", { as: "permissive", for: "insert", to: ["public"], withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
-	pgPolicy("profiles_select_own", { as: "permissive", for: "select", to: ["public"] }),
-	pgPolicy("profiles_update_own", { as: "permissive", for: "update", to: ["public"] }),
+	pgPolicy("profiles_select_own", { as: "permissive", for: "select", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))` }),
+	pgPolicy("profiles_update_own", { as: "permissive", for: "update", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))` }),
 ]);
 
 export const playlists = pgTable("playlists", {

@@ -99,7 +99,7 @@ export function FeedDeck({
       <section className="lg:pr-0">
         {visibleActivePaper ? (
           <PaperCard
-            key={visibleActivePaper.id}
+            key={`${visibleActivePaper.id}-${favoriteIds.has(visibleActivePaper.id)}-${readLaterIds.has(visibleActivePaper.id)}`}
             isFavorite={favoriteIds.has(visibleActivePaper.id)}
             isSaved={readLaterIds.has(visibleActivePaper.id)}
             dismissErrorMessage={

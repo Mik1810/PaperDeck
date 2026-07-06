@@ -74,6 +74,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
               </h2>
               <div className="mt-3">
                 <PlaylistPapers
+                  key={`${selectedPlaylistId}-${selectedPapers.map(p => p.id).join(",")}`}
                   playlistId={selectedPlaylistId}
                   papers={selectedPapers}
                 />

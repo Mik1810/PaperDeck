@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { ok: false, error: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : "Unknown error") : "Internal error" },
       { status: 500 },
     );
   }

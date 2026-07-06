@@ -208,7 +208,7 @@ export function PaperCard({
       <a
         href={paper.url}
         target="_blank"
-        rel="noreferrer"
+        rel="noreferrer noopener"
         className="flex h-11 items-center justify-center gap-2 border-t border-slate-100 bg-white text-sm font-black text-slate-700 hover:bg-slate-50 hover:text-slate-950"
       >
         <ExternalLink aria-hidden="true" size={16} strokeWidth={2.4} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createPlaylistAction,
@@ -22,7 +22,9 @@ type Props = {
 
 export function PlaylistSidebar({ playlists, selectedId }: Props) {
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingPending, setIsCreatingPending] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   return (
     <aside className="space-y-3">
@@ -45,9 +47,21 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
 
       {isCreating ? (
         <form
-          action={createPlaylistAction}
+          ref={formRef}
           className="space-y-2"
-          onSubmit={() => setIsCreating(false)}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setIsCreatingPending(true);
+            const formData = new FormData(e.currentTarget);
+            try {
+              await createPlaylistAction(formData);
+              setIsCreating(false);
+            } catch {
+              // Action failed — form stays visible for retry
+            } finally {
+              setIsCreatingPending(false);
+            }
+          }}
         >
           <input
             autoFocus
@@ -59,10 +73,11 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
           />
           <div className="flex gap-2">
             <button
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50"
+              disabled={isCreatingPending}
               type="submit"
             >
-              Create
+              {isCreatingPending ? "Saving..." : "Create"}
             </button>
             <button
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
