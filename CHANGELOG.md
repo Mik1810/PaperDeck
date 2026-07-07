@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 This project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- Added a catalog search page at `/search` and replaced the redundant `Topics` navigation item with `Search`.
+
+### Fixed
+
+- Reduced `/feed` refresh cost by reusing the already-loaded feed state, caching short-lived live recommendation batches, and clearing cached feed batches when interests change.
+- Reduced favorite and Read later deck mutation round trips by replacing preflight SELECTs with insert-on-conflict toggle flows.
+- Kept the mobile feed card action row and `Read online` link above the bottom navigation.
+- Simplified the feed sidebar by removing Mix, expanding Up next to five papers, matching its height to the main card, replacing the header `PD` block with the app mark, replacing feed green/blue accents with onboarding teal, hiding the feed card venue/category line, and tightening vertical spacing so the feed card leaves bottom margin.
+- Aligned stale unit tests with the current 50-paper feed batch, `paperdeck-initial-feed-v2`, five-minute batch TTL, classic bonus, and feed-hidden favorite/save behavior.
+
 ## [0.1.5] - 2026-07-06
 
 ### Added

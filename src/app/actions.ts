@@ -17,7 +17,7 @@ import {
   removeFromPlaylist,
   reorderPlaylistItems,
   getDefaultOnboardingTopicIds,
-  clearInitialFeedRecommendations,
+  clearFeedRecommendations,
   preloadInitialFeedRecommendations,
   getRankedFeedPapers,
 } from "@/lib/repositories/user-data";
@@ -127,7 +127,7 @@ export async function saveSettingsInterestsAction(topicIds: string[]) {
 
   await saveSelectedTopics(ownerId, topicIds);
   await writeTopicSelectionProfileEmbedding(ownerId, topicIds);
-  await clearInitialFeedRecommendations(ownerId);
+  await clearFeedRecommendations(ownerId);
 
   revalidatePath("/feed");
   revalidatePath("/settings");

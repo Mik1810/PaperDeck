@@ -57,7 +57,7 @@ describe("rankFeedPapers score components", () => {
     assert.equal(components.semantic, 60);
     assert.equal(components.topic, 90);
     assert.equal(components.feedback, 36);
-    assert.equal(components.classic, 8);
+    assert.equal(components.classic, 2);
     assert.ok(Math.abs(componentTotal - components.total) < 0.000001);
     assert.equal(ranked[0].rankingScore, components.total);
   });

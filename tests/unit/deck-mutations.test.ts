@@ -187,9 +187,9 @@ describe("isFeedHiddenAction", () => {
     assert.equal(isFeedHiddenAction("already_read"), true);
   });
 
-  test("does not hide favorite and save_to_playlist", () => {
-    assert.equal(isFeedHiddenAction("favorite"), false);
-    assert.equal(isFeedHiddenAction("save_to_playlist"), false);
+  test("hides favorite and save_to_playlist after a feed refresh", () => {
+    assert.equal(isFeedHiddenAction("favorite"), true);
+    assert.equal(isFeedHiddenAction("save_to_playlist"), true);
   });
 
   test("hides open_detail (feed advances after opening)", () => {

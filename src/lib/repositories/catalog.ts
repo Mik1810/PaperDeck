@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { papers, paperAuthors, paperTopics, taxonomyTopics } from "@/db/schema";
 import { topicDisplayLabel } from "@/lib/arxiv-categories";
@@ -10,6 +10,9 @@ import type { Paper, PaperAccess, PaperTopic } from "@/types/paper";
 type PaperRow = typeof papers.$inferSelect;
 
 type TopicRow = typeof taxonomyTopics.$inferSelect;
+
+const SEARCH_RESULT_LIMIT = 24;
+const SEARCH_QUERY_MAX_LENGTH = 120;
 
 function topicFromRow(row: TopicRow): PaperTopic {
   return {
@@ -192,6 +195,57 @@ export async function getAllPapers() {
       ),
     ),
   );
+}
+
+function normalizeCatalogSearchQuery(query: string) {
+  return query
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[%_]/g, "")
+    .slice(0, SEARCH_QUERY_MAX_LENGTH);
+}
+
+/** @admin */
+export async function searchPapers(query: string, limit = SEARCH_RESULT_LIMIT) {
+  const normalizedQuery = normalizeCatalogSearchQuery(query);
+
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  const pattern = `%${normalizedQuery}%`;
+
+  const paperMatches = await db
+    .select({ id: papers.id })
+    .from(papers)
+    .where(sql`
+      ${papers.title} ilike ${pattern}
+      or coalesce(${papers.abstract}, '') ilike ${pattern}
+      or coalesce(${papers.venue}, '') ilike ${pattern}
+      or coalesce(${papers.arxivId}, '') ilike ${pattern}
+      or coalesce(${papers.doi}, '') ilike ${pattern}
+      or exists (
+        select 1
+        from ${paperAuthors}
+        where ${paperAuthors.paperId} = ${papers.id}
+          and ${paperAuthors.name} ilike ${pattern}
+      )
+      or exists (
+        select 1
+        from ${paperTopics}
+        join ${taxonomyTopics}
+          on ${taxonomyTopics.id} = ${paperTopics.topicId}
+        where ${paperTopics.paperId} = ${papers.id}
+          and (
+            ${taxonomyTopics.label} ilike ${pattern}
+            or coalesce(${taxonomyTopics.arxivCategory}, '') ilike ${pattern}
+          )
+      )
+    `)
+    .orderBy(desc(papers.year), desc(papers.citationCount))
+    .limit(limit);
+
+  return getPapersByIds(paperMatches.map((match) => match.id));
 }
 
 /** @admin */

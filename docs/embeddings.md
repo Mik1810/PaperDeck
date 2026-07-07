@@ -89,7 +89,7 @@ Current status:
 - `src/lib/repositories/semantic-retrieval.ts` loads the current user profile vector and calls the pgvector RPC;
 - `src/lib/repositories/user-profile-embeddings.ts` can write a user vector from stored topic embeddings during onboarding/settings updates without loading any model;
 - `sentence-transformers/all-MiniLM-L6-v2` is the default model in the Python workers, GitHub Actions workflow, profile aggregation repository, and pgvector RPC;
-- `/feed` uses a fresh preloaded `recommendations` batch after onboarding, then semantic candidates when a user profile embedding exists, and falls back to the current topic/feedback ranking otherwise;
+- `/feed` uses a fresh preloaded `recommendations` batch after onboarding, then a short-lived live `recommendations` batch, then semantic candidates when a user profile embedding exists, and falls back to the current topic/feedback ranking otherwise;
 - `/feed` does not refresh the stored user profile embedding on the normal read path;
 - a first real local BGE-small smoke batch wrote 2 topic vectors and 1 paper vector before the MiniLM decision; those rows are historical baseline data, not the current default;
 - the 2026-07-03 MiniLM backfill verified 571 MiniLM paper rows, 66 MiniLM topic rows, and 2 MiniLM user profile rows in Supabase;
@@ -276,17 +276,19 @@ When a user opens the feed:
 
 ```text
 1. Load a fresh post-wizard recommendations batch when available.
-2. Otherwise load the stored user profile embedding.
-3. Use pgvector to retrieve top-K candidate papers by cosine similarity.
-4. Exclude papers already opened, dismissed, marked not interested, read, or already read.
-5. Apply TypeScript reranking:
+2. Otherwise load a fresh live recommendations batch when available.
+3. Otherwise load the stored user profile embedding.
+4. Use pgvector to retrieve top-K candidate papers by cosine similarity.
+5. Exclude papers already opened, dismissed, favorited, saved, marked not interested, read, or already read.
+6. Apply TypeScript reranking:
    - topic match;
    - explicit feedback;
    - freshness;
    - citations;
    - classic cap;
    - saved/favorite state.
-6. Return the first card and the next few candidates.
+7. Store the ranked live batch asynchronously for short-term reuse.
+8. Return the first card and the next candidates.
 ```
 
 Target SQL shape:
@@ -323,7 +325,7 @@ src/lib/repositories/semantic-retrieval.ts
 
 If no user profile embedding exists, or if the semantic candidate set is empty after filtering seen papers, PaperDeck falls back to the topic/feedback ranking over the shared catalog.
 
-Wizard completion additionally persists the first ranked deck to `recommendations` with model version `paperdeck-initial-feed-v1`; `/feed` consumes that fresh batch before recomputing live candidates.
+Wizard completion persists the first ranked deck to `recommendations` with model version `paperdeck-initial-feed-v2`; `/feed` consumes that fresh batch before live candidates. When `/feed` has to recompute live candidates, it stores the visible live batch asynchronously with model version `paperdeck-live-feed-v1` so near-term refreshes avoid rerunning semantic retrieval and TypeScript reranking.
 
 `/feed` emits a structured `feed_timing` logger event with semantic retrieval diagnostics:
 

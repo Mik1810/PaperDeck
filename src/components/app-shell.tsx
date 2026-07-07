@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { ReactNode } from "react";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { BookOpenCheck } from "lucide-react";
@@ -15,7 +16,7 @@ type AppShellProps = {
 
 const desktopNav = [
   { href: "/feed", label: "Feed" },
-  { href: "/onboarding", label: "Topics" },
+  { href: "/search", label: "Search" },
   { href: "/library", label: "Library" },
   { href: "/settings", label: "Settings" },
 ];
@@ -34,9 +35,14 @@ export function AppShell({
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/92 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/feed" className="flex items-center gap-3 rounded-lg">
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-sm">
-              PD
-            </div>
+            <Image
+              alt="PaperDeck"
+              className="h-10 w-10 rounded-lg shadow-sm"
+              height={40}
+              priority
+              src="/icon.svg"
+              width={40}
+            />
             <div>
               <p className="text-base font-black tracking-normal">PaperDeck</p>
               <p className="text-xs font-semibold text-slate-500">
@@ -86,8 +92,8 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 md:pb-10 lg:px-8">
-        <div className="mb-5 flex items-start justify-between gap-4">
+      <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-4 sm:px-6 md:pb-8 lg:px-8">
+        <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black tracking-normal text-slate-950 lg:text-3xl">
               {title}

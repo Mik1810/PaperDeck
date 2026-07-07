@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookMarked, Layers3, Library, SlidersHorizontal } from "lucide-react";
+import { Layers3, Library, Search, SlidersHorizontal } from "lucide-react";
 
 const navItems = [
   { href: "/feed", label: "Feed", icon: Layers3 },
-  { href: "/onboarding", label: "Topics", icon: BookMarked },
+  { href: "/search", label: "Search", icon: Search },
   { href: "/library", label: "Library", icon: Library },
   { href: "/settings", label: "Settings", icon: SlidersHorizontal },
 ];

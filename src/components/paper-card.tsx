@@ -22,6 +22,9 @@ import {
 } from "@/lib/client/deck-mutations";
 import type { FeedPaper } from "@/types/paper";
 
+export const PAPER_CARD_HEIGHT_CLASS_NAME =
+  "h-[clamp(410px,calc(100dvh-290px),610px)] sm:h-[clamp(520px,calc(100dvh-215px),700px)] lg:h-[calc(100vh-275px)] lg:min-h-[520px] lg:max-h-[620px]";
+
 type PaperCardProps = {
   dismissErrorMessage?: string | null;
   paper: FeedPaper;
@@ -73,10 +76,10 @@ export function PaperCard({
   const visibleErrorMessage = dismissErrorMessage ?? mutationErrorMessage;
 
   return (
-    <article className="flex h-[min(760px,calc(100dvh-150px))] min-h-[360px] w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] sm:min-h-[560px] md:max-w-2xl lg:h-auto lg:max-h-[calc(100vh-180px)] lg:max-w-none lg:rounded-xl">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+    <article className={`${PAPER_CARD_HEIGHT_CLASS_NAME} flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] md:max-w-2xl lg:max-w-none lg:rounded-xl`}>
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
         <div>
-          <p className="text-xs font-black uppercase tracking-normal text-teal-700">
+          <p className="text-xs font-black uppercase tracking-normal text-teal-600">
             {paper.recommendationReason}
           </p>
           <p className="mt-1 text-xs font-semibold text-slate-500">
@@ -89,8 +92,8 @@ export function PaperCard({
 
       <MutationAlert className="mx-5 mt-4" message={visibleErrorMessage} />
 
-      <div className="flex-1 overflow-y-auto px-5 py-5">
-        <div className="mb-4 flex flex-wrap gap-2">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="mb-3 flex flex-wrap gap-2">
           {paper.topics.map((topic) => (
             <span
               key={topic.id}
@@ -105,24 +108,18 @@ export function PaperCard({
           <MathContent text={paper.title} />
         </h2>
 
-        <p className="mt-3 text-sm font-bold text-slate-500">
+        <p className="mt-2.5 text-sm font-bold text-slate-500">
           {paper.authors.join(", ")} - {paper.year}
         </p>
 
-        {paper.venue ? (
-          <p className="mt-1 text-sm font-semibold text-slate-500">
-            {paper.venue}
-          </p>
-        ) : null}
-
-        <div className={`mt-6 space-y-3 text-[15px] leading-7 text-slate-700`}>
+        <div className={`mt-4 space-y-3 text-[15px] leading-7 text-slate-700`}>
           {paper.abstract ? (
             <>
               <div className={isExpanded ? "" : "line-clamp-[10] lg:line-clamp-[18]"}>
                 <MathContent text={paper.abstract} />
               </div>
               <button
-                className="inline-flex items-center gap-1 rounded-md text-sm font-black text-teal-700 hover:text-teal-900"
+                className="inline-flex items-center gap-1 rounded-md text-sm font-black text-teal-600 hover:text-teal-700"
                 type="button"
                 onClick={() => setIsExpanded((current) => !current)}
               >
@@ -199,9 +196,9 @@ export function PaperCard({
           aria-label={optimisticSaved ? "Saved to Read later" : "Save to Read later"}
           className={`grid h-12 w-full place-items-center rounded-lg border ${
             optimisticSaved
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-emerald-200 bg-white text-emerald-700"
-          } hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50`}
+              ? "border-teal-300 bg-teal-50 text-teal-600"
+              : "border-teal-200 bg-white text-teal-600"
+          } hover:border-teal-300 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50`}
           disabled={isMutationPending}
           onClick={() => {
             const previousSaved = optimisticSaved;

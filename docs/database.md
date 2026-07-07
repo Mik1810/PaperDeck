@@ -139,7 +139,7 @@ Remote verification on 2026-07-03 found 571 embedded paper rows for MiniLM, 66 M
 
 ## MVP Feed Ranking
 
-The current live feed ranking is computed in `src/lib/ranking/feed-ranking.ts`. The first post-wizard deck is persisted in `recommendations` as a short-lived preload batch so `/feed` can show the papers ranked during onboarding.
+The current live feed ranking is computed in `src/lib/ranking/feed-ranking.ts`. The first post-wizard deck is persisted in `recommendations` as a short-lived preload batch, and live feed rankings are also cached briefly there so `/feed` can avoid rerunning semantic retrieval and reranking on every refresh.
 
 Inputs:
 
@@ -155,13 +155,13 @@ Current behavior:
 - child/parent topic matches still count with lower weight;
 - `open_detail`, `favorite`, `save_to_playlist`, and `read` add positive topic feedback;
 - `dismiss` and `not_interested` add negative topic feedback;
-- papers with `open_detail`, `dismiss`, `not_interested`, `read`, or `already_read` are hidden from the active deck.
+- papers with `open_detail`, `dismiss`, `favorite`, `save_to_playlist`, `not_interested`, `read`, or `already_read` are hidden from the active deck.
 
 `Already read` and `Not interested` are recorded from the paper detail page. Removing a paper from `Read later` deletes the playlist item but does not add negative feedback.
 
 Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
 
-Current integration already supports this path: onboarding/settings writes create the stored user vector from selected topic embeddings. `/feed` first tries a fresh `recommendations` preload batch from the wizard. Without a batch, if `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic candidates with pgvector, then applies the existing TypeScript reranker. Without a stored user vector, it falls back to the topic/feedback ranking.
+Current integration already supports this path: onboarding/settings writes create the stored user vector from selected topic embeddings. `/feed` first tries a fresh `recommendations` preload batch from the wizard, then a fresh live `recommendations` batch. Without a batch, if `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic candidates with pgvector, applies the existing TypeScript reranker, and stores the visible live batch asynchronously. Without a stored user vector, it falls back to the topic/feedback ranking.
 
 ## RLS Notes
 

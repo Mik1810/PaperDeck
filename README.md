@@ -20,6 +20,7 @@ PaperDeck focuses on three things: fast discovery, quick triage, and a shortlist
 
 - Google login through Clerk.
 - Hierarchical computer science interest onboarding.
+- Catalog search for PaperDeck's local CS paper collection.
 - Mobile-first full-screen paper deck with swipe interactions.
 - Abstract preview with expandable text and inline LaTeX rendering.
 - Swipe left to dismiss a paper, swipe right to open the paper detail view.

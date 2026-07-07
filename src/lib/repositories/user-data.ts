@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   profiles,
@@ -59,6 +59,16 @@ type InteractionRecordOptions = {
 type RecommendationImpressionBatch = {
   batchId: string | null;
   impressionIdsByPaperId: Map<string, string>;
+};
+
+type RecommendationBatchSource = "initial_batch" | "live";
+
+type RankedFeedData = {
+  rankedPapers: RankedPaper[];
+  feedState: FeedState;
+  timings: Record<string, number>;
+  source: "initial_batch" | "live_batch" | "live_rank";
+  liveBatchToCache: RankedPaper[];
 };
 
 const ignoredInteractionActions = ["dismiss", "not_interested"] as const;
@@ -456,16 +466,49 @@ async function getLatestInitialRecommendationBatch(
   state: UserPaperState,
   limit = INITIAL_FEED_RECOMMENDATION_COUNT,
 ) {
+  return getLatestRecommendationBatch({
+    limit,
+    modelVersion: INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+    ownerId,
+    source: "initial_batch",
+    state,
+  });
+}
+
+async function getLatestLiveRecommendationBatch(
+  ownerId: string,
+  state: UserPaperState,
+  limit = INITIAL_FEED_RECOMMENDATION_COUNT,
+) {
+  return getLatestRecommendationBatch({
+    limit,
+    modelVersion: LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
+    ownerId,
+    source: "live",
+    state,
+  });
+}
+
+async function getLatestRecommendationBatch({
+  ownerId,
+  state,
+  modelVersion,
+  source,
+  limit = INITIAL_FEED_RECOMMENDATION_COUNT,
+}: {
+  ownerId: string;
+  state: UserPaperState;
+  modelVersion: string;
+  source: RecommendationBatchSource;
+  limit?: number;
+}) {
   const latest = await db
     .select({ generatedAt: recommendations.generatedAt })
     .from(recommendations)
     .where(
       and(
         eq(recommendations.ownerId, ownerId),
-        eq(
-          recommendations.modelVersion,
-          INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
-        ),
+        eq(recommendations.modelVersion, modelVersion),
       ),
     )
     .orderBy(desc(recommendations.generatedAt))
@@ -488,10 +531,7 @@ async function getLatestInitialRecommendationBatch(
     .where(
       and(
         eq(recommendations.ownerId, ownerId),
-        eq(
-          recommendations.modelVersion,
-          INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
-        ),
+        eq(recommendations.modelVersion, modelVersion),
         eq(recommendations.generatedAt, latest[0].generatedAt),
       ),
     )
@@ -529,7 +569,7 @@ async function getLatestInitialRecommendationBatch(
           recency: 0,
           classic: 0,
           total: row.score,
-          source: "initial_batch",
+          source,
         },
       };
     })
@@ -537,18 +577,87 @@ async function getLatestInitialRecommendationBatch(
 }
 
 /** @user-scoped */
-export async function clearInitialFeedRecommendations(ownerId: string) {
+export async function clearFeedRecommendations(
+  ownerId: string,
+  modelVersions = [
+    INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+    LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
+  ],
+) {
   await db
     .delete(recommendations)
     .where(
       and(
         eq(recommendations.ownerId, ownerId),
-        eq(
-          recommendations.modelVersion,
-          INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
-        ),
+        inArray(recommendations.modelVersion, modelVersions),
       ),
     );
+}
+
+/** @user-scoped */
+export async function clearInitialFeedRecommendations(ownerId: string) {
+  await clearFeedRecommendations(ownerId, [
+    INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+  ]);
+}
+
+async function insertRecommendationBatch(
+  ownerId: string,
+  batch: RankedPaper[],
+  modelVersion: string,
+) {
+  if (!batch.length) {
+    return { generatedAt: null, storedCount: 0 };
+  }
+
+  const generatedAt = new Date().toISOString();
+
+  await db.insert(recommendations).values(
+    batch.map((paper) => ({
+      ownerId,
+      paperId: paper.id,
+      score: paper.rankingScore,
+      reason: paper.recommendationReason,
+      modelVersion,
+      generatedAt,
+    })),
+  );
+
+  return { generatedAt, storedCount: batch.length };
+}
+
+async function replaceRecommendationBatch(
+  ownerId: string,
+  batch: RankedPaper[],
+  modelVersion: string,
+) {
+  await clearFeedRecommendations(ownerId, [modelVersion]);
+  return insertRecommendationBatch(ownerId, batch, modelVersion);
+}
+
+async function cacheLiveRecommendationBatch(
+  ownerId: string,
+  batch: RankedPaper[],
+) {
+  const result = await insertRecommendationBatch(
+    ownerId,
+    batch,
+    LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
+  );
+
+  if (result.generatedAt) {
+    await db
+      .delete(recommendations)
+      .where(
+        and(
+          eq(recommendations.ownerId, ownerId),
+          eq(recommendations.modelVersion, LIVE_FEED_RECOMMENDATION_MODEL_VERSION),
+          lt(recommendations.generatedAt, result.generatedAt),
+        ),
+      );
+  }
+
+  return result;
 }
 
 /** @admin */
@@ -562,29 +671,18 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
   const liveFeed = await buildLiveRankedFeed(ownerId, topics, feedState, timings);
   const batch = liveFeed.rankedPapers.slice(0, INITIAL_FEED_RECOMMENDATION_COUNT);
 
-  await clearInitialFeedRecommendations(ownerId);
-
-  if (batch.length) {
-    const generatedAt = new Date().toISOString();
-
-    await db.insert(recommendations).values(
-      batch.map((paper) => ({
-        ownerId,
-        paperId: paper.id,
-        score: paper.rankingScore,
-        reason: paper.recommendationReason,
-        modelVersion: INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
-        generatedAt,
-      })),
-    );
-  }
+  const stored = await replaceRecommendationBatch(
+    ownerId,
+    batch,
+    INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+  );
 
   logger.info("initial_feed_preload", {
     ownerId,
     totalMs: Math.round(performance.now() - startedAt),
     timings,
     rankedCount: liveFeed.rankedPapers.length,
-    storedCount: batch.length,
+    storedCount: stored.storedCount,
     semantic: {
       used: Boolean(
         liveFeed.semanticDiagnostics.candidateCount &&
@@ -600,14 +698,11 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
   });
 
   return {
-    storedCount: batch.length,
+    storedCount: stored.storedCount,
   };
 }
 
-/** @admin */
-export async function getRankedFeedPapers(
-  ownerId: string,
-): Promise<RankedPaper[]> {
+async function getRankedFeedData(ownerId: string): Promise<RankedFeedData> {
   const timings: Record<string, number> = {};
   const [topics, feedState] = await Promise.all([
     measureAsync(timings, "topics", getTopics()),
@@ -617,32 +712,81 @@ export async function getRankedFeedPapers(
 
   let rankedPapers = await measureAsync(
     timings,
-    "recommendation_batch",
+    "initial_recommendation_batch",
     getLatestInitialRecommendationBatch(ownerId, state),
   );
 
-  if (!rankedPapers.length) {
-    const liveFeed = await buildLiveRankedFeed(ownerId, topics, feedState, timings);
-    rankedPapers = liveFeed.rankedPapers;
+  if (rankedPapers.length) {
+    return {
+      feedState,
+      liveBatchToCache: [],
+      rankedPapers,
+      source: "initial_batch",
+      timings,
+    };
   }
 
-  return rankedPapers;
+  rankedPapers = await measureAsync(
+    timings,
+    "live_recommendation_batch",
+    getLatestLiveRecommendationBatch(ownerId, state),
+  );
+
+  if (rankedPapers.length) {
+    return {
+      feedState,
+      liveBatchToCache: [],
+      rankedPapers,
+      source: "live_batch",
+      timings,
+    };
+  }
+
+  const liveFeed = await buildLiveRankedFeed(ownerId, topics, feedState, timings);
+
+  return {
+    feedState,
+    liveBatchToCache: liveFeed.rankedPapers.slice(
+      0,
+      INITIAL_FEED_RECOMMENDATION_COUNT,
+    ),
+    rankedPapers: liveFeed.rankedPapers,
+    source: "live_rank",
+    timings,
+  };
+}
+
+/** @admin */
+export async function getRankedFeedPapers(
+  ownerId: string,
+): Promise<RankedPaper[]> {
+  return (await getRankedFeedData(ownerId)).rankedPapers;
 }
 
 /** @user-scoped */
 export async function getFeedPageData(ownerId: string) {
   const startedAt = performance.now();
-  const timings: Record<string, number> = {};
-
-  const rankedPapers = await getRankedFeedPapers(ownerId);
+  const feedData = await getRankedFeedData(ownerId);
+  const { rankedPapers, timings } = feedData;
   const visiblePapers = rankedPapers.slice(0, INITIAL_FEED_RECOMMENDATION_COUNT);
-
-  const feedState = await getFeedState(ownerId);
-  const state = feedState.userState;
+  const state = feedData.feedState.userState;
   const feedPapers: FeedPaper[] = visiblePapers.map((paper) => ({
     ...paper,
     recommendationImpressionId: undefined,
   }));
+
+  if (feedData.liveBatchToCache.length) {
+    after(async () => {
+      try {
+        await cacheLiveRecommendationBatch(ownerId, feedData.liveBatchToCache);
+      } catch (error) {
+        logger.error("live_feed_recommendation_cache_failed", {
+          ownerId,
+          error,
+        });
+      }
+    });
+  }
 
   after(async () => {
     try {
@@ -655,6 +799,7 @@ export async function getFeedPageData(ownerId: string) {
   logger.info("feed_timing", {
     ownerId,
     totalMs: Math.round(performance.now() - startedAt),
+    source: feedData.source,
     timings,
     rankedCount: rankedPapers.length,
   });
@@ -811,6 +956,33 @@ export async function getSettingsPageData(ownerId: string) {
 }
 
 /** @user-scoped */
+export async function getReadLaterCount(ownerId: string) {
+  const readLaterPlaylist = await db
+    .select({ id: playlists.id })
+    .from(playlists)
+    .where(
+      and(
+        eq(playlists.ownerId, ownerId),
+        eq(playlists.name, "Read later"),
+      ),
+    )
+    .limit(1);
+
+  const playlistId = readLaterPlaylist[0]?.id;
+
+  if (!playlistId) {
+    return 0;
+  }
+
+  const readLaterCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(playlistItems)
+    .where(eq(playlistItems.playlistId, playlistId));
+
+  return Number(readLaterCount[0]?.count ?? 0);
+}
+
+/** @user-scoped */
 export async function getPaperDetailData(ownerId: string, paperId: string) {
   const [papers, state] = await Promise.all([
     getPapersByIds([paperId]),
@@ -906,31 +1078,25 @@ export async function toggleFavorite(
   paperId: string,
   options: InteractionRecordOptions = {},
 ) {
-  const existing = await db
-    .select({ paperId: favorites.paperId })
-    .from(favorites)
+  const [created] = await db
+    .insert(favorites)
+    .values({ ownerId, paperId })
+    .onConflictDoNothing({ target: [favorites.ownerId, favorites.paperId] })
+    .returning({ paperId: favorites.paperId });
+
+  if (created) {
+    await recordPaperInteraction(ownerId, paperId, "favorite", "feed", options);
+    return;
+  }
+
+  await db
+    .delete(favorites)
     .where(
       and(
         eq(favorites.ownerId, ownerId),
         eq(favorites.paperId, paperId),
       ),
-    )
-    .limit(1);
-
-  if (existing.length) {
-    await db
-      .delete(favorites)
-      .where(
-        and(
-          eq(favorites.ownerId, ownerId),
-          eq(favorites.paperId, paperId),
-        ),
-      );
-    return;
-  }
-
-  await db.insert(favorites).values({ ownerId, paperId });
-  await recordPaperInteraction(ownerId, paperId, "favorite", "feed", options);
+    );
 }
 
 /** @user-scoped */
@@ -941,48 +1107,37 @@ export async function toggleReadLater(
 ) {
   const playlistId = await ensureReadLaterPlaylist(ownerId);
 
-  const existing = await db
-    .select({ paperId: playlistItems.paperId })
-    .from(playlistItems)
-    .where(
-      and(
-        eq(playlistItems.playlistId, playlistId),
-        eq(playlistItems.paperId, paperId),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length) {
-    await db
-      .delete(playlistItems)
-      .where(
-        and(
-          eq(playlistItems.playlistId, playlistId),
-          eq(playlistItems.paperId, paperId),
-        ),
-      );
-    return;
-  }
-
-  await db
+  const [created] = await db
     .insert(playlistItems)
     .values({
       playlistId,
       paperId,
       position: 0,
     })
-    .onConflictDoUpdate({
+    .onConflictDoNothing({
       target: [playlistItems.playlistId, playlistItems.paperId],
-      set: { position: 0 },
-    });
+    })
+    .returning({ paperId: playlistItems.paperId });
 
-  await recordPaperInteraction(
-    ownerId,
-    paperId,
-    "save_to_playlist",
-    "feed",
-    options,
-  );
+  if (created) {
+    await recordPaperInteraction(
+      ownerId,
+      paperId,
+      "save_to_playlist",
+      "feed",
+      options,
+    );
+    return;
+  }
+
+  await db
+    .delete(playlistItems)
+    .where(
+      and(
+        eq(playlistItems.playlistId, playlistId),
+        eq(playlistItems.paperId, paperId),
+      ),
+    );
 }
 
 /** @user-scoped */

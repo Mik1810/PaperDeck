@@ -3,7 +3,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Bookmark, X } from "lucide-react";
 import { MathContent } from "@/components/math-content";
-import { PaperCard } from "@/components/paper-card";
+import {
+  PaperCard,
+  PAPER_CARD_HEIGHT_CLASS_NAME,
+} from "@/components/paper-card";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
 import {
   deckMutationErrorMessage,
@@ -62,7 +65,7 @@ export function FeedDeck({
     (paper) => !dismissedPaperIds.has(paper.id),
   );
   const visibleActivePaper = visiblePapers[0] ?? null;
-  const visibleNextPapers = visiblePapers.slice(1, 4);
+  const visibleNextPapers = visiblePapers.slice(1, 6);
 
   const [dragX, setDragX] = useState(0);
   const [isExiting, setIsExiting] = useState(false);
@@ -172,7 +175,7 @@ export function FeedDeck({
         currentDragX.current = 0;
       }
     },
-    [handleDismissSubmit, visibleActivePaper],
+    [handleDismissSubmit, setPaperDismissed, visibleActivePaper],
   );
 
   const exitTransform = exitDirection === "left"
@@ -187,7 +190,7 @@ export function FeedDeck({
     <div className="grid gap-6 md:grid-cols-[1fr_280px] lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="md:pr-0">
         {visibleActivePaper ? (
-          <div className="relative" style={{ minHeight: "70vh" }}>
+          <div className={`relative ${PAPER_CARD_HEIGHT_CLASS_NAME}`}>
             {/* Stacked next cards behind */}
             {visiblePapers.slice(1, 3).map((paper, index) => (
               <div
@@ -238,8 +241,8 @@ export function FeedDeck({
                       opacity: Math.min(Math.abs(Math.max(dragX, 0)) / SWIPE_THRESHOLD, 1),
                     }}
                   >
-                    <div className="rounded-2xl border-4 border-emerald-500 p-3">
-                      <Bookmark className="text-emerald-500" size={36} strokeWidth={3} />
+                    <div className="rounded-2xl border-4 border-teal-300 p-3">
+                      <Bookmark className="text-teal-400" size={36} strokeWidth={3} />
                     </div>
                   </div>
                 </>
@@ -281,38 +284,12 @@ export function FeedDeck({
         )}
       </section>
 
-      <aside className="space-y-5 lg:sticky lg:top-20 lg:self-start">
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
-            Mix
-          </h2>
-          <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-teal-50 p-3">
-              <dt className="text-lg font-black text-teal-700">65%</dt>
-              <dd className="mt-1 text-xs font-bold text-teal-900">
-                Relevant
-              </dd>
-            </div>
-            <div className="rounded-lg bg-indigo-50 p-3">
-              <dt className="text-lg font-black text-indigo-700">20%</dt>
-              <dd className="mt-1 text-xs font-bold text-indigo-900">
-                Explore
-              </dd>
-            </div>
-            <div className="rounded-lg bg-amber-50 p-3">
-              <dt className="text-lg font-black text-amber-700">15%</dt>
-              <dd className="mt-1 text-xs font-bold text-amber-900">
-                Classics
-              </dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">
+      <aside className="lg:sticky lg:top-20 lg:self-start">
+        <section className={`${PAPER_CARD_HEIGHT_CLASS_NAME} flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm`}>
+          <h2 className="shrink-0 text-sm font-black uppercase tracking-normal text-slate-500">
             Up next
           </h2>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1">
             {visibleNextPapers.map((paper) => (
               <div key={paper.id} className="border-t border-slate-100 pt-3">
                 <p className="text-sm font-black leading-5 text-slate-900 line-clamp-2">

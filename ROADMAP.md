@@ -32,6 +32,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Swipe right apre la scheda dettaglio del paper.
 - Preferiti e swipe sono segnali diversi: cuore per preferiti, segnalibro per playlist.
 - Abstract nella card: preview ellipsata, espandibile stile descrizione post social, con scroll verticale nella card.
+- Search MVP: tab autenticata per cercare nel catalogo CS locale per titolo, autore, topic e identificativi, senza diventare una ricerca universale tipo reference manager.
 - Aprire il dettaglio e' un segnale positivo leggero per il ranking.
 - Segnalibro: salva prima in una playlist default tipo `Read later`.
 - Preview abstract: circa 10 righe su mobile, adattiva su desktop.
@@ -59,6 +60,7 @@ Aggiornato al 2026-07-03:
   - La playlist privata default `Read later` viene creata automaticamente.
   - L'onboarding salva gli interessi in `user_interests`.
   - Feed, library, settings e paper detail leggono dati da Supabase.
+  - Search legge il catalogo Supabase e riusa le card lista esistenti.
   - Le azioni dismiss, open detail, favorite e save to playlist scrivono interazioni utente.
   - Il feed usa un primo ranking MVP con interessi selezionati, feedback recente e penalita' per paper gia' aperti/letti.
   - `Read later` supporta aggiunta e rimozione da feed, dettaglio e library.
@@ -80,7 +82,7 @@ Aggiornato al 2026-07-03:
   - 66 topic embeddings MiniLM in `topic_embeddings`; le righe BGE-small restano baseline storica nelle tabelle multi-modello.
   - 2 user profile embeddings MiniLM in `user_profile_embeddings`; il retrieval filtra i profili sul modello corrente.
   - RPC `match_papers_by_embedding` per cosine similarity search attiva con default MiniLM.
-- Feed semantico: profilo utente generato su write da onboarding/settings, con primo batch feed salvato in `recommendations` dopo il wizard.
+- Feed semantico: profilo utente generato su write da onboarding/settings, con primo batch feed e batch live breve salvati in `recommendations` per evitare reranking completo a ogni refresh.
 - Onboarding interessi: wizard full-screen scuro e guidato, senza navigazione libera tra step, con controlli separati a destra su desktop.
 - LLM triage summary: implementato.
   - Worker `scripts/generate-summaries.ts` con Jina AI Reader + GitHub Models.
@@ -97,7 +99,7 @@ Aggiornato al 2026-07-03:
 
 ## Prossimi passi
 
-- Monitorare `feed_timing` dopo il preload iniziale del wizard e valutare un rinnovo batch/background worker per sessioni lunghe.
+- Monitorare `feed_timing` dopo il preload iniziale e il riuso del batch live; valutare un rinnovo batch/background worker per sessioni lunghe.
 - Feature P2: playlist custom, digest in-app, metadati paper detail migliorati.
 - Rivedere strategia storage summary JSONB prima di scalare oltre 10K paper (rivisto in Session 8 — decision document in `docs/summaries.md`).
 
