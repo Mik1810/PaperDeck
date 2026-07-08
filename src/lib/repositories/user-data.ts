@@ -9,6 +9,7 @@ import {
   playlists,
   playlistItems,
   papers,
+  paperNotes,
   recommendationImpressions,
   recommendations,
   userInterests,
@@ -1067,9 +1068,10 @@ export async function getReadLaterCount(ownerId: string) {
 
 /** @user-scoped */
 export async function getPaperDetailData(ownerId: string, paperId: string) {
-  const [papers, state] = await Promise.all([
+  const [papers, state, notes] = await Promise.all([
     getPapersByIds([paperId]),
     getPaperDetailState(ownerId, paperId),
+    getPaperNotes(ownerId, paperId),
   ]);
 
   return {
@@ -1077,6 +1079,7 @@ export async function getPaperDetailData(ownerId: string, paperId: string) {
     isFavorite: state.isFavorite,
     isSaved: state.isSaved,
     readLaterCount: state.readLaterCount,
+    notes,
   };
 }
 
@@ -1136,6 +1139,62 @@ async function getPaperDetailState(ownerId: string, paperId: string) {
     isSaved: readLaterItem.length > 0,
     readLaterCount: Number(readLaterCount[0]?.count ?? 0),
   };
+}
+
+export const PAPER_NOTE_MAX_LENGTH = 4000;
+
+export type PaperNote = {
+  id: string;
+  body: string;
+  playlistId: string | null;
+  createdAt: string;
+};
+
+/** @user-scoped */
+export async function getPaperNotes(
+  ownerId: string,
+  paperId: string,
+): Promise<PaperNote[]> {
+  return db
+    .select({
+      id: paperNotes.id,
+      body: paperNotes.body,
+      playlistId: paperNotes.playlistId,
+      createdAt: paperNotes.createdAt,
+    })
+    .from(paperNotes)
+    .where(
+      and(eq(paperNotes.ownerId, ownerId), eq(paperNotes.paperId, paperId)),
+    )
+    .orderBy(desc(paperNotes.createdAt));
+}
+
+/** @user-scoped */
+export async function addPaperNote(
+  ownerId: string,
+  paperId: string,
+  body: string,
+  playlistId: string | null = null,
+) {
+  const trimmed = body.trim().slice(0, PAPER_NOTE_MAX_LENGTH);
+
+  if (!trimmed) {
+    return;
+  }
+
+  await db.insert(paperNotes).values({
+    ownerId,
+    paperId,
+    body: trimmed,
+    playlistId,
+  });
+}
+
+/** @user-scoped */
+export async function deletePaperNote(ownerId: string, noteId: string) {
+  await db
+    .delete(paperNotes)
+    .where(and(eq(paperNotes.ownerId, ownerId), eq(paperNotes.id, noteId)));
 }
 
 /** @user-scoped */

@@ -82,6 +82,7 @@ Note: Supabase/Postgres warns that creating the `ivfflat` index on an empty `pap
 - `recommendations`
 - `digests`
 - `digest_items`
+- `paper_notes`
 
 These tables contain or derive ownership from `owner_id`.
 

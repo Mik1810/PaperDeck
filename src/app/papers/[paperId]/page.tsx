@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { addPaperNoteAction, deletePaperNoteAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { PaperDetailActions } from "@/components/paper-detail-actions";
+import { PaperNoteEditor } from "@/components/paper-note-editor";
 import { MathContent } from "@/components/math-content";
 import { requireOwnerId } from "@/lib/auth/session";
 import {
   getPaperDetailData,
   hasUsableOnboardingState,
+  PAPER_NOTE_MAX_LENGTH,
 } from "@/lib/repositories/user-data";
 import { redirect } from "next/navigation";
 
@@ -40,10 +43,8 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
     redirect("/onboarding");
   }
 
-  const { paper, isFavorite, isSaved, readLaterCount } = await getPaperDetailData(
-    ownerId,
-    paperId,
-  );
+  const { paper, isFavorite, isSaved, readLaterCount, notes } =
+    await getPaperDetailData(ownerId, paperId);
 
   if (!paper) {
     notFound();
@@ -126,6 +127,14 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
             </div>
           </section>
         ) : null}
+
+        <PaperNoteEditor
+          addAction={addPaperNoteAction}
+          deleteAction={deletePaperNoteAction}
+          maxLength={PAPER_NOTE_MAX_LENGTH}
+          notes={notes}
+          paperId={paper.id}
+        />
       </article>
     </AppShell>
   );

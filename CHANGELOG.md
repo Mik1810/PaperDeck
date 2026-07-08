@@ -11,6 +11,7 @@ This project follows Semantic Versioning.
 - Added a catalog search page at `/search` and replaced the redundant `Topics` navigation item with `Search`.
 - Added Prev/Next pagination to `/search` (20 results per page) with URL-driven `page` params.
 - Added an in-app `/digest` page ("New for you"): a scannable, topic-grouped list of the 10 most relevant recent papers (last 7 days, widening to 14/30 when sparse), distinct from the swipe-based feed. Added a Digest nav item and moved mobile Settings access to a header gear icon.
+- Added private per-paper notes on the paper detail page (`paper_notes` table, timestamped sequential note log per paper, optional playlist link), with add/delete server actions and RLS.
 
 ### Fixed
 

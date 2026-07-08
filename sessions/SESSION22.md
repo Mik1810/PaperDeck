@@ -56,3 +56,17 @@ Add pagination to the `/search` catalog page. Search previously returned a hard 
 
 - `npm run lint`, `npm run typecheck`, `npm run test:unit` (46 pass), `npm run audit:service-role` (passed), `npm run build` (route `/digest` present)
 - Live check on a temporary dev-auth server (port 3212, owner `local-dev-user`): `/digest` returns HTTP 200 and renders a topic-grouped list with the recency filter applied.
+
+## Feature: private paper notes (issue #36)
+
+- Added a `paper_notes` table (migration `20260708210000_add_paper_notes.sql`, Drizzle schema + relations): timestamped sequential notes per `(owner_id, paper_id)` (no unique constraint — multiple notes per paper), optional `playlist_id` (on delete set null), `body`, timestamps, RLS `paper_notes_own`. Applied the migration to the database.
+- Added repository functions in `user-data.ts`: `getPaperNotes` (chronological list), `addPaperNote` (insert), `deletePaperNote` (by note id), plus `PAPER_NOTE_MAX_LENGTH` (4000). `getPaperDetailData` now returns the notes list.
+- Added server actions `addPaperNoteAction` / `deletePaperNoteAction` that revalidate the paper detail path.
+- Added a `PaperNoteEditor` client component: a write box that clears after submit plus a timestamped chronological note log with per-note delete.
+- Updated `supabase/schema.sql`, `docs/database.md`, `ROADMAP.md`, and CHANGELOG.
+
+## Validation (paper notes)
+
+- `npm run lint`, `npm run typecheck`, `npm run test:unit` (46 pass), `npm run audit:service-role` (passed), `npm run build`
+- DB round-trip (insert/upsert/delete) verified directly against Postgres
+- Live check on a temporary dev-auth checkout (port 3214): paper detail page returns HTTP 200 and renders the "Private note" editor

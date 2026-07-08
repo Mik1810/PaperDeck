@@ -538,6 +538,8 @@ Non e' indispensabile nell'MVP se l'obiettivo principale e' discovery + ranking.
 
 Decisione: note personali post-MVP.
 
+Stato: implementato. La pagina di dettaglio paper include note private: si scrivono in un box che si svuota dopo il salvataggio e vengono mostrate come log cronologico con data e ora (`paper_notes`, più note per paper, opzionalmente collegate a una playlist), visibili solo all'utente.
+
 ### Digest
 
 MVP semplice:

@@ -224,6 +224,16 @@ create table digest_items (
   primary key (digest_id, paper_id)
 );
 
+create table paper_notes (
+  id uuid primary key default gen_random_uuid(),
+  owner_id text not null references profiles(owner_id) on delete cascade,
+  paper_id uuid not null references papers(id) on delete cascade,
+  playlist_id uuid references playlists(id) on delete set null,
+  body text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table ingestion_runs (
   id uuid primary key default gen_random_uuid(),
   source paper_source not null,
@@ -269,6 +279,8 @@ create index recommendation_impressions_owner_batch_rank_idx on recommendation_i
 create index recommendations_owner_model_generated_idx on recommendations(owner_id, model_version, generated_at desc);
 create index recommendations_owner_score_idx on recommendations(owner_id, score desc);
 create index digests_owner_generated_idx on digests(owner_id, generated_at desc);
+create index paper_notes_owner_paper_created_idx on paper_notes(owner_id, paper_id, created_at desc);
+create index paper_notes_playlist_idx on paper_notes(playlist_id);
 create index ingestion_cursors_updated_idx on ingestion_cursors(updated_at desc);
 
 -- Use cosine distance for the current 384-dimensional embedding model.
@@ -285,6 +297,7 @@ alter table user_paper_interactions enable row level security;
 alter table recommendations enable row level security;
 alter table digests enable row level security;
 alter table digest_items enable row level security;
+alter table paper_notes enable row level security;
 
 alter table taxonomy_topics enable row level security;
 alter table topic_relations enable row level security;
@@ -365,6 +378,11 @@ with check (owner_id = auth.jwt() ->> 'sub');
 
 create policy "digests_own"
 on digests for all
+using (owner_id = auth.jwt() ->> 'sub')
+with check (owner_id = auth.jwt() ->> 'sub');
+
+create policy "paper_notes_own"
+on paper_notes for all
 using (owner_id = auth.jwt() ->> 'sub')
 with check (owner_id = auth.jwt() ->> 'sub');
 

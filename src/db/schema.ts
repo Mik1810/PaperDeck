@@ -247,6 +247,35 @@ export const favorites = pgTable("favorites", {
 	pgPolicy("favorites_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
 ]);
 
+export const paperNotes = pgTable("paper_notes", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	ownerId: text("owner_id").notNull(),
+	paperId: uuid("paper_id").notNull(),
+	playlistId: uuid("playlist_id"),
+	body: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("paper_notes_owner_paper_created_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.paperId.asc().nullsLast().op("uuid_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
+	index("paper_notes_playlist_idx").using("btree", table.playlistId.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.ownerId],
+			foreignColumns: [profiles.ownerId],
+			name: "paper_notes_owner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.paperId],
+			foreignColumns: [papers.id],
+			name: "paper_notes_paper_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.playlistId],
+			foreignColumns: [playlists.id],
+			name: "paper_notes_playlist_id_fkey"
+		}).onDelete("set null"),
+	pgPolicy("paper_notes_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
+]);
+
 export const userInterests = pgTable("user_interests", {
 	ownerId: text("owner_id").notNull(),
 	topicId: uuid("topic_id").notNull(),

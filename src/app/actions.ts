@@ -20,6 +20,9 @@ import {
   clearFeedRecommendations,
   preloadInitialFeedRecommendations,
   getRankedFeedPapers,
+  addPaperNote,
+  deletePaperNote,
+  PAPER_NOTE_MAX_LENGTH,
 } from "@/lib/repositories/user-data";
 import {
   writeTopicSelectionProfileEmbedding,
@@ -263,4 +266,30 @@ export async function reorderPlaylistAction(formData: FormData) {
 export async function loadMoreDeckPapersAction() {
   const ownerId = await requireOwnerId();
   return await getRankedFeedPapers(ownerId);
+}
+
+export async function addPaperNoteAction(formData: FormData) {
+  const ownerId = await requireOwnerId();
+  const paperId = requirePaperId(formData);
+  const body = formData.get("body");
+
+  if (typeof body !== "string") {
+    throw new Error("Missing note body");
+  }
+
+  await addPaperNote(ownerId, paperId, body.slice(0, PAPER_NOTE_MAX_LENGTH));
+  revalidatePath(`/papers/${paperId}`);
+}
+
+export async function deletePaperNoteAction(formData: FormData) {
+  const ownerId = await requireOwnerId();
+  const paperId = requirePaperId(formData);
+  const noteId = formData.get("noteId");
+
+  if (typeof noteId !== "string" || !noteId) {
+    throw new Error("Missing noteId");
+  }
+
+  await deletePaperNote(ownerId, noteId);
+  revalidatePath(`/papers/${paperId}`);
 }
