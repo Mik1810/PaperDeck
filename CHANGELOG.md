@@ -9,9 +9,12 @@ This project follows Semantic Versioning.
 ### Added
 
 - Added a catalog search page at `/search` and replaced the redundant `Topics` navigation item with `Search`.
+- Added Prev/Next pagination to `/search` (20 results per page) with URL-driven `page` params.
 
 ### Fixed
 
+- Scheduled the paper summary workflow twice daily (05:37 and 17:37 UTC) so summary generation keeps pace with nightly arXiv ingestion.
+- Fixed the arXiv ingestion workflow `Summary` step failing with `jq: Cannot iterate over string` (exit 5) by rewriting the summary formatter in Python; ingestion itself was succeeding but the run was marked failed.
 - Reduced `/feed` refresh cost by reusing the already-loaded feed state, caching short-lived live recommendation batches, and clearing cached feed batches when interests change.
 - Reduced favorite and Read later deck mutation round trips by replacing preflight SELECTs with insert-on-conflict toggle flows.
 - Kept the mobile feed card action row and `Read online` link above the bottom navigation.

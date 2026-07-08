@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, Search as SearchIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Search as SearchIcon,
+} from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { MathContent } from "@/components/math-content";
 import { PaperListItem } from "@/components/paper-list-item";
@@ -14,11 +18,24 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 type SearchPageProps = {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 };
 
 function normalizeQueryParam(value?: string) {
   return (value ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
+}
+
+function normalizePageParam(value?: string) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function searchHref(query: string, page: number) {
+  const params = new URLSearchParams({ q: query });
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+  return `/search?${params.toString()}`;
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
@@ -28,12 +45,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     redirect("/onboarding");
   }
 
-  const { q } = await searchParams;
+  const { q, page: pageParam } = await searchParams;
   const query = normalizeQueryParam(q);
-  const [readLaterCount, results] = await Promise.all([
+  const page = normalizePageParam(pageParam);
+  const [readLaterCount, search] = await Promise.all([
     getReadLaterCount(ownerId),
-    query ? searchPapers(query) : Promise.resolve([]),
+    query
+      ? searchPapers(query, page)
+      : Promise.resolve({ results: [], page: 1, hasMore: false }),
   ]);
+  const { results, hasMore } = search;
 
   return (
     <AppShell
@@ -76,7 +97,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               Results
             </h2>
             <span className="text-xs font-bold text-slate-400">
-              {results.length} found
+              {page > 1 ? `Page ${page}` : `${results.length} shown`}
             </span>
           </div>
         ) : null}
@@ -108,14 +129,58 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         ) : null}
 
+        {query && results.length && (page > 1 || hasMore) ? (
+          <nav
+            aria-label="Search results pages"
+            className="flex items-center justify-between gap-3"
+          >
+            {page > 1 ? (
+              <Link
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.99]"
+                href={searchHref(query, page - 1)}
+                rel="prev"
+              >
+                <ArrowLeft aria-hidden="true" size={17} strokeWidth={2.5} />
+                Previous
+              </Link>
+            ) : (
+              <span />
+            )}
+            {hasMore ? (
+              <Link
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.99]"
+                href={searchHref(query, page + 1)}
+                rel="next"
+              >
+                Next
+                <ArrowRight aria-hidden="true" size={17} strokeWidth={2.5} />
+              </Link>
+            ) : (
+              <span />
+            )}
+          </nav>
+        ) : null}
+
         {query && !results.length ? (
           <div className="rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center">
             <h2 className="text-sm font-black text-slate-950">
-              No papers found
+              {page > 1 ? "No more results" : "No papers found"}
             </h2>
             <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-500">
-              Try a paper title, author, topic, or arXiv category.
+              {page > 1
+                ? "You have reached the end of the results."
+                : "Try a paper title, author, topic, or arXiv category."}
             </p>
+            {page > 1 ? (
+              <Link
+                className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.99]"
+                href={searchHref(query, page - 1)}
+                rel="prev"
+              >
+                <ArrowLeft aria-hidden="true" size={17} strokeWidth={2.5} />
+                Previous
+              </Link>
+            ) : null}
           </div>
         ) : null}
 

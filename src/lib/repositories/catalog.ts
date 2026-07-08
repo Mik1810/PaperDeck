@@ -5,14 +5,26 @@ import { db } from "@/db";
 import { papers, paperAuthors, paperTopics, taxonomyTopics } from "@/db/schema";
 import { topicDisplayLabel } from "@/lib/arxiv-categories";
 import { paperSourceFromDatabase } from "@/lib/paper-sources";
+import {
+  SEARCH_PAGE_SIZE,
+  normalizeSearchPage,
+  searchPageOffset,
+} from "@/lib/repositories/catalog-search";
 import type { Paper, PaperAccess, PaperTopic } from "@/types/paper";
 
 type PaperRow = typeof papers.$inferSelect;
 
 type TopicRow = typeof taxonomyTopics.$inferSelect;
 
-const SEARCH_RESULT_LIMIT = 24;
 const SEARCH_QUERY_MAX_LENGTH = 120;
+
+export { SEARCH_PAGE_SIZE };
+
+export type SearchPapersResult = {
+  results: Awaited<ReturnType<typeof getPapersByIds>>;
+  page: number;
+  hasMore: boolean;
+};
 
 function topicFromRow(row: TopicRow): PaperTopic {
   return {
@@ -206,14 +218,19 @@ function normalizeCatalogSearchQuery(query: string) {
 }
 
 /** @admin */
-export async function searchPapers(query: string, limit = SEARCH_RESULT_LIMIT) {
+export async function searchPapers(
+  query: string,
+  page = 1,
+): Promise<SearchPapersResult> {
   const normalizedQuery = normalizeCatalogSearchQuery(query);
+  const currentPage = normalizeSearchPage(page);
 
   if (normalizedQuery.length < 2) {
-    return [];
+    return { results: [], page: currentPage, hasMore: false };
   }
 
   const pattern = `%${normalizedQuery}%`;
+  const offset = searchPageOffset(currentPage);
 
   const paperMatches = await db
     .select({ id: papers.id })
@@ -243,9 +260,14 @@ export async function searchPapers(query: string, limit = SEARCH_RESULT_LIMIT) {
       )
     `)
     .orderBy(desc(papers.year), desc(papers.citationCount))
-    .limit(limit);
+    .offset(offset)
+    .limit(SEARCH_PAGE_SIZE + 1);
 
-  return getPapersByIds(paperMatches.map((match) => match.id));
+  const hasMore = paperMatches.length > SEARCH_PAGE_SIZE;
+  const pageMatches = paperMatches.slice(0, SEARCH_PAGE_SIZE);
+  const results = await getPapersByIds(pageMatches.map((match) => match.id));
+
+  return { results, page: currentPage, hasMore };
 }
 
 /** @admin */

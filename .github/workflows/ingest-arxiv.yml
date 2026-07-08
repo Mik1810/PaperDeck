@@ -64,19 +64,60 @@ jobs:
       - name: Summary
         if: always()
         shell: bash
+        env:
+          INGEST_OUTPUT: ${{ steps.ingest.outputs.output }}
         run: |
-          cat << 'JQSCRIPT' > /tmp/format-summary.jq
-          def modeLabel: if .mode == "dry-run" then "🔍 Dry run" elif .mode == "dry-run-backfill" then "🔍 Dry run (backfill)" elif .mode == "write-backfill" then "📥 Write (backfill)" else "📥 Write" end;
-          def countBadge($n): if $n > 0 then "**\($n)**" else "0" end;
+          python3 << 'PYSCRIPT' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          import os
 
-          "## arXiv Ingestion · \(modeLabel)", "", "| Category | Fetched | Importable | Skipped |", "|----------|---------|------------|---------|",
-          (.categoryBreakdown // []) | map("| \(.category) | \(countBadge(.fetched)) | \(countBadge(.importable)) | \(.skipped) |") | join("\n"),
-          "", "**Total:** fetched **\(.fetched)**, importable **\(.importable)**", "",
-          if .firstPaper then "First paper: `\(.firstPaper)`" else "" end,
-          if (.categoryBreakdown // []) | any(.cursorHint) then "", "### Cursor decisions", "", (.categoryBreakdown | map("| \(.category) | cursor at \(.cursorHint) | first \(.firstFetched) | last \(.lastFetched) |") | [ "| Category | Cursor | First fetched | Last fetched |", "|----------|--------|---------------|--------------|" ] + . | join("\n")) else "" end
-          JQSCRIPT
+          raw = os.environ.get("INGEST_OUTPUT", "").strip()
+          if not raw:
+              raise SystemExit(0)
 
-          output='${{ steps.ingest.outputs.output }}'
-          if [ -n "$output" ]; then
-            echo "$output" | jq -r -f /tmp/format-summary.jq >> "$GITHUB_STEP_SUMMARY"
-          fi
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError:
+              raise SystemExit(0)
+
+          mode_labels = {
+              "dry-run": "🔍 Dry run",
+              "dry-run-backfill": "🔍 Dry run (backfill)",
+              "write-backfill": "📥 Write (backfill)",
+          }
+          mode = mode_labels.get(data.get("mode"), "📥 Write")
+
+          def badge(n):
+              return f"**{n}**" if isinstance(n, (int, float)) and n > 0 else "0"
+
+          breakdown = data.get("categoryBreakdown") or []
+          lines = [
+              f"## arXiv Ingestion · {mode}",
+              "",
+              "| Category | Fetched | Importable | Skipped |",
+              "|----------|---------|------------|---------|",
+          ]
+          for item in breakdown:
+              lines.append(
+                  f"| {item.get('category')} | {badge(item.get('fetched'))} "
+                  f"| {badge(item.get('importable'))} | {item.get('skipped')} |"
+              )
+
+          importable = data.get("importable", data.get("imported"))
+          lines += ["", f"**Total:** fetched **{data.get('fetched')}**, importable **{importable}**", ""]
+
+          if data.get("firstPaper"):
+              lines.append(f"First paper: `{data['firstPaper']}`")
+
+          if any(item.get("cursorHint") for item in breakdown):
+              lines += ["", "### Cursor decisions", ""]
+              lines.append("| Category | Cursor | First fetched | Last fetched |")
+              lines.append("|----------|--------|---------------|--------------|")
+              for item in breakdown:
+                  lines.append(
+                      f"| {item.get('category')} | cursor at {item.get('cursorHint')} "
+                      f"| first {item.get('firstFetched')} | last {item.get('lastFetched')} |"
+                  )
+
+          print("\n".join(lines))
+          PYSCRIPT

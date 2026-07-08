@@ -26,6 +26,7 @@ on:
         type: boolean
   schedule:
     - cron: "37 5 * * *"
+    - cron: "37 17 * * *"
 
 permissions:
   contents: read
