@@ -44,6 +44,7 @@ export type Paper = {
   recommendationReason: string;
   url: string;
   pdfUrl?: string;
+  doi?: string;
   citationCount?: number;
   isClassic?: boolean;
   access: PaperAccess;

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { addPaperNoteAction, deletePaperNoteAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { PaperDetailActions } from "@/components/paper-detail-actions";
+import { PaperMetadata } from "@/components/paper-metadata";
 import { PaperNoteEditor } from "@/components/paper-note-editor";
 import { MathContent } from "@/components/math-content";
 import { requireOwnerId } from "@/lib/auth/session";
@@ -84,11 +85,6 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
         <p className="mt-4 text-sm font-bold text-slate-500 lg:text-base">
           {paper.authors.join(", ")} - {paper.year}
         </p>
-        {paper.venue ? (
-          <p className="mt-1 text-sm font-semibold text-slate-500 lg:text-base">
-            {paper.venue}
-          </p>
-        ) : null}
 
         <PaperDetailActions
           feedbackActionPath={`/papers/${paper.id}/feedback`}
@@ -97,6 +93,8 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
           paperId={paper.id}
           paperUrl={paper.url}
         />
+
+        <PaperMetadata paper={paper} />
 
         <section className="mt-8 border-t border-slate-200 pt-6">
           <h2 className="text-sm font-black uppercase tracking-normal text-slate-500">

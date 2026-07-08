@@ -58,6 +58,7 @@ export function paperFromRow(
     recommendationReason: buildRecommendationReason(paperTopics) ?? "",
     url: row.url,
     pdfUrl: row.pdfUrl ?? undefined,
+    doi: row.doi ?? undefined,
     citationCount: row.citationCount ?? undefined,
     isClassic: row.isClassic ?? false,
     access: row.access as PaperAccess,

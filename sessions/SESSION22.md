@@ -70,3 +70,16 @@ Add pagination to the `/search` catalog page. Search previously returned a hard 
 - `npm run lint`, `npm run typecheck`, `npm run test:unit` (46 pass), `npm run audit:service-role` (passed), `npm run build`
 - DB round-trip (insert/upsert/delete) verified directly against Postgres
 - Live check on a temporary dev-auth checkout (port 3214): paper detail page returns HTTP 200 and renders the "Private note" editor
+
+## Feature: improved paper detail metadata (issue #30)
+
+- Extended the `Paper` type and `paperFromRow` with `doi` and `arxivId` (already on the papers row, no extra query).
+- Added a `PaperMetadata` server component: a "Details" section (source badge, access status, venue, year, citations, DOI link) and an "External links" block (arXiv, DOI, PDF, publisher page) — every field/link rendered only when present. Access badge shows Open access / Publisher and is hidden when `unknown`.
+- Integrated `PaperMetadata` into the paper detail page and removed the now-redundant standalone venue line.
+- Follow-up on review: removed the External links block (it duplicated the DOI row and the existing "Read online" landing-page link, and PDF/publisher links often pointed to the same URL). Kept only the compact Details section with smaller fonts and tighter spacing. Dropped the unused `arxivId` from the `Paper` type again since arXiv access is already covered by "Read online".
+- Updated CHANGELOG.
+
+## Validation (paper metadata)
+
+- `npm run lint`, `npm run typecheck`, `npm run test:unit` (46 pass), `npm run audit:service-role`, `npm run build`
+- Live check on a temporary dev-auth checkout (port 3215): a DOI paper renders DOI + access + all links; an arXiv-only paper renders the arXiv link and omits the DOI row (conditional rendering confirmed)
