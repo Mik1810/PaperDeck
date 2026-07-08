@@ -8,6 +8,7 @@ import {
   profiles,
   playlists,
   playlistItems,
+  papers,
   recommendationImpressions,
   recommendations,
   userInterests,
@@ -808,6 +809,88 @@ export async function getFeedPageData(ownerId: string) {
     activePaper: feedPapers[0] ?? null,
     nextPapers: feedPapers.slice(1),
     favoriteIds: state.favoriteIds,
+    readLaterIds: state.readLaterIds,
+    readLaterCount: state.readLaterIds.size,
+  };
+}
+
+const DIGEST_PAPER_COUNT = 10;
+const DIGEST_MIN_PAPER_COUNT = 3;
+const DIGEST_RECENCY_WINDOWS_DAYS = [7, 14, 30];
+
+export type DigestGroup = {
+  topicLabel: string;
+  papers: Paper[];
+};
+
+async function getRecentPaperIds(
+  paperIds: string[],
+  sinceDays: number,
+): Promise<Set<string>> {
+  if (!paperIds.length) {
+    return new Set();
+  }
+
+  const since = new Date(
+    Date.now() - sinceDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const rows = await db
+    .select({ id: papers.id })
+    .from(papers)
+    .where(
+      and(
+        inArray(papers.id, paperIds),
+        sql`coalesce(${papers.publishedAt}, ${papers.ingestedAt}) >= ${since}`,
+      ),
+    );
+
+  return new Set(rows.map((row) => row.id));
+}
+
+/** @admin */
+export async function getDigestPageData(ownerId: string) {
+  const feedData = await getRankedFeedData(ownerId);
+  const { rankedPapers } = feedData;
+  const state = feedData.feedState.userState;
+  const rankedById = new Map(rankedPapers.map((paper) => [paper.id, paper]));
+
+  let recentPapers: RankedPaper[] = [];
+
+  for (const windowDays of DIGEST_RECENCY_WINDOWS_DAYS) {
+    const recentIds = await getRecentPaperIds(
+      rankedPapers.map((paper) => paper.id),
+      windowDays,
+    );
+    recentPapers = rankedPapers.filter((paper) => recentIds.has(paper.id));
+
+    if (recentPapers.length >= DIGEST_MIN_PAPER_COUNT) {
+      break;
+    }
+  }
+
+  const selectedPapers = recentPapers.slice(0, DIGEST_PAPER_COUNT);
+
+  const groupsByLabel = new Map<string, Paper[]>();
+  for (const paper of selectedPapers) {
+    const topicLabel = paper.topics[0]?.label ?? "General";
+    const list = groupsByLabel.get(topicLabel) ?? [];
+    list.push(paper);
+    groupsByLabel.set(topicLabel, list);
+  }
+
+  const groups: DigestGroup[] = [...groupsByLabel.entries()]
+    .map(([topicLabel, papersInGroup]) => ({ topicLabel, papers: papersInGroup }))
+    .sort((a, b) => {
+      const aScore = rankedById.get(a.papers[0].id)?.rankingScore ?? 0;
+      const bScore = rankedById.get(b.papers[0].id)?.rankingScore ?? 0;
+      return bScore - aScore;
+    });
+
+  return {
+    groups,
+    totalCount: selectedPapers.length,
+    generatedAt: new Date().toISOString(),
     readLaterIds: state.readLaterIds,
     readLaterCount: state.readLaterIds.size,
   };

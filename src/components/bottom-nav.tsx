@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Layers3, Library, Search, SlidersHorizontal } from "lucide-react";
+import { Layers3, Library, Newspaper, Search } from "lucide-react";
 
 const navItems = [
   { href: "/feed", label: "Feed", icon: Layers3 },
+  { href: "/digest", label: "Digest", icon: Newspaper },
   { href: "/search", label: "Search", icon: Search },
   { href: "/library", label: "Library", icon: Library },
-  { href: "/settings", label: "Settings", icon: SlidersHorizontal },
 ];
 
 export function BottomNav() {

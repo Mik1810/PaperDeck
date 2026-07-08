@@ -236,6 +236,7 @@ test.describe("dev-auth app smoke", () => {
 
   for (const { path, heading } of [
     { path: "/feed", heading: "Today" },
+    { path: "/digest", heading: "Digest" },
     { path: "/onboarding", heading: "Macro areas" },
     { path: "/search", heading: "Search" },
     { path: "/library", heading: "Library" },

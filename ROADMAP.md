@@ -952,7 +952,7 @@ Output:
 
 Output:
 
-- Digest in-app settimanale.
+- Digest in-app settimanale. ✅ MVP: pagina `/digest` "New for you", lista scannerizzabile raggruppata per topic, paper recenti (ultimi 7 giorni, finestra allargata a 14/30 se pochi), top 10, distinta dal feed a swipe.
 - Preferenze digest.
 - Email solo post-MVP.
 

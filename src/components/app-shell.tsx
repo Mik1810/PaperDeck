@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { ReactNode } from "react";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
-import { BookOpenCheck } from "lucide-react";
+import { BookOpenCheck, Settings } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 
@@ -16,6 +16,7 @@ type AppShellProps = {
 
 const desktopNav = [
   { href: "/feed", label: "Feed" },
+  { href: "/digest", label: "Digest" },
   { href: "/search", label: "Search" },
   { href: "/library", label: "Library" },
   { href: "/settings", label: "Settings" },
@@ -64,6 +65,13 @@ export function AppShell({
           </nav>
 
           <div className="flex items-center gap-2">
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 md:hidden"
+            >
+              <Settings aria-hidden="true" size={18} strokeWidth={2.4} />
+            </Link>
             {devAuthEnabled ? (
               <div className="h-10 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-black text-amber-800">
                 Local dev

@@ -43,3 +43,16 @@ Add pagination to the `/search` catalog page. Search previously returned a hard 
 - Confirmed the summary workflow works correctly: recent live runs report `{"papersChecked":50,"generated":50,"failed":0}` (LLM_LIMIT=50, batch 3). Short 30s runs on days with an empty backlog logged "No papers found needing summaries".
 - Nightly ingestion adds ~128 papers/day while summaries ran only once daily at 50/day, so the arXiv backlog was growing.
 - Kept `LLM_LIMIT=50` but added a second daily schedule (`37 17 * * *`) alongside the existing `37 5 * * *`, lifting throughput to ~100/day to catch up without a larger per-run load.
+
+## Feature: in-app digest (issue #29)
+
+- Designed the digest to stay distinct from the swipe feed on three axes chosen with the user: recency (recent papers only), topic grouping, and a scannable no-swipe list. Decided on an on-the-fly approach (no persisted `digests`/`digest_items` rows) and abstract snippets (no summaries-first) for the first version.
+- Added `getDigestPageData(ownerId)` in `src/lib/repositories/user-data.ts`: reuses `getRankedFeedData`, filters candidates to those published/ingested within the last 7 days (widening to 14 then 30 days when fewer than 3 remain), takes the top 10, and groups them by primary topic ordered by best ranking score. Returns groups plus read-later state.
+- Added `src/app/digest/page.tsx` and `loading.tsx`: `AppShell`-based, topic-grouped `PaperListItem` cards with a Read later toggle (`toggleReadLaterAction`, `sourcePath="/digest"`) and Open detail link, plus an empty state.
+- Navigation: replaced Settings with Digest (Newspaper icon) in the mobile bottom nav, added a header gear link to `/settings` visible on mobile, and added Digest to the desktop nav (Feed / Digest / Search / Library / Settings).
+- Added a `/digest renders without a server error` case to the e2e smoke matrix.
+
+## Validation (digest)
+
+- `npm run lint`, `npm run typecheck`, `npm run test:unit` (46 pass), `npm run audit:service-role` (passed), `npm run build` (route `/digest` present)
+- Live check on a temporary dev-auth server (port 3212, owner `local-dev-user`): `/digest` returns HTTP 200 and renders a topic-grouped list with the recency filter applied.
