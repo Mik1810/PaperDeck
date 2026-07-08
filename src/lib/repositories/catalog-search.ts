@@ -1,3 +1,5 @@
+import "server-only";
+
 export const SEARCH_PAGE_SIZE = 20;
 
 export function normalizeSearchPage(page: number) {
