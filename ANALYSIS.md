@@ -1,151 +1,141 @@
-# PaperDeck — Issues rimanenti
+# PaperDeck Codebase Analysis
 
-Generato il 2026-07-06. Aggiornato dopo SESSION 18 (16 issue chiuse).
+Findings from a codebase review on 2026-07-08. Each block below is parsable by
+`npm run issues:import` (`scripts/create-issues.ts`): a `## Title`, an optional
+`labels:` line, a `**File:**` reference, and a Markdown body, separated by `---`.
 
----
-
-## 1. HIGH — Performance
-
-### 1.1 Query catalog che caricano embedding e triage summary
-
-**File:** `src/lib/repositories/catalog.ts:80-82, 141`
-
-`.select()` senza colonne esplicite carica `embedding` (384-dim vector) e `triageSummary` (jsonb) in ogni query, inclusa `getAllPapers()`. Impatto significativo sul payload di ogni feed load.
-
-**Fix:** selezionare solo le colonne necessarie con `select({ id: papers.id, title: papers.title, ... })`.
-
-### 1.2 Query sequenziali invece di parallele
-
-**File:** `src/lib/repositories/catalog.ts:80-96`
-
-`getPapersByIds` esegue tre query in serie (papers → authors → topics). Possono essere parallelizzate con `Promise.all` per un ~2x speedup.
-
-### 1.3 N UPDATE sequenziali nel riordinamento playlist
-
-**File:** `src/lib/repositories/playlist-items.ts:80-90`
-
-`reorderOwnedPlaylistItems` esegue N UPDATE individuali. Per 50 item = 50 round trip. Usare un batch update o una singola transazione SQL.
+Known/tracked topics (feed latency, deck latency, optimistic rollback, RLS
+policies, Supabase types, playlist ordering, service worker caching, etc.) are
+intentionally excluded to avoid duplicating existing issues.
 
 ---
+## Handle errors when swipe-right save-to-read-later fails
+labels: type:bug, area:feed, priority:p1
 
-## 2. HIGH — CI e Test
+**File:** src/components/feed-deck.tsx:155
 
-### 2.1 Test auth sempre skippati in CI
+A right swipe optimistically dismisses the active paper (`setPaperDismissed(id, true)`) and then calls `submitDeckAction("read_later", ...)` as a fire-and-forget promise: the result is never awaited and errors are never caught. The left-swipe path, by contrast, uses `handleDismissSubmit`, which catches failures and restores the card via `setPaperDismissed(id, false)`.
 
-**File:** `tests/e2e/auth-smoke.spec.ts`, `.github/workflows/ci.yml:18-19`
+Consequence: if the Read later API call fails (network error, 500, auth expiry), the paper disappears from the feed but is never saved anywhere — silent data loss from the user's perspective.
 
-I test di autenticazione sono condizionati da `!PAPERDECK_E2E_DEV_AUTH`, ma in CI `PAPERDECK_E2E_DEV_AUTH=true` è sempre attivo. I test non vengono mai eseguiti.
-
-### 2.2 Nessun test per l'algoritmo di ranking
-
-**File:** `src/lib/ranking/feed-ranking.ts` (212 linee)
-
-Il core ranking algorithm non ha test. Qualsiasi modifica ai pesi o alla logica è non validata.
-
-### 2.3 Nessun test per `semantic-retrieval.ts`
-
-Il path di retrieval semantico (pgvector match_papers_by_embedding) non ha test.
-
-### 2.4 Cleanup incompleto nei test E2E
-
-**File:** `tests/e2e/app-smoke.spec.ts:38-40`
-
-`resetDevOwner()` cancella `profiles WHERE owner_id = ...` ma non pulisce le righe correlate in `playlists`, `user_interests`, `user_paper_interactions`, `user_profile_embeddings`, `recommendations`. Fallimenti lasciano il DB sporco.
+**Fix:** Route the right swipe through the same optimistic + rollback pattern as dismiss: await the mutation and restore the card (and surface an error) on failure.
 
 ---
+## Stop using the current year as a fallback for missing paper year
+labels: type:bug, area:backend, priority:p2
 
-## 3. MEDIUM — Qualità codice
+**File:** src/lib/repositories/catalog.ts:53
 
-### 3.1 Duplicazione massiva nei 6 script TS
+`paperFromRow` returns `year: row.year ?? new Date().getFullYear()`. This makes a pure read non-deterministic: a paper with a null year renders as 2026 today and 2027 next year, and can differ between server render and any later re-render. It also silently fabricates metadata that is then shown as fact on the paper detail and cards.
 
-`loadLocalEnv()` (~20 linee), `requireEnv()`, `createSupabaseClient()` sono copia-incollati in:
-- `scripts/ingest-arxiv.ts`
-- `scripts/enrich-semantic-scholar.ts`
-- `scripts/enrich-openalex.ts`
-- `scripts/enrich-unpaywall.ts`
-- `scripts/discover-classic-papers.ts`
-- `scripts/generate-summaries.ts`
-
-**Fix:** estrarre in `scripts/lib/env.ts` condiviso.
-
-### 3.2 Magic numbers nel ranking
-
-**File:** `src/lib/ranking/feed-ranking.ts:125-145`
-
-17 numeri magici (`120`, `90`, `6`, `2`, `0.4`, `8`, `12`, `18`, `-5`, `-7`, `2020`, `0.75`, `0.5`). Dovrebbero essere costanti nominate e configurabili.
-
-### 3.3 `match_papers_by_embedding` — unsafe type cast
-
-**File:** `src/lib/repositories/semantic-retrieval.ts:73`
-
-Doppio cast che bypassa il type system. Il tipo `SemanticMatchRow` dichiara `paper_id: string` ma la funzione RPC restituisce `uuid`.
-
-### 3.6 Input non validato in API route
-
-**File:** `src/app/api/deck/route.ts:12`
-
-`const body = (await request.json()) as Record<string, string>` — nessuna validazione con Zod.
-
-### 3.7 `generate-summaries.yml` — nome secret inconsistente
-
-**File:** `.github/workflows/generate-summaries.yml:52`
-
-Usa `secrets.GH_MODELS_TOKEN` ma la variabile documentata è `GITHUB_MODELS_TOKEN`.
-
-### 3.8 `requirePaperId()` usato per ID non-paper
-
-**File:** `src/app/actions.ts:31,189,202`
-
-La funzione `requirePaperId(formData)` viene riutilizzata per estrarre `playlistId` in `renamePlaylistAction` e `deletePlaylistAction`. Il nome è fuorviante.
-
-**Fix:** rinominare in `requireId()`.
+**Fix:** Make `year` optional on the `Paper` type (`year?: number`) and return `row.year ?? undefined`, letting the UI decide how to render a missing year (e.g. hide it or show "—"). Update consumers accordingly.
 
 ---
+## Wrap saveSelectedTopics delete-then-insert in a transaction
+labels: type:bug, area:database, priority:p1
 
-## 4. MEDIUM — Accessibilità
+**File:** src/lib/repositories/user-data.ts:303
 
-### 4.2 Test dinamici con `for` loop
+`saveSelectedTopics` deletes all of a user's `user_interests` rows and then inserts the new selection in two separate statements with no transaction. If the process crashes or the DB connection drops between the delete and the insert, the user permanently loses every selected interest — which also degrades their feed ranking and onboarding state.
 
-**File:** `tests/e2e/app-smoke.spec.ts:229`
-
-Generazione dinamica di test con `for` loop — in modalità `fullyParallel`, l'ordinamento non è deterministico.
-
----
-
-## 5. MEDIUM — Configurazione
+**Fix:** Wrap the delete + insert (and the subsequent profile update) in `db.transaction(async (tx) => { ... })` so the change is atomic.
 
 ---
+## Make playlist reordering atomic and batched
+labels: type:bug, area:database, priority:p2
 
-## 6. MEDIUM — Documentazione
+**File:** src/lib/repositories/playlist-items.ts:83
 
-### 6.2 `embeddings.md` — riferimento a commit/run specifici
+`reorderOwnedPlaylistItems` issues one `UPDATE` per paper in a sequential loop with no transaction. A failure mid-loop leaves the playlist half-reordered (some items updated, others stale), and a 50-item playlist means 50 round trips.
 
-**File:** `docs/embeddings.md:94`
-
-Riferimenti a commit `e001b6d` e run `28576306513` — dettagli che invecchieranno male.
-
-### 6.3 `clerk-supabase-rls.md` — passaggio 3 non tracciato
-
-**File:** `docs/clerk-supabase-rls.md:58`
-
-Il passaggio "transition user-scoped functions to clerk-authenticated client" non ha task in TASKS.md. Issue #47 copre ma è risolta solo a livello di documentazione/audit.
+**Fix:** Wrap the loop in `db.transaction(...)` so positions commit or roll back together. Optionally collapse to a single statement using a `CASE ... WHEN` expression (or `unnest`) to set all positions at once.
 
 ---
+## Fix race condition when computing next playlist item position
+labels: type:bug, area:database, priority:p2
 
-## 7. LOW — Miglioramenti minori
+**File:** src/lib/repositories/playlist-items.ts:35
 
-| # | File | Problema |
-|---|------|----------|
-| 1 | `src/lib/repositories/catalog.ts:37` | `row.year ?? new Date().getFullYear()` — anno mancante diventa anno corrente |
-| 2 | `src/lib/render-latex.ts` | Nessun escape HTML per contenuto non-LaTeX |
-| 3 | `src/lib/client/deck-mutations.ts:39` | Nessun timeout sulla fetch — UI bloccata su rete lenta |
-| 4 | `src/lib/repositories/semantic-retrieval.ts:86-88` | Query profilo embedding non filtra per `embeddingModel` |
-| 5 | `src/types/paper.ts:68` | `"seen"` in `InteractionType` non usato |
-| 6 | `src/components/feed-deck.tsx` | Percentuali mix hardcodate, non derivate dal ranking reale |
-| 7 | `src/lib/logging/logger.ts` | Nessun sampling per eventi ad alto volume |
-| 8 | `supabase/migrations` | `get_table_sizes()` in migration ma non in `schema.sql` |
-| 9 | `supabase/schema.sql` | Nessun trigger `on update now()` per `profiles.updated_at` e `playlists.updated_at` |
-| 10 | `scripts/review_triage_summaries.py:564` | Prompt in italiano in app altrimenti inglese |
-| 11 | `scripts/generate-summaries.ts:666,672` | URL API e versione GitHub Models hardcodati |
-| 12 | `scripts/discover-classic-papers.ts:91-241` | 151 linee di profili discovery hardcodati in TS |
-| 13 | `src/lib/auth/session.ts:22,41` | `throw new Error("Unauthenticated")` dopo `redirectToSignIn()` è dead code |
+`addToOwnedPlaylist` reads the current max `position` and inserts with `max + 1` in two separate queries. Two concurrent adds to the same playlist both read the same max and insert the same position, corrupting the ordering drag-and-drop relies on.
+
+**Fix:** Compute the next position atomically — e.g. inside a transaction with `SELECT ... FOR UPDATE` on the playlist, or via a single `INSERT ... SELECT coalesce(max(position), -1) + 1 FROM playlist_items WHERE playlist_id = ...`.
+
+---
+## Verify a note belongs to the paper before deleting it
+labels: type:bug, area:security, priority:p2
+
+**File:** src/app/actions.ts:283
+
+`deletePaperNoteAction` reads `paperId` from the form only to call `revalidatePath(/papers/{paperId})`, then calls `deletePaperNote(ownerId, noteId)`. The repository (`user-data.ts:1194`) filters only by `ownerId` and note `id`, never checking the note actually belongs to `paperId`. A crafted request could delete one of the user's notes on paper B while revalidating paper A (leaving B's page stale). Ownership is enforced, but the paper linkage is not validated.
+
+**Fix:** Add `eq(paperNotes.paperId, paperId)` to the delete predicate (pass `paperId` through the repository function) so deletion is scoped to the intended paper.
+
+---
+## Order favorites and playlist reads deterministically
+labels: type:bug, area:backend, priority:p3
+
+**File:** src/lib/repositories/user-data.ts:974
+
+The favorites query in `getLibraryPageData` selects paper IDs with no `ORDER BY`, so Postgres may return them in any order and the library's Favorites list can reshuffle between visits. Read later already orders by `addedAt`; favorites should be consistent too.
+
+**Fix:** Add `.orderBy(desc(favorites.createdAt))` to the favorites query so the newest favorites appear first and ordering is stable.
+
+---
+## Give Read later items a real position instead of always 0
+labels: type:bug, area:data-model, priority:p3
+
+**File:** src/lib/repositories/user-data.ts:1252
+
+`toggleReadLater` inserts every playlist item with `position: 0`, while `addToOwnedPlaylist` computes `max + 1`. All Read later items therefore share position 0, so any position-based ordering or future reorder of the default Read later playlist is meaningless. Today it's masked because the library orders Read later by `addedAt`.
+
+**Fix:** Reuse the next-position computation from `addToOwnedPlaylist` in `toggleReadLater`, or drop `position` from the insert and rely on the column default consistently, and document the intended ordering.
+
+---
+## Preserve recommendation attribution for library and digest actions
+labels: type:bug, area:analytics, priority:p3
+
+**File:** src/app/actions.ts:137
+
+`dismissPaperAction`, `toggleFavoriteAction`, and `toggleReadLaterAction` call the repository without the `options.recommendationImpressionId` that `/api/deck` always resolves. Saves/dismisses from the library and digest pages are therefore never linked to the recommendation impression that surfaced them, breaking downstream attribution for those surfaces.
+
+**Fix:** Resolve and pass `recommendationImpressionId` in these actions (via a hidden form field plus `resolveRecommendationImpressionId`), or explicitly document that off-deck interactions are intentionally unattributed.
+
+---
+## Validate semantic match rows instead of an unchecked cast
+labels: type:enhancement, area:recommendations, priority:p3
+
+**File:** src/lib/repositories/semantic-retrieval.ts:69
+
+`matchPapersByEmbedding` runs raw SQL and casts the result via `as unknown as SemanticMatchRow[]` with no runtime shape check. If the `match_papers_by_embedding` Postgres function's return columns change (rename/typo during a migration), the failure is silent: `semanticScores` maps undefined keys and `getPapersByIds` receives garbage IDs. The trailing `?? []` is also dead code since `db.execute` never returns null.
+
+**Fix:** Add a small runtime guard (assert `typeof row.paper_id === "string"` and `typeof row.semantic_score === "number"`, filtering invalid rows) or a Zod schema before use, and remove the dead fallback.
+
+---
+## Validate triage summary JSON shape before casting
+labels: type:enhancement, area:backend, priority:p3
+
+**File:** src/lib/repositories/catalog.ts:64
+
+`triageSummary` is read from a `jsonb` column and cast directly with `as Paper["triageSummary"]` with no validation. If the summariser writes a malformed object (missing a field, wrong type), consumers such as the paper detail page render `undefined` values or could throw, with no error surfaced.
+
+**Fix:** Validate the four expected string fields at read time (small runtime check or Zod schema) and fall back to `undefined` when the shape is invalid.
+
+---
+## Rename the misleading requirePaperId helper used for playlist IDs
+labels: type:refactor, area:backend, priority:p3
+
+**File:** src/app/actions.ts:32
+
+`requirePaperId` reads `formData.get("paperId")`, but `renamePlaylistAction` and `deletePlaylistAction` reuse it to extract a playlist ID that the sidebar submits in a hidden input also named `paperId`. The name collision makes the code confusing and easy to break during future edits.
+
+**Fix:** Generalise the helper (e.g. `requireFormId(formData, field)`), rename the playlist hidden inputs to `playlistId`, and update the actions to read the correctly named field.
+
+---
+## Batch playlist item queries to remove the N+1 on the library page
+labels: type:enhancement, area:performance, priority:p3
+
+**File:** src/lib/repositories/user-data.ts:1002
+
+`getLibraryPageData` maps over playlists and issues one `SELECT` per playlist to fetch its item IDs (inside `Promise.all`), producing N queries for N playlists on every library load, on top of the separate favorites/read-later reads.
+
+**Fix:** Fetch all items in one query with `inArray(playlistItems.playlistId, playlistIds)` (ordered by playlist then position) and group by `playlistId` in memory.
