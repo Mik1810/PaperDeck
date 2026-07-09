@@ -10,7 +10,8 @@ import {
   normalizeSearchPage,
   searchPageOffset,
 } from "@/lib/repositories/catalog-search";
-import type { Paper, PaperAccess, PaperTopic } from "@/types/paper";
+import { PaperAccessSchema, TriageSummarySchema } from "@/lib/schemas/paper-access";
+import type { Paper, PaperTopic } from "@/types/paper";
 
 type PaperRow = typeof papers.$inferSelect;
 
@@ -50,7 +51,7 @@ export function paperFromRow(
     id: row.id,
     title: row.title,
     authors,
-    year: row.year ?? new Date().getFullYear(),
+    year: row.year ?? undefined,
     source: paperSourceFromDatabase(row.source),
     venue: row.venue ?? undefined,
     abstract: row.abstract ?? "",
@@ -61,8 +62,10 @@ export function paperFromRow(
     doi: row.doi ?? undefined,
     citationCount: row.citationCount ?? undefined,
     isClassic: row.isClassic ?? false,
-    access: row.access as PaperAccess,
-    triageSummary: (row.triageSummary ?? undefined) as Paper["triageSummary"],
+    access: PaperAccessSchema.parse(row.access),
+    triageSummary: row.triageSummary
+      ? TriageSummarySchema.parse(row.triageSummary)
+      : undefined,
   };
 }
 

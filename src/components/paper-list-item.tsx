@@ -18,9 +18,11 @@ export function PaperListItem({ paper, action, meta }: PaperListItemProps) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <PaperSourceBadge source={paper.source} />
-            <span className="text-xs font-black text-slate-500 lg:text-sm">
-              {paper.year}
-            </span>
+            {paper.year ? (
+              <span className="text-xs font-black text-slate-500 lg:text-sm">
+                {paper.year}
+              </span>
+            ) : null}
           </div>
           <h2 className="mt-2 text-base font-black leading-6 text-slate-950 md:text-lg">
             <MathContent text={paper.title} />

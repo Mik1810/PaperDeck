@@ -97,25 +97,26 @@ export function PaperCard({
           {paper.topics.map((topic) => (
             <span
               key={topic.id}
-              className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700"
+              className="rounded-md bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 sm:text-xs"
             >
               {topic.label}
             </span>
           ))}
         </div>
 
-        <h2 className="text-2xl font-black leading-8 tracking-normal text-slate-950">
+        <h2 className="text-xl font-black leading-8 tracking-normal text-slate-950 sm:text-2xl">
           <MathContent text={paper.title} />
         </h2>
 
         <p className="mt-2.5 text-sm font-bold text-slate-500">
-          {paper.authors.join(", ")} - {paper.year}
+          {paper.authors.join(", ")}
+          {paper.year ? ` - ${paper.year}` : ""}
         </p>
 
-        <div className={`mt-4 space-y-3 text-[15px] leading-7 text-slate-700`}>
+        <div className="mt-4 space-y-3 text-sm leading-relaxed text-slate-700">
           {paper.abstract ? (
             <>
-              <div className={isExpanded ? "" : "line-clamp-[10] lg:line-clamp-[18]"}>
+              <div className={isExpanded ? "italic" : "line-clamp-[10] lg:line-clamp-[18] italic"}>
                 <MathContent text={paper.abstract} />
               </div>
               <button

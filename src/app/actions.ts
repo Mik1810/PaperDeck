@@ -32,14 +32,18 @@ import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
 
 type OnboardingPersonalizationSource = "save" | "skip";
 
-function requirePaperId(formData: FormData) {
-  const paperId = formData.get("paperId");
+function requireFormId(formData: FormData, field: string) {
+  const value = formData.get(field);
 
-  if (typeof paperId !== "string" || !paperId) {
-    throw new Error("Missing paperId");
+  if (typeof value !== "string" || !value) {
+    throw new Error(`Missing ${field}`);
   }
 
-  return paperId;
+  return value;
+}
+
+function requirePaperId(formData: FormData) {
+  return requireFormId(formData, "paperId");
 }
 
 function sourcePathFrom(formData: FormData, fallback: string) {
@@ -190,7 +194,7 @@ export async function createPlaylistAction(formData: FormData) {
 
 export async function renamePlaylistAction(formData: FormData) {
   const ownerId = await requireOwnerId();
-  const playlistId = requirePaperId(formData);
+  const playlistId = requireFormId(formData, "playlistId");
   const name = formData.get("name");
 
   if (typeof name !== "string" || !name.trim()) {
@@ -203,7 +207,7 @@ export async function renamePlaylistAction(formData: FormData) {
 
 export async function deletePlaylistAction(formData: FormData) {
   const ownerId = await requireOwnerId();
-  const playlistId = requirePaperId(formData);
+  const playlistId = requireFormId(formData, "playlistId");
 
   await deletePlaylist(ownerId, playlistId);
   revalidatePath("/library");
@@ -290,6 +294,6 @@ export async function deletePaperNoteAction(formData: FormData) {
     throw new Error("Missing noteId");
   }
 
-  await deletePaperNote(ownerId, noteId);
+  await deletePaperNote(ownerId, paperId, noteId);
   revalidatePath(`/papers/${paperId}`);
 }

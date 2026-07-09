@@ -155,7 +155,7 @@ function scorePaper(paper: Paper, context: RankingContext): RankingScoreComponen
     0,
   );
   const citationScore = Math.log1p(paper.citationCount ?? 0) * 2;
-  const recencyScore = Math.max(0, paper.year - 2020) * 0.4;
+  const recencyScore = Math.max(0, (paper.year ?? 2020) - 2020) * 0.4;
   const classicScore = paper.isClassic ? 2 : 0;
   const total =
     semanticScore +

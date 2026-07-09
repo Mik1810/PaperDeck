@@ -36,7 +36,7 @@ export type Paper = {
   id: string;
   title: string;
   authors: string[];
-  year: number;
+  year?: number;
   source: PaperSource;
   venue?: string;
   abstract: string;

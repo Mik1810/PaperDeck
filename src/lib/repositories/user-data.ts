@@ -302,30 +302,31 @@ function userInterestFromTopic(topic: TopicRow, selectedTopicIds: Set<string>) {
 /** @user-scoped */
 export async function saveSelectedTopics(ownerId: string, topicIds: string[]) {
   const uniqueTopicIds = [...new Set(topicIds)];
-
-  await db
-    .delete(userInterests)
-    .where(eq(userInterests.ownerId, ownerId));
-
-  if (uniqueTopicIds.length) {
-    await db.insert(userInterests).values(
-      uniqueTopicIds.map((topicId) => ({
-        ownerId,
-        topicId,
-        weight: 1,
-      })),
-    );
-  }
-
   const now = new Date().toISOString();
 
-  await db
-    .update(profiles)
-    .set({
-      onboardingCompletedAt: now,
-      updatedAt: now,
-    })
-    .where(eq(profiles.ownerId, ownerId));
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(userInterests)
+      .where(eq(userInterests.ownerId, ownerId));
+
+    if (uniqueTopicIds.length) {
+      await tx.insert(userInterests).values(
+        uniqueTopicIds.map((topicId) => ({
+          ownerId,
+          topicId,
+          weight: 1,
+        })),
+      );
+    }
+
+    await tx
+      .update(profiles)
+      .set({
+        onboardingCompletedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(profiles.ownerId, ownerId));
+  });
 }
 
 /** @admin */
@@ -974,7 +975,8 @@ export async function getLibraryPageData(ownerId: string) {
   const favoriteRows = await db
     .select({ paperId: favorites.paperId })
     .from(favorites)
-    .where(eq(favorites.ownerId, ownerId));
+    .where(eq(favorites.ownerId, ownerId))
+    .orderBy(desc(favorites.createdAt));
 
   const readLaterPlaylist = playlistRows.find(
     (p) => p.name === "Read later",
@@ -999,21 +1001,39 @@ export async function getLibraryPageData(ownerId: string) {
     getIgnoredPaperHistory(ownerId),
   ]);
 
-  const playlistSummaries: Playlist[] = await Promise.all(
-    playlistRows.map(async (playlist) => {
-      const items = await db
-        .select({ paperId: playlistItems.paperId })
-        .from(playlistItems)
-        .where(eq(playlistItems.playlistId, playlist.id));
+  const playlistIds = playlistRows.map((playlist) => playlist.id);
 
-      return {
-        id: playlist.id,
-        name: playlist.name,
-        paperIds: items.map((r) => r.paperId),
-        isDefault: playlist.isDefault ?? false,
-      };
-    }),
-  );
+  const allPlaylistItems = playlistIds.length
+    ? await db
+        .select({
+          playlistId: playlistItems.playlistId,
+          paperId: playlistItems.paperId,
+        })
+        .from(playlistItems)
+        .where(inArray(playlistItems.playlistId, playlistIds))
+        .orderBy(
+          playlistItems.playlistId,
+          playlistItems.position,
+          desc(playlistItems.addedAt),
+        )
+    : [];
+
+  const paperIdsByPlaylist = new Map<string, string[]>();
+  for (const item of allPlaylistItems) {
+    const existing = paperIdsByPlaylist.get(item.playlistId);
+    if (existing) {
+      existing.push(item.paperId);
+    } else {
+      paperIdsByPlaylist.set(item.playlistId, [item.paperId]);
+    }
+  }
+
+  const playlistSummaries: Playlist[] = playlistRows.map((playlist) => ({
+    id: playlist.id,
+    name: playlist.name,
+    paperIds: paperIdsByPlaylist.get(playlist.id) ?? [],
+    isDefault: playlist.isDefault ?? false,
+  }));
 
   return {
     playlists: playlistSummaries,
@@ -1191,10 +1211,20 @@ export async function addPaperNote(
 }
 
 /** @user-scoped */
-export async function deletePaperNote(ownerId: string, noteId: string) {
+export async function deletePaperNote(
+  ownerId: string,
+  paperId: string,
+  noteId: string,
+) {
   await db
     .delete(paperNotes)
-    .where(and(eq(paperNotes.ownerId, ownerId), eq(paperNotes.id, noteId)));
+    .where(
+      and(
+        eq(paperNotes.ownerId, ownerId),
+        eq(paperNotes.paperId, paperId),
+        eq(paperNotes.id, noteId),
+      ),
+    );
 }
 
 /** @user-scoped */

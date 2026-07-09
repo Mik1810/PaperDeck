@@ -52,7 +52,8 @@ export function SortablePlaylistPaper({ paper, playlistId }: Props) {
           <MathContent text={paper.title} />
         </a>
         <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
-          {paper.authors.join(", ")} - {paper.year}
+          {paper.authors.join(", ")}
+          {paper.year ? ` - ${paper.year}` : ""}
         </p>
       </div>
 

@@ -83,7 +83,8 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
         </h1>
 
         <p className="mt-4 text-sm font-bold text-slate-500 lg:text-base">
-          {paper.authors.join(", ")} - {paper.year}
+          {paper.authors.join(", ")}
+          {paper.year ? ` - ${paper.year}` : ""}
         </p>
 
         <PaperDetailActions

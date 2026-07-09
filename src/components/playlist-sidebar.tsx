@@ -99,7 +99,7 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
               className="space-y-2"
               onSubmit={() => setEditingId(null)}
             >
-              <input name="paperId" type="hidden" value={playlist.id} />
+              <input name="playlistId" type="hidden" value={playlist.id} />
               <input
                 autoFocus
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-900"
@@ -155,7 +155,7 @@ export function PlaylistSidebar({ playlists, selectedId }: Props) {
                     <Pencil aria-hidden="true" size={14} strokeWidth={2} />
                   </button>
                   <form action={deletePlaylistAction}>
-                    <input name="paperId" type="hidden" value={playlist.id} />
+                    <input name="playlistId" type="hidden" value={playlist.id} />
                     <button
                       aria-label="Delete playlist"
                       className="invisible rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 group-hover:visible"

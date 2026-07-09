@@ -115,6 +115,26 @@ export function FeedDeck({
     }
   }, [setPaperDismissed]);
 
+  const handleReadLaterSubmit = useCallback(async function (
+    paperId: string,
+    recommendationImpressionId?: string,
+  ) {
+    setDismissError(null);
+    setPaperDismissed(paperId, true);
+
+    try {
+      await submitDeckAction("read_later", paperId, {
+        recommendationImpressionId,
+      });
+    } catch {
+      setPaperDismissed(paperId, false);
+      setDismissError({
+        message: deckMutationErrorMessage("read_later"),
+        paperId,
+      });
+    }
+  }, [setPaperDismissed]);
+
   const pointerDown = useCallback((e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     isPointerDown.current = true;
@@ -154,11 +174,10 @@ export function FeedDeck({
 
         setTimeout(() => {
           if (direction === "right") {
-            setPaperDismissed(visibleActivePaper.id, true);
-            submitDeckAction("read_later", visibleActivePaper.id, {
-              recommendationImpressionId:
-                visibleActivePaper.recommendationImpressionId,
-            });
+            handleReadLaterSubmit(
+              visibleActivePaper.id,
+              visibleActivePaper.recommendationImpressionId,
+            );
           } else {
             handleDismissSubmit(
               visibleActivePaper.id,
@@ -175,7 +194,7 @@ export function FeedDeck({
         currentDragX.current = 0;
       }
     },
-    [handleDismissSubmit, setPaperDismissed, visibleActivePaper],
+    [handleDismissSubmit, handleReadLaterSubmit, visibleActivePaper],
   );
 
   const exitTransform = exitDirection === "left"
@@ -297,9 +316,11 @@ export function FeedDeck({
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <PaperSourceBadge className="px-2 py-0.5" source={paper.source} />
-                  <span className="text-xs font-bold text-slate-500">
-                    {paper.year}
-                  </span>
+                  {paper.year ? (
+                    <span className="text-xs font-bold text-slate-500">
+                      {paper.year}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             ))}

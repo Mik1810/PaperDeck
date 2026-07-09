@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { playlists, playlistItems } from "@/db/schema";
 
@@ -30,28 +30,43 @@ export async function addToOwnedPlaylist(
   playlistId: string,
   paperId: string,
 ) {
-  await requireOwnedPlaylist(ownerId, playlistId, "Authorize playlist add");
+  await db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: playlists.id, ownerId: playlists.ownerId })
+      .from(playlists)
+      .where(eq(playlists.id, playlistId))
+      .limit(1)
+      .for("update");
 
-  const maxRows = await db
-    .select({ position: playlistItems.position })
-    .from(playlistItems)
-    .where(eq(playlistItems.playlistId, playlistId))
-    .orderBy(desc(playlistItems.position))
-    .limit(1);
+    if (!rows.length) {
+      throw new Error("Authorize playlist add: playlist not found");
+    }
 
-  const nextPosition = (maxRows[0]?.position ?? -1) + 1;
+    if (rows[0].ownerId !== ownerId) {
+      throw new Error("Authorize playlist add: playlist not owned by user");
+    }
 
-  await db
-    .insert(playlistItems)
-    .values({
-      playlistId,
-      paperId,
-      position: nextPosition,
-    })
-    .onConflictDoUpdate({
-      target: [playlistItems.playlistId, playlistItems.paperId],
-      set: { position: nextPosition },
-    });
+    const maxRows = await tx
+      .select({ position: playlistItems.position })
+      .from(playlistItems)
+      .where(eq(playlistItems.playlistId, playlistId))
+      .orderBy(desc(playlistItems.position))
+      .limit(1);
+
+    const nextPosition = (maxRows[0]?.position ?? -1) + 1;
+
+    await tx
+      .insert(playlistItems)
+      .values({
+        playlistId,
+        paperId,
+        position: nextPosition,
+      })
+      .onConflictDoUpdate({
+        target: [playlistItems.playlistId, playlistItems.paperId],
+        set: { position: nextPosition },
+      });
+  });
 }
 
 /** @user-scoped */
@@ -80,15 +95,26 @@ export async function reorderOwnedPlaylistItems(
 ) {
   await requireOwnedPlaylist(ownerId, playlistId, "Authorize playlist reorder");
 
-  for (let i = 0; i < orderedPaperIds.length; i++) {
-    await db
-      .update(playlistItems)
-      .set({ position: i })
-      .where(
-        and(
-          eq(playlistItems.playlistId, playlistId),
-          eq(playlistItems.paperId, orderedPaperIds[i]),
-        ),
-      );
+  if (orderedPaperIds.length === 0) {
+    return;
   }
+
+  const positionCases = orderedPaperIds.map(
+    (paperId, index) => sql`when ${paperId}::uuid then ${index}`,
+  );
+
+  await db
+    .update(playlistItems)
+    .set({
+      position: sql`case ${playlistItems.paperId} ${sql.join(
+        positionCases,
+        sql` `,
+      )} else ${playlistItems.position} end`,
+    })
+    .where(
+      and(
+        eq(playlistItems.playlistId, playlistId),
+        inArray(playlistItems.paperId, orderedPaperIds),
+      ),
+    );
 }

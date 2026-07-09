@@ -67,7 +67,7 @@ export function PaperMetadata({ paper }: PaperMetadataProps) {
 
         {paper.venue ? <DetailRow label="Venue">{paper.venue}</DetailRow> : null}
 
-        <DetailRow label="Year">{paper.year}</DetailRow>
+        <DetailRow label="Year">{paper.year ?? "—"}</DetailRow>
 
         {typeof paper.citationCount === "number" ? (
           <DetailRow label="Citations">
