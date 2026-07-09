@@ -1,6 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import {
+  S2BatchResponseSchema,
+  S2CursorSchema,
+  S2PaperRowArraySchema,
+  type S2Paper,
+  type S2PaperRow,
+} from "../src/lib/schemas/s2-paper";
 
 type EnrichConfig = {
   batchSize: number;
@@ -8,39 +15,6 @@ type EnrichConfig = {
   dryRun: boolean;
   requestDelayMs: number;
   apiKey: string | null;
-};
-
-type PaperRow = {
-  id: string;
-  arxiv_id: string;
-  doi: string | null;
-  venue: string | null;
-  year: number | null;
-  ingested_at: string;
-};
-
-type S2ExternalIds = {
-  ArXiv?: string;
-  DOI?: string;
-  MAG?: string;
-  CorpusId?: number;
-};
-
-type S2OpenAccessPdf = {
-  url: string;
-  status: string;
-};
-
-type S2Paper = {
-  paperId: string;
-  externalIds: S2ExternalIds;
-  citationCount: number;
-  year: number | null;
-  venue: string;
-  title: string;
-  url: string;
-  publicationDate: string | null;
-  openAccessPdf: S2OpenAccessPdf | null;
 };
 
 const S2_BASE = "https://api.semanticscholar.org/graph/v1";
@@ -140,7 +114,7 @@ async function getPapersToEnrich(
     throw error;
   }
 
-  return (data ?? []) as PaperRow[];
+  return S2PaperRowArraySchema.parse(data ?? []);
 }
 
 async function fetchS2Batch(
@@ -172,12 +146,12 @@ async function fetchS2Batch(
     );
   }
 
-  return (await response.json()) as (S2Paper | null)[];
+  return S2BatchResponseSchema.parse(await response.json());
 }
 
 async function updatePaper(
   supabase: ReturnType<typeof createSupabaseClient>,
-  paper: PaperRow,
+  paper: S2PaperRow,
   s2: S2Paper,
 ) {
   const updates: Record<string, unknown> = {
@@ -259,7 +233,7 @@ async function getCursor(
     throw error;
   }
 
-  return data as { cursor_value: string | null; imported_count: number } | null;
+  return S2CursorSchema.parse(data);
 }
 
 async function updateCursor(

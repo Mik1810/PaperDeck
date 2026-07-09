@@ -4,12 +4,11 @@ import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { userProfileEmbeddings } from "@/db/schema";
 import { getPapersByIds } from "@/lib/repositories/catalog";
+import {
+  SemanticMatchRowArraySchema,
+  type SemanticMatchRow,
+} from "@/lib/schemas/semantic-match";
 import type { Paper } from "@/types/paper";
-
-type SemanticMatchRow = {
-  paper_id: string;
-  semantic_score: number;
-};
 
 export type SemanticPaperCandidates = {
   papers: Paper[];
@@ -70,7 +69,7 @@ async function matchPapersByEmbedding(
     sql`SELECT * FROM match_papers_by_embedding(${embeddingStr}::vector, ${matchCount}, ${embeddingModelFilter})`,
   );
 
-  return (result as unknown as SemanticMatchRow[]) ?? [];
+  return SemanticMatchRowArraySchema.parse(result);
 }
 
 /** @admin */

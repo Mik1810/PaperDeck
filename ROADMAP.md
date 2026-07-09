@@ -45,6 +45,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Note personali: post-MVP.
 - Tassonomia interessi: derivata dalle fonti disponibili, poi curata e normalizzata dentro l'app.
 - Vincolo economico: approccio free-first, evitando servizi a pagamento finche' possibile.
+- Caching layer: resta basato su Postgres (tabella `recommendations`, TTL 5 minuti). Redis/KV esterni sono rinviati fino al superamento di threshold definiti (catalogo >100k, GET /feed p95 >2s, QPS sostenuto oltre limiti free tier). Il preferred path post-threshold e' Next.js cache built-in prima di valutare servizi esterni.
 
 ## Stato implementazione
 

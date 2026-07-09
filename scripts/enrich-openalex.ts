@@ -1,6 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import {
+  OACursorSchema,
+  OAPaperRowArraySchema,
+  OAResponseSchema,
+  OATopicIdRowSchema,
+  type OAWork,
+  type OAPaperRow,
+  type OATopic,
+} from "../src/lib/schemas/oa-response";
 
 type EnrichConfig = {
   batchSize: number;
@@ -8,49 +17,6 @@ type EnrichConfig = {
   dryRun: boolean;
   requestDelayMs: number;
   email: string | null;
-};
-
-type PaperRow = {
-  id: string;
-  arxiv_id: string | null;
-  doi: string | null;
-  venue: string | null;
-  abstract: string | null;
-  is_open_access: boolean | null;
-  access: string;
-  ingested_at: string;
-};
-
-type OATopic = {
-  id: string;
-  display_name: string;
-  score: number;
-  subfield?: { id: string; display_name: string };
-  field?: { id: string; display_name: string };
-};
-
-type OALocation = {
-  source?: { display_name?: string };
-};
-
-type OAWork = {
-  id: string;
-  doi: string;
-  title: string;
-  primary_location: OALocation | null;
-  open_access: {
-    is_oa: boolean;
-    oa_status: string;
-    oa_url: string | null;
-  };
-  topics: OATopic[];
-  abstract_inverted_index: Record<string, number[]> | null;
-  publication_date: string | null;
-};
-
-type OAResponse = {
-  meta: { count: number; per_page: number; page: number };
-  results: OAWork[];
 };
 
 const OA_BASE = "https://api.openalex.org";
@@ -150,7 +116,7 @@ async function getPapersToEnrich(
     throw error;
   }
 
-  return (data ?? []) as PaperRow[];
+  return OAPaperRowArraySchema.parse(data ?? []);
 }
 
 function reconstructAbstract(
@@ -209,7 +175,7 @@ async function fetchOpenAlexBatch(
     );
   }
 
-  return (await response.json()) as OAResponse;
+  return OAResponseSchema.parse(await response.json());
 }
 
 async function ensureOpenAlexTopic(
@@ -225,7 +191,7 @@ async function ensureOpenAlexTopic(
     .maybeSingle();
 
   if (existing) {
-    return existing.id as string;
+    return OATopicIdRowSchema.parse(existing).id;
   }
 
   const { data: created, error } = await supabase
@@ -244,12 +210,12 @@ async function ensureOpenAlexTopic(
     throw error;
   }
 
-  return created.id as string;
+  return OATopicIdRowSchema.parse(created).id;
 }
 
 async function updatePaper(
   supabase: ReturnType<typeof createSupabaseClient>,
-  paper: PaperRow,
+  paper: OAPaperRow,
   work: OAWork,
 ) {
   const updates: Record<string, unknown> = {
@@ -372,7 +338,7 @@ async function getCursor(
     throw error;
   }
 
-  return data as { cursor_value: string | null; imported_count: number } | null;
+  return OACursorSchema.parse(data);
 }
 
 async function updateCursor(

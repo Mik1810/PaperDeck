@@ -3,6 +3,14 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { XMLParser } from "fast-xml-parser";
 import { arxivCategoryLabels } from "../src/lib/arxiv-categories";
+import {
+  ArxivFeedSchema,
+  ArxivIdRowSchema,
+  IngestionCursorSchema,
+  SingleIdRowSchema,
+  TopicRowArraySchema,
+  type IngestionCursor,
+} from "../src/lib/schemas/arxiv-entry";
 
 type ArxivPaper = {
   arxivId: string;
@@ -18,17 +26,6 @@ type ArxivPaper = {
   url: string;
   pdfUrl: string | null;
   primaryCategory: string | null;
-};
-
-type TopicRow = {
-  id: string;
-  arxiv_category: string | null;
-};
-
-type IngestionCursor = {
-  cursor_value: string | null;
-  last_seen_published_at: string | null;
-  last_seen_external_id: string | null;
 };
 
 type IngestionConfig = {
@@ -297,11 +294,7 @@ async function fetchArxivPapersForCategory(
     attributeNamePrefix: "@_",
     removeNSPrefix: false,
   });
-  const parsed = parser.parse(await response.text()) as {
-    feed?: {
-      entry?: Record<string, unknown> | Array<Record<string, unknown>>;
-    };
-  };
+  const parsed = ArxivFeedSchema.parse(parser.parse(await response.text()));
 
   return asArray(parsed.feed?.entry).map(parseEntry);
 }
@@ -331,7 +324,7 @@ async function getExistingArxivIds(
     throw error;
   }
 
-  return new Set((data ?? []).map((row) => row.arxiv_id as string));
+  return new Set((data ?? []).map((row) => ArxivIdRowSchema.parse(row).arxiv_id));
 }
 
 async function getBackfillCursor(
@@ -349,7 +342,7 @@ async function getBackfillCursor(
     throw error;
   }
 
-  return data as IngestionCursor | null;
+  return IngestionCursorSchema.parse(data);
 }
 
 async function updateBackfillCursor(
@@ -401,7 +394,7 @@ async function getCategoryCursor(
     throw error;
   }
 
-  return data as IngestionCursor | null;
+  return IngestionCursorSchema.parse(data);
 }
 
 function isAfterCursor(paper: ArxivPaper, cursor: IngestionCursor | null) {
@@ -504,7 +497,7 @@ async function ensureCategoryTopics(
   }
 
   return new Map(
-    ((data ?? []) as TopicRow[])
+    TopicRowArraySchema.parse(data ?? [])
       .filter((topic) => topic.arxiv_category)
       .map((topic) => [topic.arxiv_category as string, topic.id]),
   );
@@ -531,7 +524,7 @@ async function createIngestionRun(
     throw error;
   }
 
-  return data.id as string;
+  return SingleIdRowSchema.parse(data).id;
 }
 
 async function finishIngestionRun(
@@ -609,7 +602,7 @@ async function upsertPaper(
     throw new Error(`Missing saved paper row for ${paper.arxivId}`);
   }
 
-  const paperId = saved.id as string;
+  const paperId = SingleIdRowSchema.parse(saved).id;
   const { error: externalIdError } = await supabase
     .from("paper_external_ids")
     .upsert(

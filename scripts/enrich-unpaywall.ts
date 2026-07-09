@@ -1,38 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import {
+  UPCursorSchema,
+  UPPaperRowArraySchema,
+  UPResponseSchema,
+  type UPLocation,
+  type UPResponse,
+  type UPPaperRow,
+} from "../src/lib/schemas/up-response";
 
 type EnrichConfig = {
   limit: number;
   dryRun: boolean;
   requestDelayMs: number;
   email: string;
-};
-
-type PaperRow = {
-  id: string;
-  arxiv_id: string | null;
-  doi: string | null;
-  is_open_access: boolean | null;
-  pdf_url: string | null;
-  ingested_at: string;
-};
-
-type UPLocation = {
-  url: string | null;
-  url_for_pdf: string | null;
-  url_for_landing_page: string | null;
-  host_type: string | null;
-  version: string | null;
-  license: string | null;
-};
-
-type UPResponse = {
-  doi: string;
-  is_oa: boolean;
-  oa_status: string;
-  best_oa_location: UPLocation | null;
-  oa_locations: UPLocation[];
 };
 
 const UP_BASE = "https://api.unpaywall.org/v2";
@@ -114,7 +96,7 @@ async function getPapersToEnrich(
   supabase: ReturnType<typeof createSupabaseClient>,
   limit: number,
 ) {
-  const allPapers: PaperRow[] = [];
+  const allPapers: UPPaperRow[] = [];
   let page = 0;
   const perPage = 100;
 
@@ -152,7 +134,7 @@ async function getPapersToEnrich(
       (existingExtIds ?? []).map((row) => row.paper_id),
     );
 
-    const notEnriched = (data as PaperRow[]).filter(
+    const notEnriched = UPPaperRowArraySchema.parse(data).filter(
       (p) => !enrichedIds.has(p.id),
     );
 
@@ -183,7 +165,7 @@ async function fetchUnpaywall(doi: string, email: string) {
     );
   }
 
-  return (await response.json()) as UPResponse;
+  return UPResponseSchema.parse(await response.json());
 }
 
 function bestOaUrl(best: UPLocation | null) {
@@ -196,7 +178,7 @@ function bestOaUrl(best: UPLocation | null) {
 
 async function enrichPaper(
   supabase: ReturnType<typeof createSupabaseClient>,
-  paper: PaperRow,
+  paper: UPPaperRow,
   up: UPResponse,
 ) {
   const updates: Record<string, unknown> = {};
@@ -255,7 +237,7 @@ async function getCursor(
     throw error;
   }
 
-  return data as { cursor_value: string | null; imported_count: number } | null;
+  return UPCursorSchema.parse(data);
 }
 
 async function updateCursor(
