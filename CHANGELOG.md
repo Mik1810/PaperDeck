@@ -8,6 +8,7 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Added a Zod validation layer (`src/lib/schemas/*`) and replaced unsafe `as` casts with `.parse()` in semantic retrieval and the ingest/enrich scripts.
 - Added a catalog search page at `/search` and replaced the redundant `Topics` navigation item with `Search`.
 - Added Prev/Next pagination to `/search` (20 results per page) with URL-driven `page` params.
 - Added an in-app `/digest` page ("New for you"): a scannable, topic-grouped list of the 10 most relevant recent papers (last 7 days, widening to 14/30 when sparse), distinct from the swipe-based feed. Added a Digest nav item and moved mobile Settings access to a header gear icon.
@@ -16,6 +17,14 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Swipe-right save-to-Read-later now awaits the mutation and rolls back the card on failure, matching the dismiss path (no more silent data loss).
+- Wrapped `saveSelectedTopics` (delete + insert + profile update) in a transaction so interrupted onboarding can no longer wipe interests.
+- Made playlist reordering atomic and batched (single `CASE` update) and fixed the next-position race on add via a `FOR UPDATE` lock.
+- Scoped per-paper note deletion to its paper, not just owner + note id.
+- Made favorites and Read later ordering deterministic (favorites by newest; Read later by added date as a stable tie-breaker).
+- Stopped fabricating the current year for papers with a missing year; `year` is now optional and hidden in the UI when absent.
+- Generalized the misleading `requirePaperId` form helper to `requireFormId(field)` and renamed the playlist hidden inputs to `playlistId`.
+- Removed the N+1 playlist-item queries on the library page (single batched query).
 - Scheduled the paper summary workflow twice daily (05:37 and 17:37 UTC) so summary generation keeps pace with nightly arXiv ingestion.
 - Fixed the arXiv ingestion workflow `Summary` step failing with `jq: Cannot iterate over string` (exit 5) by rewriting the summary formatter in Python; ingestion itself was succeeding but the run was marked failed.
 - Reduced `/feed` refresh cost by reusing the already-loaded feed state, caching short-lived live recommendation batches, and clearing cached feed batches when interests change.
