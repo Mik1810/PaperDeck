@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -387,16 +387,17 @@ async function main() {
 
     if (!dryRun) {
       try {
-        const labelArgs =
-          entry.labels.length > 0
-            ? `--label "${entry.labels.join(",")}"`
-            : "";
+        const args = ["issue", "create", "--title", entry.title];
+        if (entry.labels.length > 0) {
+          args.push("--label", entry.labels.join(","));
+        }
+        args.push("--body-file", "-");
 
-        const cmd = `gh issue create --title "${entry.title.replace(/"/g, '\\"')}" ${labelArgs} --body -`;
-
-        execSync(cmd, {
+        execFileSync("gh", args, {
           input: body,
-          stdio: verbose ? "inherit" : ["pipe", "pipe", "pipe"],
+          stdio: verbose
+            ? ["pipe", "inherit", "inherit"]
+            : ["pipe", "pipe", "pipe"],
         });
 
         console.log(`CREATED: ${entry.title}`);

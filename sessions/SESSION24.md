@@ -118,3 +118,16 @@ skip the analytics-tracking feature but fix genuine bugs/logic errors.
 - `eslint` on touched files: clean.
 - `npm run test:unit`: 46/46 pass.
 
+## Fix issue-import script writing `-` as the body
+
+- Root cause: `scripts/create-issues.ts` invoked `gh issue create ... --body -`.
+  `--body` takes a literal string, so every imported issue got the body `"-"`
+  (this is why #67–#79 had empty `-` bodies); stdin was ignored.
+- Fix: switched to `execFileSync("gh", [...])` with `--body-file -` (reads the
+  body from piped stdin) and always pipe stdin (even in `--verbose`, which
+  previously used `stdio: "inherit"` and would hang waiting on the TTY). Using
+  an args array also removes fragile shell-quoting of the title.
+- Verified end-to-end: imported a throwaway issue, confirmed a real multi-line
+  Markdown body + label, then deleted it.
+
+

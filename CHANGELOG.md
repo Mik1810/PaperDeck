@@ -17,6 +17,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Fixed `npm run issues:import` creating issues with a literal `-` body: the script now uses `gh --body-file -` (piped stdin) instead of `--body -`.
 - Swipe-right save-to-Read-later now awaits the mutation and rolls back the card on failure, matching the dismiss path (no more silent data loss).
 - Wrapped `saveSelectedTopics` (delete + insert + profile update) in a transaction so interrupted onboarding can no longer wipe interests.
 - Made playlist reordering atomic and batched (single `CASE` update) and fixed the next-position race on add via a `FOR UPDATE` lock.
