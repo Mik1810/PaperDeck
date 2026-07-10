@@ -5,6 +5,7 @@ import {
   createEmbeddingAccumulator,
   l2NormalizeEmbedding,
   parseEmbeddingVector,
+  PROFILE_PAPER_INTERACTION_WEIGHTS,
   topicSelectionInputSignature,
 } from "../../src/lib/profile-embedding-utils";
 
@@ -32,6 +33,14 @@ test("addWeightedEmbeddingVector applies weights in place", () => {
   addWeightedEmbeddingVector(accumulator, [1, 1, 1], -1);
 
   assert.deepEqual(accumulator, [3, 7, 11]);
+});
+
+test("already_read has the same positive profile weight as read", () => {
+  assert.equal(
+    PROFILE_PAPER_INTERACTION_WEIGHTS.already_read,
+    PROFILE_PAPER_INTERACTION_WEIGHTS.read,
+  );
+  assert.equal(PROFILE_PAPER_INTERACTION_WEIGHTS.already_read, 3);
 });
 
 test("topicSelectionInputSignature is order-insensitive and not hashed", () => {

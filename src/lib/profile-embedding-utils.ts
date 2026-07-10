@@ -1,5 +1,19 @@
+import type { InteractionType } from "@/types/paper";
+
 export const PROFILE_EMBEDDING_DIMENSION = 384;
 export const SELECTED_TOPIC_EMBEDDING_WEIGHT = 4;
+
+export const PROFILE_PAPER_INTERACTION_WEIGHTS: Partial<
+  Record<InteractionType, number>
+> = {
+  open_detail: 2,
+  favorite: 6,
+  save_to_playlist: 5,
+  read: 3,
+  already_read: 3,
+  not_interested: -5,
+  dismiss: -4,
+};
 
 export type EmbeddingVectorInput = string | number[];
 

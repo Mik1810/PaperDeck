@@ -198,12 +198,15 @@ Initial weights:
 selected topic       4.0
 favorite paper       6.0
 read later paper     5.0
-read paper           3.0
+read / already read   3.0
 open detail paper    2.0
 not interested      -5.0
 dismiss             -4.0
-already read         exclude from feed, no negative topic penalty by default
 ```
+
+`read` is the legacy generic completion signal. `already_read` is the current
+detail-page action; both have the same positive weight and hide the exact paper
+from the active deck.
 
 The vector should be normalized after aggregation.
 
@@ -331,6 +334,7 @@ Wizard completion persists the first ranked deck to `recommendations` with model
 
 - whether semantic retrieval was used;
 - requested match count;
+- synchronous recommendation-impression batch duration, batch ID, and count;
 - whether the pgvector RPC was attempted;
 - RPC match count;
 - loaded candidate paper count;

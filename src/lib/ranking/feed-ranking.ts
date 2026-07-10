@@ -42,6 +42,7 @@ const positiveInteractionWeights: Partial<Record<InteractionType, number>> = {
   favorite: 6,
   save_to_playlist: 5,
   read: 3,
+  already_read: 3,
 };
 
 const negativeInteractionWeights: Partial<Record<InteractionType, number>> = {

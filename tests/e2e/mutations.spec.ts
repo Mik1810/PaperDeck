@@ -269,10 +269,7 @@ test.describe("recommendation analytics", () => {
     await seedTestProfile();
   });
 
-  test("persists feed impressions and links a valid deck interaction", async ({
-    page,
-    request,
-  }) => {
+  test("links a rendered deck action to its feed impression", async ({ page }) => {
     test.skip(!devAuthEnabled, "Requires dev auth.");
     test.skip(!hasDb, "Requires DATABASE_URL.");
 
@@ -290,31 +287,37 @@ test.describe("recommendation analytics", () => {
     expect(impressions[0].model_version).toMatch(/paperdeck-.+-feed-v1/);
     expect(typeof impressions[0].score_components).toBe("object");
 
-    const mutation = await request.post("/api/deck", {
-      data: {
-        action: "open_detail",
-        paperId: impressions[0].paper_id,
-        recommendationImpressionId: impressions[0].id,
-      },
-    });
-
-    expect(mutation.status()).toBe(200);
-
-    const interactions = await withDb((sql) =>
-      sql<{ recommendation_impression_id: string | null }[]>`
-        select recommendation_impression_id
-        from user_paper_interactions
-        where owner_id = ${devOwnerId}
-          and paper_id = ${impressions[0].paper_id}
-          and action = 'open_detail'
-        order by created_at desc
-        limit 1
-      `,
+    const activePaperHref = await page
+      .getByRole("link", { name: "Open" })
+      .getAttribute("href");
+    const activePaperId = activePaperHref?.split("/").at(-1);
+    const activeImpression = impressions.find(
+      (impression) => impression.paper_id === activePaperId,
     );
 
-    expect(interactions[0]?.recommendation_impression_id).toBe(
-      impressions[0].id,
-    );
+    expect(activeImpression).toBeDefined();
+
+    if (!activeImpression) {
+      throw new Error("The rendered active paper has no recommendation impression");
+    }
+
+    await page.getByRole("button", { name: "Dismiss paper" }).click();
+
+    await expect.poll(async () => {
+      const interactions = await withDb(async (sql) =>
+        await sql<{ recommendation_impression_id: string | null }[]>`
+          select recommendation_impression_id
+          from user_paper_interactions
+          where owner_id = ${devOwnerId}
+            and paper_id = ${activeImpression.paper_id}
+            and action = 'dismiss'
+          order by created_at desc
+          limit 1
+        `,
+      );
+
+      return interactions[0]?.recommendation_impression_id;
+    }).toBe(activeImpression.id);
   });
 
   test("ignores invalid or mismatched impression ids without failing mutations", async ({

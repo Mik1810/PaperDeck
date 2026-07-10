@@ -83,4 +83,23 @@ describe("rankFeedPapers score components", () => {
     assert.equal(ranked[0].id, "paper-high");
     assert.equal(ranked[0].rankingScoreComponents.semantic, 108);
   });
+
+  test("uses already_read as positive feedback for related papers", () => {
+    const ranked = rankFeedPapers(
+      [
+        paper({ id: "already-read", topics: [{ id: "topic-a", label: "Topic A" }] }),
+        paper({ id: "candidate", topics: [{ id: "topic-a", label: "Topic A" }] }),
+      ],
+      [{ id: "topic-a", parentId: null }],
+      new Set(),
+      {
+        seenIds: new Set(["already-read"]),
+        interactions: [{ action: "already_read", paperId: "already-read" }],
+      },
+    );
+
+    assert.equal(ranked[0].id, "candidate");
+    assert.equal(ranked[0].rankingScoreComponents.feedback, 18);
+    assert.match(ranked[0].recommendationReason, /recent Topic A feedback/);
+  });
 });

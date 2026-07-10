@@ -8,6 +8,7 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Added a versioned end-to-end social-interactions development plan: recommendation gates, privacy/ACL foundations, metadata sharing, private academic subscriptions, invite-only collections, moderation, and explicit public-release gates.
 - Added a Zod validation layer (`src/lib/schemas/*`) and replaced unsafe `as` casts with `.parse()` in semantic retrieval and the ingest/enrich scripts.
 - Added a catalog search page at `/search` and replaced the redundant `Topics` navigation item with `Search`.
 - Added Prev/Next pagination to `/search` (20 results per page) with URL-driven `page` params.
@@ -17,6 +18,8 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Feed cards now receive real recommendation impression IDs, so their dismiss, favorite, Read later, and open-detail actions retain ranking attribution.
+- `Already read` now contributes the same positive feedback weight as `read` to both feed ranking and the user profile embedding.
 - Fixed `npm run issues:import` creating issues with a literal `-` body: the script now uses `gh --body-file -` (piped stdin) instead of `--body -`.
 - Swipe-right save-to-Read-later now awaits the mutation and rolls back the card on failure, matching the dismiss path (no more silent data loss).
 - Wrapped `saveSelectedTopics` (delete + insert + profile update) in a transaction so interrupted onboarding can no longer wipe interests.

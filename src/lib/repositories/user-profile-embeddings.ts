@@ -19,11 +19,11 @@ import {
   l2NormalizeEmbedding,
   parseEmbeddingVector,
   PROFILE_EMBEDDING_DIMENSION,
+  PROFILE_PAPER_INTERACTION_WEIGHTS,
   SELECTED_TOPIC_EMBEDDING_WEIGHT,
   topicSelectionInputSignature,
   vectorToPgLiteral,
 } from "@/lib/profile-embedding-utils";
-import type { InteractionType } from "@/types/paper";
 
 export const EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2";
 const MAX_INTERACTIONS = 100;
@@ -54,15 +54,6 @@ export type ProfileEmbeddingRefreshResult =
       reason: "no_weighted_vectors" | "zero_vector";
       vectorCount: number;
     };
-
-const paperInteractionWeights: Partial<Record<InteractionType, number>> = {
-  open_detail: 2,
-  favorite: 6,
-  save_to_playlist: 5,
-  read: 3,
-  not_interested: -5,
-  dismiss: -4,
-};
 
 function parseVector(value: string | number[]) {
   return parseEmbeddingVector(value, PROFILE_EMBEDDING_DIMENSION);
@@ -290,7 +281,7 @@ export async function refreshUserProfileEmbedding(
   }
 
   for (const interaction of interactionRows) {
-    const weight = paperInteractionWeights[interaction.action] ?? 0;
+    const weight = PROFILE_PAPER_INTERACTION_WEIGHTS[interaction.action] ?? 0;
     accumulateWeights(paperWeights, interaction.paperId, weight);
   }
 

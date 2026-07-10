@@ -154,11 +154,11 @@ Current behavior:
 
 - exact topic matches rank highest;
 - child/parent topic matches still count with lower weight;
-- `open_detail`, `favorite`, `save_to_playlist`, and `read` add positive topic feedback;
+- `open_detail`, `favorite`, `save_to_playlist`, `read`, and `already_read` add positive topic feedback;
 - `dismiss` and `not_interested` add negative topic feedback;
 - papers with `open_detail`, `dismiss`, `favorite`, `save_to_playlist`, `not_interested`, `read`, or `already_read` are hidden from the active deck.
 
-`Already read` and `Not interested` are recorded from the paper detail page. Removing a paper from `Read later` deletes the playlist item but does not add negative feedback.
+`Already read` and `Not interested` are recorded from the paper detail page. `already_read` has the same positive weight as the legacy `read` signal. Removing a paper from `Read later` deletes the playlist item but does not add negative feedback.
 
 Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
 

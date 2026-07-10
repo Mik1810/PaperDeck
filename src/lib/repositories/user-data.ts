@@ -773,9 +773,15 @@ export async function getFeedPageData(ownerId: string) {
   const { rankedPapers, timings } = feedData;
   const visiblePapers = rankedPapers.slice(0, INITIAL_FEED_RECOMMENDATION_COUNT);
   const state = feedData.feedState.userState;
+  const impressionBatch = await measureAsync(
+    timings,
+    "recommendation_impressions",
+    recordRecommendationImpressions(ownerId, visiblePapers),
+  );
   const feedPapers: FeedPaper[] = visiblePapers.map((paper) => ({
     ...paper,
-    recommendationImpressionId: undefined,
+    recommendationImpressionId:
+      impressionBatch.impressionIdsByPaperId.get(paper.id),
   }));
 
   if (feedData.liveBatchToCache.length) {
@@ -791,20 +797,14 @@ export async function getFeedPageData(ownerId: string) {
     });
   }
 
-  after(async () => {
-    try {
-      await recordRecommendationImpressions(ownerId, visiblePapers);
-    } catch (error) {
-      logger.error("feed_impressions_failed", { ownerId, error });
-    }
-  });
-
   logger.info("feed_timing", {
     ownerId,
     totalMs: Math.round(performance.now() - startedAt),
     source: feedData.source,
     timings,
     rankedCount: rankedPapers.length,
+    recommendationImpressionBatchId: impressionBatch.batchId,
+    recommendationImpressionCount: impressionBatch.impressionIdsByPaperId.size,
   });
 
   return {
