@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { animate, useMotionValue, useTransform, motion, type MotionValue, type PanInfo } from "motion/react";
 import { Bookmark, X } from "lucide-react";
 import { MathContent } from "@/components/math-content";
@@ -27,10 +27,9 @@ function SwipeOverlay({
   dragX: MotionValue<number>;
 }) {
   const opacity = useTransform(dragX, (value: number) => {
-    const threshold = direction === "left" ? -20 : 20;
-    const crossed = direction === "left" ? value < threshold : value > threshold;
-    if (!crossed) return 0;
-    return Math.min(Math.abs(value) / SWIPE_THRESHOLD, 1);
+    const relevant = direction === "left" ? Math.abs(Math.min(value, 0)) : Math.max(value, 0);
+    if (relevant < 20) return 0;
+    return Math.min(relevant / SWIPE_THRESHOLD, 1);
   });
 
   const scale = useTransform(dragX, (value: number) => {
@@ -120,6 +119,16 @@ export function FeedDeck({
 
   const exitingRef = useRef(false);
 
+  useEffect(() => {
+    const prev = document.body.style.overflowX;
+    document.body.style.overflowX = "hidden";
+    document.documentElement.style.overflowX = "hidden";
+    return () => {
+      document.body.style.overflowX = prev;
+      document.documentElement.style.overflowX = "";
+    };
+  }, []);
+
   const setPaperDismissed = useCallback((paperId: string, isDismissed: boolean) => {
     setDismissedState((current) => {
       const paperIds =
@@ -181,6 +190,7 @@ export function FeedDeck({
   }, [setPaperDismissed]);
 
   const dragX = useMotionValue<number>(0);
+  const rotate = useTransform(dragX, (value: number) => value * 0.05);
 
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     const offset = info.offset.x;
@@ -226,7 +236,7 @@ export function FeedDeck({
     <div className="grid gap-6 md:grid-cols-[1fr_280px] lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="md:pr-0">
         {visibleActivePaper ? (
-          <div className={`relative ${PAPER_CARD_HEIGHT_CLASS_NAME}`}>
+          <div className={`relative [overflow-y:clip] ${PAPER_CARD_HEIGHT_CLASS_NAME}`}>
             {visiblePapers.slice(1, 3).map((paper, index) => (
               <div
                 key={paper.id}
@@ -242,9 +252,8 @@ export function FeedDeck({
 
             <motion.div
               className="relative z-10 select-none"
-              style={{ x: dragX }}
+              style={{ x: dragX, rotate }}
               drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
               dragElastic={1}
               onDragEnd={handleDragEnd}
               whileTap={{ cursor: "grabbing" }}
