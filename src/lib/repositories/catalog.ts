@@ -235,14 +235,15 @@ export async function searchPapers(
 
   const pattern = `%${normalizedQuery}%`;
   const offset = searchPageOffset(currentPage);
+  const tsquery = sql`plainto_tsquery('english', ${normalizedQuery})`;
+  const rank = sql<number>`coalesce(ts_rank(${papers}."search_vector", ${tsquery}), 0)`;
 
   const paperMatches = await db
-    .select({ id: papers.id })
+    .select({ id: papers.id, rank })
     .from(papers)
     .where(sql`
-      ${papers.title} ilike ${pattern}
-      or coalesce(${papers.abstract}, '') ilike ${pattern}
-      or coalesce(${papers.venue}, '') ilike ${pattern}
+      ${papers}."search_vector" @@ ${tsquery}
+      or ${papers.title} ilike ${pattern}
       or coalesce(${papers.arxivId}, '') ilike ${pattern}
       or coalesce(${papers.doi}, '') ilike ${pattern}
       or exists (
@@ -257,13 +258,10 @@ export async function searchPapers(
         join ${taxonomyTopics}
           on ${taxonomyTopics.id} = ${paperTopics.topicId}
         where ${paperTopics.paperId} = ${papers.id}
-          and (
-            ${taxonomyTopics.label} ilike ${pattern}
-            or coalesce(${taxonomyTopics.arxivCategory}, '') ilike ${pattern}
-          )
+          and ${taxonomyTopics.label} ilike ${pattern}
       )
     `)
-    .orderBy(desc(papers.year), desc(papers.citationCount))
+    .orderBy(desc(rank), desc(papers.year))
     .offset(offset)
     .limit(SEARCH_PAGE_SIZE + 1);
 
