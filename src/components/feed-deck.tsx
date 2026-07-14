@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { animate, useMotionValue, useTransform, motion, type MotionValue, type PanInfo } from "motion/react";
 import { Bookmark, X } from "lucide-react";
 import { MathContent } from "@/components/math-content";
 import {
@@ -15,7 +16,57 @@ import {
 import type { FeedPaper } from "@/types/paper";
 
 const SWIPE_THRESHOLD = 100;
-const EXIT_DURATION = 300;
+const EXIT_VELOCITY = 500;
+const EXIT_DURATION = 0.3;
+
+function SwipeOverlay({
+  direction,
+  dragX,
+}: {
+  direction: "left" | "right";
+  dragX: MotionValue<number>;
+}) {
+  const opacity = useTransform(dragX, (value: number) => {
+    const threshold = direction === "left" ? -20 : 20;
+    const crossed = direction === "left" ? value < threshold : value > threshold;
+    if (!crossed) return 0;
+    return Math.min(Math.abs(value) / SWIPE_THRESHOLD, 1);
+  });
+
+  const scale = useTransform(dragX, (value: number) => {
+    const raw = Math.min(Math.abs(value) / SWIPE_THRESHOLD, 1);
+    return 0.8 + raw * 0.2;
+  });
+
+  const isLeft = direction === "left";
+
+  return (
+    <motion.div
+      className={`pointer-events-none absolute inset-0 z-20 flex items-center rounded-2xl ${
+        isLeft ? "justify-start" : "justify-end"
+      }`}
+      style={{
+        opacity,
+        background: isLeft
+          ? "linear-gradient(to right, rgba(244,63,94,0.18) 0%, transparent 50%)"
+          : "linear-gradient(to left, rgba(20,184,166,0.18) 0%, transparent 50%)",
+      }}
+    >
+      <motion.div
+        className={`mx-8 flex h-16 w-16 items-center justify-center rounded-full border-2 bg-white/85 backdrop-blur-sm shadow-sm ${
+          isLeft ? "border-rose-200 text-rose-600" : "border-teal-200 text-teal-600"
+        }`}
+        style={{ scale }}
+      >
+        {isLeft ? (
+          <X size={30} strokeWidth={2.5} />
+        ) : (
+          <Bookmark size={28} strokeWidth={2.5} />
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
 
 type FeedDeckProps = {
   activePaper: FeedPaper | null;
@@ -67,13 +118,7 @@ export function FeedDeck({
   const visibleActivePaper = visiblePapers[0] ?? null;
   const visibleNextPapers = visiblePapers.slice(1, 6);
 
-  const [dragX, setDragX] = useState(0);
-  const [isExiting, setIsExiting] = useState(false);
-  const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(null);
-  const dragStartX = useRef(0);
-  const currentDragX = useRef(0);
-  const isSwipeLocked = useRef(false);
-  const isPointerDown = useRef(false);
+  const exitingRef = useRef(false);
 
   const setPaperDismissed = useCallback((paperId: string, isDismissed: boolean) => {
     setDismissedState((current) => {
@@ -135,82 +180,53 @@ export function FeedDeck({
     }
   }, [setPaperDismissed]);
 
-  const pointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    isPointerDown.current = true;
-    isSwipeLocked.current = false;
-    dragStartX.current = e.clientX;
-  }, []);
+  const dragX = useMotionValue<number>(0);
 
-  const pointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isPointerDown.current) return;
-    const dx = e.clientX - dragStartX.current;
+  function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
+    const offset = info.offset.x;
+    const velocity = info.velocity.x;
 
-    if (!isSwipeLocked.current && Math.abs(dx) > 10) {
-      isSwipeLocked.current = true;
-      e.currentTarget.setPointerCapture(e.pointerId);
+    if (Math.abs(offset) >= SWIPE_THRESHOLD || Math.abs(velocity) >= EXIT_VELOCITY) {
+      if (exitingRef.current || !visibleActivePaper) return;
+      exitingRef.current = true;
+
+      const direction: "left" | "right" = offset > 0 ? "right" : "left";
+      const targetX = direction === "left" ? -window.innerWidth * 1.2 : window.innerWidth * 1.2;
+
+      void animate(dragX, targetX, {
+        type: "spring",
+        stiffness: 300,
+        damping: 32,
+        duration: EXIT_DURATION,
+      }).then(() => {
+        if (direction === "right") {
+          void handleReadLaterSubmit(
+            visibleActivePaper.id,
+            visibleActivePaper.recommendationImpressionId,
+          );
+        } else {
+          void handleDismissSubmit(
+            visibleActivePaper.id,
+            visibleActivePaper.recommendationImpressionId,
+          );
+        }
+        dragX.set(0);
+        exitingRef.current = false;
+      });
+    } else {
+      void animate(dragX, 0, {
+        type: "spring",
+        stiffness: 400,
+        damping: 25,
+      });
     }
-
-    if (isSwipeLocked.current) {
-      currentDragX.current = dx;
-      setDragX(dx);
-    }
-  }, []);
-
-  const pointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isPointerDown.current) return;
-      isPointerDown.current = false;
-      if (isSwipeLocked.current) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
-
-      const finalX = currentDragX.current;
-
-      if (Math.abs(finalX) >= SWIPE_THRESHOLD && visibleActivePaper) {
-        const direction = finalX > 0 ? "right" : "left";
-        setExitDirection(direction);
-        setIsExiting(true);
-
-        setTimeout(() => {
-          if (direction === "right") {
-            handleReadLaterSubmit(
-              visibleActivePaper.id,
-              visibleActivePaper.recommendationImpressionId,
-            );
-          } else {
-            handleDismissSubmit(
-              visibleActivePaper.id,
-              visibleActivePaper.recommendationImpressionId,
-            );
-          }
-          setIsExiting(false);
-          setExitDirection(null);
-          setDragX(0);
-          currentDragX.current = 0;
-        }, EXIT_DURATION);
-      } else {
-        setDragX(0);
-        currentDragX.current = 0;
-      }
-    },
-    [handleDismissSubmit, handleReadLaterSubmit, visibleActivePaper],
-  );
-
-  const exitTransform = exitDirection === "left"
-    ? "translateX(-150%) rotate(-15deg)"
-    : exitDirection === "right"
-    ? "translateX(150%) rotate(15deg)"
-    : "";
-
-  const cardOpacity = dragX !== 0 ? (1 - Math.min(Math.abs(dragX) / SWIPE_THRESHOLD, 0.4)) : 1;
+  }
 
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_280px] lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="md:pr-0">
         {visibleActivePaper ? (
           <div className={`relative ${PAPER_CARD_HEIGHT_CLASS_NAME}`}>
-            {/* Stacked next cards behind */}
             {visiblePapers.slice(1, 3).map((paper, index) => (
               <div
                 key={paper.id}
@@ -224,48 +240,17 @@ export function FeedDeck({
               />
             ))}
 
-            {/* Active card with swipe */}
-            <div
-              className={`relative z-10 select-none ${dragX !== 0 ? "cursor-grabbing" : ""}`}
-              style={{
-                transform: isExiting
-                  ? exitTransform
-                  : dragX !== 0
-                  ? `translateX(${dragX}px) rotate(${dragX * 0.05}deg)`
-                  : "translateX(0) rotate(0deg)",
-                opacity: isExiting ? 0 : cardOpacity,
-                transition: dragX !== 0 ? "none" : `transform ${EXIT_DURATION}ms ease, opacity ${EXIT_DURATION}ms ease`,
-              }}
-              onPointerDown={pointerDown}
-              onPointerMove={pointerMove}
-              onPointerUp={pointerUp}
-              onPointerCancel={pointerUp}
+            <motion.div
+              className="relative z-10 select-none"
+              style={{ x: dragX }}
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={1}
+              onDragEnd={handleDragEnd}
+              whileTap={{ cursor: "grabbing" }}
             >
-              {/* Swipe hint overlays */}
-              {dragX !== 0 && Math.abs(dragX) > 20 && (
-                <>
-                  <div
-                    className="absolute inset-0 z-20 flex items-center justify-start rounded-2xl px-8"
-                    style={{
-                      opacity: Math.min(Math.abs(Math.min(dragX, 0)) / SWIPE_THRESHOLD, 1),
-                    }}
-                  >
-                    <div className="rounded-2xl border-4 border-red-500 p-3">
-                      <X className="text-red-500" size={36} strokeWidth={3} />
-                    </div>
-                  </div>
-                  <div
-                    className="absolute inset-0 z-20 flex items-center justify-end rounded-2xl px-8"
-                    style={{
-                      opacity: Math.min(Math.abs(Math.max(dragX, 0)) / SWIPE_THRESHOLD, 1),
-                    }}
-                  >
-                    <div className="rounded-2xl border-4 border-teal-300 p-3">
-                      <Bookmark className="text-teal-400" size={36} strokeWidth={3} />
-                    </div>
-                  </div>
-                </>
-              )}
+              <SwipeOverlay direction="left" dragX={dragX} />
+              <SwipeOverlay direction="right" dragX={dragX} />
 
               <PaperCard
                 key={`${visibleActivePaper.id}-${favoriteIds.has(visibleActivePaper.id)}-${readLaterIds.has(visibleActivePaper.id)}`}
@@ -279,7 +264,8 @@ export function FeedDeck({
                 onDismissSubmit={handleDismissSubmit}
                 paper={visibleActivePaper}
               />
-            </div>
+            </motion.div>
+
           </div>
         ) : activePaper === null && nextPapers.length === 0 ? (
           <div className="w-full max-w-md rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm md:max-w-xl lg:max-w-none">
