@@ -21,13 +21,28 @@ function hasDatabaseEnv() {
 
 const hasDb = hasDatabaseEnv();
 
-async function withDb<T>(task: (sql: postgres.Sql) => Promise<T>) {
+async function withDb<T>(
+  task: (sql: postgres.Sql) => Promise<T>,
+  retries = 3,
+): Promise<T> {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is required");
   }
   const sql = postgres(process.env.DATABASE_URL, { max: 1 });
   try {
     return await task(sql);
+  } catch (error) {
+    if (
+      retries > 0 &&
+      error instanceof Error &&
+      error.message.includes("EMAXCONNSESSION")
+    ) {
+      await sql.end();
+      const delay = 1000 * (4 - retries);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return withDb(task, retries - 1);
+    }
+    throw error;
   } finally {
     await sql.end();
   }

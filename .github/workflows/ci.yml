@@ -29,6 +29,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || '' }}
       DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
+      DATABASE_MAX_CONNECTIONS: "1"
       PAPERDECK_E2E_DEV_AUTH: "true"
       PAPERDECK_E2E_OWNER_ID: playwright-user-${{ github.run_id }}
 
