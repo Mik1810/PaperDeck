@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Layers3, Library, Newspaper, Search } from "lucide-react";
+import { AppNavLink } from "@/components/app-nav-link";
 
 const navItems = [
   { href: "/feed", label: "Feed", icon: Layers3 },
@@ -24,7 +24,7 @@ export function BottomNav() {
             (item.href === "/feed" && pathname.startsWith("/papers/"));
 
           return (
-            <Link
+            <AppNavLink
               key={item.href}
               href={item.href}
               className={`flex h-12 flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-bold ${
@@ -35,7 +35,7 @@ export function BottomNav() {
             >
               <Icon aria-hidden="true" size={18} strokeWidth={2.4} />
               <span>{item.label}</span>
-            </Link>
+            </AppNavLink>
           );
         })}
       </div>

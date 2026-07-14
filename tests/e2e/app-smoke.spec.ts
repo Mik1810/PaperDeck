@@ -77,6 +77,33 @@ async function seedLegacyInterestDevOwner() {
   });
 }
 
+async function seedSettingsInterestDevOwner() {
+  return withDb(async (sql) => {
+    const topics = await sql<{ id: string; label: string }[]>`
+      select id, label
+      from taxonomy_topics
+      order by sort_order, label
+      limit 2
+    `;
+
+    if (topics.length < 2) {
+      throw new Error("Settings smoke setup requires at least two taxonomy topics");
+    }
+
+    await sql`delete from profiles where owner_id = ${devOwnerId}`;
+    await sql`
+      insert into profiles (owner_id, onboarding_completed_at)
+      values (${devOwnerId}, now())
+    `;
+    await sql`
+      insert into user_interests (owner_id, topic_id)
+      values (${devOwnerId}, ${topics[0].id})
+    `;
+
+    return topics[0];
+  });
+}
+
 async function seedIgnoredHistoryDevOwner() {
   return withDb(async (sql) => {
     const papers = await sql<{ id: string; title: string }[]>`
@@ -232,6 +259,61 @@ test.describe("dev-auth app smoke", () => {
     await expect(page.getByText("Dismissed")).toBeVisible();
     await expect(page.getByText(papers[0].title)).toHaveCount(1);
     await expect(page.getByText(papers[1].title)).toHaveCount(1);
+  });
+
+  test("settings interests persist only after explicit save", async ({ page }) => {
+    test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
+
+    const initialTopic = await seedSettingsInterestDevOwner();
+    const response = await page.goto("/settings");
+
+    expect(response?.status()).toBeLessThan(500);
+
+    const saveButton = page.getByRole("button", {
+      exact: true,
+      name: "Save changes",
+    });
+    await expect(saveButton).toBeDisabled();
+    const newTopicButton = page
+      .getByRole("heading", { exact: true, name: "Microcategories" })
+      .locator("..")
+      .getByRole("button")
+      .first();
+    const newTopicLabel = await newTopicButton.textContent();
+    expect(newTopicLabel).toBeTruthy();
+    await newTopicButton.click();
+    await expect(saveButton).toBeEnabled();
+
+    const newTopic = await withDb(async (sql) => {
+      const rows = await sql<{ id: string }[]>`
+        select id
+        from taxonomy_topics
+        where label = ${newTopicLabel!}
+        limit 1
+      `;
+      return rows[0];
+    });
+    expect(newTopic).toBeTruthy();
+
+    const beforeSave = await withDb((sql) => sql<{ topic_id: string }[]>`
+      select topic_id
+      from user_interests
+      where owner_id = ${devOwnerId}
+    `);
+    expect(beforeSave.map((row) => row.topic_id)).toEqual([initialTopic.id]);
+
+    await saveButton.click();
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+
+    const afterSave = await withDb((sql) => sql<{ topic_id: string }[]>`
+      select topic_id
+      from user_interests
+      where owner_id = ${devOwnerId}
+      order by topic_id
+    `);
+    expect(afterSave.map((row) => row.topic_id).sort()).toEqual(
+      [initialTopic.id, newTopic.id].sort(),
+    );
   });
 
   for (const { path, heading } of [

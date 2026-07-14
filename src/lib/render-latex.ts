@@ -1,74 +1,121 @@
 import katex from "katex";
 
+type MathDelimiter = {
+  close: string;
+  displayMode: boolean;
+  open: string;
+};
+
+const mathDelimiters: MathDelimiter[] = [
+  { open: "$$", close: "$$", displayMode: true },
+  { open: "\\[", close: "\\]", displayMode: true },
+  { open: "\\(", close: "\\)", displayMode: false },
+  { open: "$", close: "$", displayMode: false },
+];
+
 export function renderLatex(text: string): string {
-  if (!text.includes("$")) {
-    return escapeHtml(text);
+  const parts: string[] = [];
+  let plainText = "";
+  let cursor = 0;
+
+  function flushPlainText() {
+    if (!plainText) return;
+    parts.push(escapeHtml(plainText));
+    plainText = "";
   }
 
-  const parts: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > 0) {
-    const dollarIdx = remaining.indexOf("$");
-
-    if (dollarIdx === -1) {
-      parts.push(escapeHtml(remaining));
-      break;
-    }
-
-    if (dollarIdx > 0) {
-      parts.push(escapeHtml(remaining.slice(0, dollarIdx)));
-    }
-
-    remaining = remaining.slice(dollarIdx + 1);
-
-    if (remaining.startsWith("$")) {
-      remaining = remaining.slice(1);
-      const endDisplay = remaining.indexOf("$$");
-      if (endDisplay !== -1) {
-        const math = remaining.slice(0, endDisplay);
-        remaining = remaining.slice(endDisplay + 2);
-        try {
-          parts.push(
-            katex.renderToString(math, {
-              throwOnError: false,
-              output: "html",
-              displayMode: true,
-              strict: false,
-            }),
-          );
-        } catch {
-          parts.push(escapeHtml("$$" + math + "$$"));
-        }
-        continue;
-      }
-      parts.push(escapeHtml("$"));
+  while (cursor < text.length) {
+    if (
+      text[cursor] === "\\" &&
+      text[cursor + 1] === "$" &&
+      !isEscaped(text, cursor)
+    ) {
+      plainText += "$";
+      cursor += 2;
       continue;
     }
 
-    const nextDollar = remaining.indexOf("$");
-    if (nextDollar === -1) {
-      parts.push(escapeHtml("$" + remaining));
-      break;
+    const delimiter = mathDelimiters.find(
+      ({ open }) =>
+        text.startsWith(open, cursor) && !isEscaped(text, cursor),
+    );
+
+    if (!delimiter) {
+      plainText += text[cursor];
+      cursor += 1;
+      continue;
     }
 
-    const math = remaining.slice(0, nextDollar);
-    remaining = remaining.slice(nextDollar + 1);
+    const mathStart = cursor + delimiter.open.length;
+    const mathEnd = findUnescapedDelimiter(text, delimiter.close, mathStart);
 
-    try {
-      parts.push(
-        katex.renderToString(math, {
-          throwOnError: false,
-          output: "html",
-          strict: false,
-        }),
-      );
-    } catch {
-      parts.push(escapeHtml("$" + math + "$"));
+    if (mathEnd === -1) {
+      plainText += delimiter.open;
+      cursor = mathStart;
+      continue;
     }
+
+    flushPlainText();
+    parts.push(
+      renderMath(
+        text.slice(mathStart, mathEnd),
+        delimiter.displayMode,
+        delimiter.open,
+        delimiter.close,
+      ),
+    );
+    cursor = mathEnd + delimiter.close.length;
   }
 
+  flushPlainText();
   return parts.join("");
+}
+
+function findUnescapedDelimiter(
+  text: string,
+  delimiter: string,
+  start: number,
+) {
+  let cursor = start;
+
+  while (cursor < text.length) {
+    const delimiterIndex = text.indexOf(delimiter, cursor);
+
+    if (delimiterIndex === -1) return -1;
+    if (!isEscaped(text, delimiterIndex)) return delimiterIndex;
+
+    cursor = delimiterIndex + delimiter.length;
+  }
+
+  return -1;
+}
+
+function isEscaped(text: string, index: number) {
+  let backslashCount = 0;
+
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor -= 1) {
+    backslashCount += 1;
+  }
+
+  return backslashCount % 2 === 1;
+}
+
+function renderMath(
+  math: string,
+  displayMode: boolean,
+  open: string,
+  close: string,
+) {
+  try {
+    return katex.renderToString(math, {
+      throwOnError: false,
+      output: "html",
+      displayMode,
+      strict: false,
+    });
+  } catch {
+    return escapeHtml(`${open}${math}${close}`);
+  }
 }
 
 function escapeHtml(text: string): string {

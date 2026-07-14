@@ -1,9 +1,9 @@
-import Link from "next/link";
 import Image from "next/image";
 import type { ReactNode } from "react";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { BookOpenCheck, Settings } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
+import { AppNavLink } from "@/components/app-nav-link";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 
 type AppShellProps = {
@@ -35,7 +35,7 @@ export function AppShell({
     <div className="min-h-screen bg-[#f6f7fb] text-slate-950">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/92 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/feed" className="flex items-center gap-3 rounded-lg">
+          <AppNavLink href="/feed" className="flex items-center gap-3 rounded-lg">
             <Image
               alt="PaperDeck"
               className="h-10 w-10 rounded-lg shadow-sm"
@@ -50,28 +50,28 @@ export function AppShell({
                 CS paper discovery
               </p>
             </div>
-          </Link>
+          </AppNavLink>
 
           <nav className="hidden items-center gap-1 md:flex">
             {desktopNav.map((item) => (
-              <Link
+              <AppNavLink
                 key={item.href}
                 href={item.href}
                 className="rounded-lg px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
               >
                 {item.label}
-              </Link>
+              </AppNavLink>
             ))}
           </nav>
 
           <div className="flex items-center gap-2">
-            <Link
+            <AppNavLink
               href="/settings"
               aria-label="Settings"
               className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 md:hidden"
             >
               <Settings aria-hidden="true" size={18} strokeWidth={2.4} />
-            </Link>
+            </AppNavLink>
             {devAuthEnabled ? (
               <div className="h-10 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-black text-amber-800">
                 Local dev

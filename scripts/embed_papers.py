@@ -30,15 +30,31 @@ class PaperCandidate:
 
 
 class PaperEmbeddingClient(SupabaseRestClient):
-    def select_papers(self, table_limit: int) -> list[dict[str, Any]]:
-        return self.request_json(
+    def _select_page(self, table_limit: int, offset: int) -> list[dict[str, Any]]:
+        result = self.request_json(
             "papers",
             {
                 "select": "id,title,abstract,embedding,embedding_model,embedding_content_hash,ingested_at",
-                "order": "ingested_at.desc",
+                "order": "ingested_at.asc",
                 "limit": str(table_limit),
+                "offset": str(offset),
             },
+            range_header=f"{offset}-{offset + table_limit - 1}",
         )
+        return result if isinstance(result, list) else []
+
+    def select_papers(self, table_limit: int) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            page = self._select_page(min(table_limit - len(rows), 1000), offset)
+            if not page:
+                break
+            rows.extend(page)
+            offset += len(page)
+            if len(rows) >= table_limit or len(page) < 1000:
+                break
+        return rows
 
     def update_paper_embedding(self, paper_id: str, payload: dict[str, Any]) -> None:
         self.request_json(

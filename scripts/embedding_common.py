@@ -63,6 +63,7 @@ class SupabaseRestClient:
         method: str = "GET",
         payload: dict[str, Any] | list[dict[str, Any]] | None = None,
         prefer: str | None = None,
+        range_header: str | None = None,
     ) -> Any:
         encoded_query = urllib.parse.urlencode(query or {})
         url = f"{self.base_url}/rest/v1/{path}"
@@ -70,11 +71,15 @@ class SupabaseRestClient:
         if encoded_query:
             url = f"{url}?{encoded_query}"
 
+        headers = self.headers(prefer=prefer)
+        if range_header:
+            headers["Range"] = range_header
+
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
         request = urllib.request.Request(
             url,
             data=body,
-            headers=self.headers(prefer=prefer),
+            headers=headers,
             method=method,
         )
 

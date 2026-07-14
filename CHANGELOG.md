@@ -18,6 +18,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Hardened scientific-text rendering for common arXiv LaTeX delimiters (`\\(...\\)`, `\\[...\\]`, `$...$`, and `$$...$$`), escaped dollars, and unbalanced delimiters without weakening HTML escaping.
+- Made settings interest edits explicit and recoverable: changes remain local until saved, concurrent toggles are blocked during persistence, failures restore the last confirmed selection, and users see an actionable error.
+- Centralized authenticated navigation links with prefetch disabled by default, preventing background RSC requests from dynamic user-specific routes.
 - Feed cards now receive real recommendation impression IDs, so their dismiss, favorite, Read later, and open-detail actions retain ranking attribution.
 - `Already read` now contributes the same positive feedback weight as `read` to both feed ranking and the user profile embedding.
 - Fixed `npm run issues:import` creating issues with a literal `-` body: the script now uses `gh --body-file -` (piped stdin) instead of `--body -`.

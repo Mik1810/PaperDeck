@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Check, X } from "lucide-react";
 import { saveSettingsInterestsAction } from "@/app/actions";
+import { MutationAlert } from "@/components/mutation-alert";
 import {
   macroIdsFromTopics,
   topicGranularity,
@@ -69,8 +70,16 @@ export function SettingsInterestEditor({ interests }: Props) {
   const [selectedIds, setSelectedIds] = useState(
     () => new Set(initiallySelectedInterests.map((interest) => interest.id)),
   );
+  const [confirmedIds, setConfirmedIds] = useState(
+    () => new Set(initiallySelectedInterests.map((interest) => interest.id)),
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const hasChanges =
+    selectedIds.size !== confirmedIds.size ||
+    Array.from(selectedIds).some((id) => !confirmedIds.has(id));
 
   const macroTopics = interests.filter(
     (interest) => topicGranularity(interest) === "macro",
@@ -130,33 +139,47 @@ export function SettingsInterestEditor({ interests }: Props) {
 
   const toggle = useCallback(
     (id: string) => {
-      const next = new Set(selectedIds);
+      if (saving) return;
 
-      if (next.has(id)) {
-        if (next.size <= 1) {
-          return;
+      setSelectedIds((current) => {
+        const next = new Set(current);
+
+        if (next.has(id)) {
+          if (next.size <= 1) return current;
+          next.delete(id);
+        } else {
+          next.add(id);
         }
 
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      setSelectedIds(next);
+        return next;
+      });
       setSaved(false);
-      setSaving(true);
-
-      saveSettingsInterestsAction(Array.from(next))
-        .then(() => {
-          setSaving(false);
-          setSaved(true);
-          setTimeout(() => setSaved(false), 2000);
-        })
-        .catch(() => {
-          setSaving(false);
-        });
+      setErrorMessage(null);
     },
-    [selectedIds],
+    [saving],
   );
+
+  async function saveChanges() {
+    if (!hasChanges || saving) return;
+
+    const nextIds = new Set(selectedIds);
+    setSaving(true);
+    setSaved(false);
+    setErrorMessage(null);
+
+    try {
+      await saveSettingsInterestsAction(Array.from(nextIds));
+      setConfirmedIds(nextIds);
+      setSaved(true);
+    } catch {
+      setSelectedIds(new Set(confirmedIds));
+      setErrorMessage(
+        "We couldn't save your interests. Your last saved selection has been restored.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
@@ -165,9 +188,7 @@ export function SettingsInterestEditor({ interests }: Props) {
           Interests
         </h2>
         <div className="flex items-center gap-2">
-          {saving ? (
-            <span className="text-xs font-bold text-slate-400">Saving...</span>
-          ) : saved ? (
+          {saved && !hasChanges ? (
             <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
               <Check size={14} strokeWidth={3} />
               Saved
@@ -180,6 +201,8 @@ export function SettingsInterestEditor({ interests }: Props) {
           ) : null}
         </div>
       </div>
+
+      <MutationAlert className="mt-4" message={errorMessage} />
 
       <div className="mt-4 space-y-5">
         <div>
@@ -217,7 +240,7 @@ export function SettingsInterestEditor({ interests }: Props) {
             })}
             {macroTopics.map((topic) => {
               const isSelected = selectedIds.has(topic.id);
-              const isDisabled = isSelected && selectedIds.size <= 1;
+              const isDisabled = saving || (isSelected && selectedIds.size <= 1);
 
               return (
                 <button
@@ -248,7 +271,7 @@ export function SettingsInterestEditor({ interests }: Props) {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {categoryTopics.map((topic) => {
               const isSelected = selectedIds.has(topic.id);
-              const isDisabled = isSelected && selectedIds.size <= 1;
+              const isDisabled = saving || (isSelected && selectedIds.size <= 1);
 
               return (
                 <button
@@ -279,7 +302,7 @@ export function SettingsInterestEditor({ interests }: Props) {
           <div className="flex flex-wrap gap-2">
             {microTopics.map((topic) => {
               const isSelected = selectedIds.has(topic.id);
-              const isDisabled = isSelected && selectedIds.size <= 1;
+              const isDisabled = saving || (isSelected && selectedIds.size <= 1);
 
               return (
                 <button
@@ -294,6 +317,20 @@ export function SettingsInterestEditor({ interests }: Props) {
               );
             })}
           </div>
+        </div>
+
+        <div className="flex flex-col items-start gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs font-semibold text-slate-500">
+            Saving refreshes your recommendation profile and next feed.
+          </p>
+          <button
+            className="h-10 rounded-lg bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            disabled={!hasChanges || saving}
+            onClick={saveChanges}
+            type="button"
+          >
+            {saving ? "Saving..." : "Save changes"}
+          </button>
         </div>
       </div>
     </section>

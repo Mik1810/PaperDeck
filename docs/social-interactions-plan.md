@@ -80,8 +80,8 @@ Le interazioni sociali non devono mascherare un ranking non misurabile. Prima va
 | --- | --- |
 | [#81](https://github.com/Mik1810/PaperDeck/issues/81) | ✅ Risolta il 2026-07-10: le azioni del deck mantengono l'attribuzione all'impressione mostrata. |
 | [#83](https://github.com/Mik1810/PaperDeck/issues/83) | ✅ Risolta il 2026-07-10: `already_read` allena coerentemente pesi e profilo semantico. |
-| [#84](https://github.com/Mik1810/PaperDeck/issues/84) | Gli interessi devono salvarsi in ordine, con rollback e senza race. |
-| [#82](https://github.com/Mik1810/PaperDeck/issues/82) | Le navigazioni autenticate devono mantenere il budget di latenza mobile. |
+| [#84](https://github.com/Mik1810/PaperDeck/issues/84) | ✅ Risolta il 2026-07-11: gli interessi usano un salvataggio esplicito, seriale e con rollback allo stato confermato. |
+| [#82](https://github.com/Mik1810/PaperDeck/issues/82) | ✅ Risolta il 2026-07-11: i link autenticati disabilitano il prefetch per proteggere il budget di latenza mobile. |
 
 In aggiunta:
 

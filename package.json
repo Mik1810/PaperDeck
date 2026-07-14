@@ -16,6 +16,7 @@
     "discover:classics": "tsx scripts/discover-classic-papers.ts",
     "generate:summaries": "tsx scripts/generate-summaries.ts",
     "generate:summaries:py": "uv run scripts/generate_summaries.py",
+    "generate:summaries:local": "uv run --with-requirements requirements-summaries.txt scripts/generate_summaries_local.py",
     "generate:chatgpt-prompt": "uv run scripts/dump_papers_for_chatgpt.py --limit 20 --output prompts/chatgpt_summary_prompt.txt",
     "import:chatgpt-summaries": "uv run scripts/import_chatgpt_summaries.py",
     "review:triage": "uv run scripts/review_triage_summaries.py",
