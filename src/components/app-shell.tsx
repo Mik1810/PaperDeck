@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { BookOpenCheck, Settings } from "lucide-react";
@@ -30,6 +33,7 @@ export function AppShell({
   readLaterCount,
 }: AppShellProps) {
   const devAuthEnabled = isDevAuthEnabled();
+  const pathname = usePathname();
 
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-slate-950">
@@ -53,15 +57,24 @@ export function AppShell({
           </AppNavLink>
 
           <nav className="hidden items-center gap-1 md:flex">
-            {desktopNav.map((item) => (
-              <AppNavLink
-                key={item.href}
-                href={item.href}
-                className="rounded-lg px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-              >
-                {item.label}
-              </AppNavLink>
-            ))}
+            {desktopNav.map((item) => {
+              const isActive =
+                pathname === item.href ||
+                (item.href === "/feed" && pathname.startsWith("/papers/"));
+              return (
+                <AppNavLink
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-lg px-3 py-2 text-sm font-bold ${
+                    isActive
+                      ? "bg-slate-900 text-white"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                  }`}
+                >
+                  {item.label}
+                </AppNavLink>
+              );
+            })}
           </nav>
 
           <div className="flex items-center gap-2">
