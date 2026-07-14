@@ -21,18 +21,25 @@ export function PwaProvider() {
     }
 
     let cancelled = false;
+    let updateDetected = false;
 
     function showUpdate() {
       if (cancelled || dismissed.current) return;
       setUpdateReady(true);
     }
 
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (updateDetected) {
+        showUpdate();
+      }
+    });
+
     navigator.serviceWorker
       .register("/sw.js", { scope: "/" })
       .then((registration) => {
         if (cancelled) return;
 
-        if (registration.waiting && navigator.serviceWorker.controller) {
+        if (registration.waiting) {
           showUpdate();
           return;
         }
@@ -40,13 +47,13 @@ export function PwaProvider() {
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           if (!worker) return;
+          updateDetected = true;
 
           worker.addEventListener("statechange", () => {
-            if (
-              worker.state === "installed" &&
-              navigator.serviceWorker.controller
-            ) {
-              showUpdate();
+            if (worker.state === "installed") {
+              if (navigator.serviceWorker.controller) {
+                showUpdate();
+              }
             }
           });
         });
