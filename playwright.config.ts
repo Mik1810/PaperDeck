@@ -33,7 +33,7 @@ export default defineConfig({
   webServer: {
     command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
     env: {
-      PAPERDECK_DEV_AUTH: devAuth,
+      NEXT_PUBLIC_PAPERDECK_DEV_AUTH: devAuth,
       PAPERDECK_DEV_OWNER_ID: devOwnerId,
       NEXT_PUBLIC_CLERK_SIGN_IN_URL:
         process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/sign-in",

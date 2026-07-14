@@ -85,7 +85,7 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
 CLERK_AUTHORIZED_PARTIES=http://localhost:3000,https://paperdeck.example.com
-PAPERDECK_DEV_AUTH=false
+NEXT_PUBLIC_PAPERDECK_DEV_AUTH=false
 PAPERDECK_DEV_OWNER_ID=local-dev-user
 
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
@@ -95,7 +95,7 @@ SUPABASE_SERVICE_ROLE_KEY=replace_me
 
 `.env.local` is intentionally ignored by Git.
 
-Use Clerk development keys (`pk_test_...` / `sk_test_...`) for local authentication testing. For UI latency debugging without Clerk, set `PAPERDECK_DEV_AUTH=true`; this bypass only works outside production.
+Use Clerk development keys (`pk_test_...` / `sk_test_...`) for local authentication testing. For UI latency debugging without Clerk, set `NEXT_PUBLIC_PAPERDECK_DEV_AUTH=true`; this bypass only works outside production.
 
 ## Testing
 

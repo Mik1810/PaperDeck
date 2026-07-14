@@ -47,7 +47,7 @@ Local development should use Clerk development keys:
 ```env
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
-PAPERDECK_DEV_AUTH=false
+NEXT_PUBLIC_PAPERDECK_DEV_AUTH=false
 ```
 
 Production keys (`pk_live_...` / `sk_live_...`) are tied to the production custom domain and are not valid for `localhost`.
@@ -55,7 +55,7 @@ Production keys (`pk_live_...` / `sk_live_...`) are tied to the production custo
 For UI and latency debugging without Clerk, PaperDeck also supports a local-only bypass:
 
 ```env
-PAPERDECK_DEV_AUTH=true
+NEXT_PUBLIC_PAPERDECK_DEV_AUTH=true
 PAPERDECK_DEV_OWNER_ID=local-dev-user
 ```
 
@@ -73,7 +73,7 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
 CLERK_AUTHORIZED_PARTIES=https://paperdeck.michaelpiccirilli.it
-PAPERDECK_DEV_AUTH=false
+NEXT_PUBLIC_PAPERDECK_DEV_AUTH=false
 
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
