@@ -29,6 +29,17 @@ import {
 } from "@/lib/repositories/user-profile-embeddings";
 import { logger } from "@/lib/logging/logger";
 import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
+import { emailLookupHash } from "@/lib/collaboration/email-lookup";
+import {
+  isGroupInvitePolicy,
+  validatePublicDisplayName,
+} from "@/lib/collaboration/profile";
+import {
+  getCollaborationSettings,
+  type RelationshipStatus,
+  savePublicDisplayName,
+  syncCollaborationIdentity,
+} from "@/lib/repositories/collaboration";
 
 type OnboardingPersonalizationSource = "save" | "skip";
 
@@ -100,6 +111,11 @@ function scheduleOnboardingPersonalization(
 export async function saveOnboardingInterestsAction(formData: FormData) {
   const user = await requireUserContext();
   await ensureUserProfile(user);
+  await savePublicDisplayName(
+    user.ownerId,
+    requireFormId(formData, "displayName"),
+  );
+  await syncCollaborationIdentity(user);
 
   const topicIds = formData
     .getAll("topicId")
@@ -114,9 +130,14 @@ export async function saveOnboardingInterestsAction(formData: FormData) {
   redirect("/feed");
 }
 
-export async function skipOnboardingAction() {
+export async function skipOnboardingAction(formData: FormData) {
   const user = await requireUserContext();
   await ensureUserProfile(user);
+  await savePublicDisplayName(
+    user.ownerId,
+    requireFormId(formData, "displayName"),
+  );
+  await syncCollaborationIdentity(user);
 
   const topicIds = await getDefaultOnboardingTopicIds();
 
@@ -127,6 +148,215 @@ export async function skipOnboardingAction() {
   revalidatePath("/onboarding");
   revalidatePath("/settings");
   redirect("/feed");
+}
+
+export async function saveCollaborationSettingsAction(input: {
+  displayName: string;
+  discoverableByEmail: boolean;
+  groupInvitePolicy: string;
+}) {
+  const user = await requireUserContext();
+
+  if (!isGroupInvitePolicy(input.groupInvitePolicy)) {
+    throw new Error("Invalid group invitation policy.");
+  }
+
+  await ensureUserProfile(user);
+  await savePublicDisplayName(user.ownerId, input.displayName);
+  await syncCollaborationIdentity(user, {
+    discoverableByEmail: input.discoverableByEmail,
+    groupInvitePolicy: input.groupInvitePolicy,
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/search");
+}
+
+export type CollaborationSearchResult =
+  | { status: "idle" | "unavailable" | "rate_limited"; profile?: never }
+  | {
+      status: "found";
+      profile: {
+        publicId: string;
+        displayName: string;
+        imageUrl: string | null;
+        relationshipStatus: Exclude<RelationshipStatus, "blocked">;
+        requestId: string | null;
+      };
+    };
+
+export async function searchCollaborationProfileAction(
+  email: string,
+): Promise<CollaborationSearchResult> {
+  await requireOwnerId();
+
+  let hash: string;
+  try {
+    hash = emailLookupHash(email);
+  } catch {
+    return { status: "unavailable" };
+  }
+
+  const supabase = await createClerkAuthenticatedClient();
+  const { data, error } = await supabase.rpc("find_collaboration_profile", {
+    p_email_lookup_hash: hash,
+  });
+
+  if (error) {
+    if (error.message.includes("rate_limit_exceeded")) {
+      return { status: "rate_limited" };
+    }
+    return { status: "unavailable" };
+  }
+
+  const profile = data?.[0];
+  if (!profile) {
+    return { status: "unavailable" };
+  }
+  const relationshipStatus = profile.relationship_status;
+  if (
+    relationshipStatus !== "none" &&
+    relationshipStatus !== "incoming_pending" &&
+    relationshipStatus !== "outgoing_pending" &&
+    relationshipStatus !== "friends"
+  ) {
+    return { status: "unavailable" };
+  }
+
+  return {
+    status: "found",
+    profile: {
+      publicId: profile.public_id,
+      displayName: validatePublicDisplayName(profile.display_name),
+      imageUrl: profile.image_url,
+      relationshipStatus,
+      requestId: typeof profile.request_id === "string" ? profile.request_id : null,
+    },
+  };
+}
+
+export type FriendActionResult = {
+  ok: boolean;
+  relationshipStatus?: Exclude<RelationshipStatus, "blocked">;
+  requestId?: string | null;
+  message?: string;
+};
+
+function friendActionError(message: string): FriendActionResult {
+  if (message.includes("public_profile_required")) {
+    return { ok: false, message: "Add a public name in Settings before sending requests." };
+  }
+  if (message.includes("friend_request_cooldown")) {
+    return {
+      ok: false,
+      message: "A declined request cannot be retried for 30 days.",
+    };
+  }
+  if (message.includes("friend_request_rate_limited")) {
+    return { ok: false, message: "You can send at most 10 requests per day." };
+  }
+  return { ok: false, message: "This profile or request is unavailable." };
+}
+
+async function ensureFriendshipActor() {
+  const user = await requireUserContext();
+  await ensureUserProfile(user);
+  const settings = await getCollaborationSettings(user.ownerId);
+  validatePublicDisplayName(settings.displayName);
+  await syncCollaborationIdentity(user);
+}
+
+async function friendshipRpc(
+  functionName: string,
+  parameters: Record<string, unknown>,
+) {
+  await requireOwnerId();
+  const supabase = await createClerkAuthenticatedClient();
+  return supabase.rpc(functionName, parameters);
+}
+
+export async function sendFriendRequestAction(
+  publicId: string,
+): Promise<FriendActionResult> {
+  try {
+    await ensureFriendshipActor();
+  } catch {
+    return friendActionError("public_profile_required");
+  }
+  const { data, error } = await friendshipRpc("send_friend_request", {
+    p_target_public_id: publicId,
+  });
+  if (error) return friendActionError(error.message);
+  const result = data?.[0];
+  revalidatePath("/search");
+  revalidatePath("/settings");
+  return {
+    ok: true,
+    relationshipStatus: result?.relationship_status ?? "outgoing_pending",
+    requestId: result?.request_id ?? null,
+  };
+}
+
+export async function respondFriendRequestAction(
+  requestId: string,
+  accept: boolean,
+): Promise<FriendActionResult> {
+  const { error } = await friendshipRpc("respond_friend_request", {
+    p_request_id: requestId,
+    p_accept: accept,
+  });
+  if (error) return friendActionError(error.message);
+  revalidatePath("/search");
+  revalidatePath("/settings");
+  return { ok: true, relationshipStatus: accept ? "friends" : "none" };
+}
+
+export async function cancelFriendRequestAction(
+  requestId: string,
+): Promise<FriendActionResult> {
+  const { error } = await friendshipRpc("cancel_friend_request", {
+    p_request_id: requestId,
+  });
+  if (error) return friendActionError(error.message);
+  revalidatePath("/search");
+  revalidatePath("/settings");
+  return { ok: true, relationshipStatus: "none" };
+}
+
+export async function unfriendProfileAction(
+  publicId: string,
+): Promise<FriendActionResult> {
+  const { error } = await friendshipRpc("unfriend_profile", {
+    p_target_public_id: publicId,
+  });
+  if (error) return friendActionError(error.message);
+  revalidatePath("/search");
+  revalidatePath("/settings");
+  return { ok: true, relationshipStatus: "none" };
+}
+
+export async function blockProfileAction(
+  publicId: string,
+): Promise<FriendActionResult> {
+  const { error } = await friendshipRpc("block_profile", {
+    p_target_public_id: publicId,
+  });
+  if (error) return friendActionError(error.message);
+  revalidatePath("/search");
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+export async function unblockProfileAction(
+  publicId: string,
+): Promise<FriendActionResult> {
+  const { error } = await friendshipRpc("unblock_profile", {
+    p_target_public_id: publicId,
+  });
+  if (error) return friendActionError(error.message);
+  revalidatePath("/search");
+  revalidatePath("/settings");
+  return { ok: true, relationshipStatus: "none" };
 }
 
 export async function saveSettingsInterestsAction(topicIds: string[]) {
@@ -167,17 +397,26 @@ export async function toggleReadLaterAction(formData: FormData) {
 }
 
 export async function verifyClerkRlsAction() {
+  const ownerId = await requireOwnerId();
   const supabase = await createClerkAuthenticatedClient();
 
-  const { count, error } = await supabase
-    .from("user_interests")
-    .select("*", { count: "exact", head: true });
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("owner_id")
+    .limit(10);
 
   if (error) {
     throw new Error(`RLS verification failed: ${error.message}`);
   }
 
-  return { count: count ?? 0 };
+  if (data.some((profile) => profile.owner_id !== ownerId)) {
+    throw new Error("RLS verification failed: cross-owner profile was visible");
+  }
+
+  return {
+    isolationVerified: true,
+    visibleProfileCount: data.length,
+  };
 }
 
 export async function createPlaylistAction(formData: FormData) {

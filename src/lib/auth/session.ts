@@ -7,6 +7,7 @@ export type AuthenticatedUserContext = {
   ownerId: string;
   displayName: string | null;
   imageUrl: string | null;
+  primaryEmail: string | null;
 };
 
 export async function requireOwnerId() {
@@ -31,6 +32,7 @@ export async function requireUserContext(): Promise<AuthenticatedUserContext> {
       ownerId: getDevOwnerId(),
       displayName: "Local dev",
       imageUrl: null,
+      primaryEmail: null,
     };
   }
 
@@ -43,11 +45,15 @@ export async function requireUserContext(): Promise<AuthenticatedUserContext> {
   }
 
   const user = await currentUser();
+  const primaryEmail = user?.primaryEmailAddress;
 
   return {
     ownerId,
-    displayName:
-      user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? null,
+    displayName: user?.fullName ?? null,
     imageUrl: user?.imageUrl ?? null,
+    primaryEmail:
+      primaryEmail?.verification?.status === "verified"
+        ? primaryEmail.emailAddress
+        : null,
   };
 }

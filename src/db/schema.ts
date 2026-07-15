@@ -4,6 +4,8 @@ import { sql } from "drizzle-orm"
 export const interactionType = pgEnum("interaction_type", ['seen', 'open_detail', 'dismiss', 'favorite', 'save_to_playlist', 'read', 'not_interested', 'already_read'])
 export const paperAccess = pgEnum("paper_access", ['open', 'publisher', 'unknown'])
 export const paperSource = pgEnum("paper_source", ['arxiv', 'semantic_scholar', 'openalex', 'dblp', 'crossref', 'manual'])
+export const groupInvitePolicy = pgEnum("group_invite_policy", ['nobody', 'friends_only', 'anyone'])
+export const friendRequestStatus = pgEnum("friend_request_status", ['pending', 'accepted', 'declined', 'cancelled'])
 
 
 export const profiles = pgTable("profiles", {
@@ -17,6 +19,84 @@ export const profiles = pgTable("profiles", {
 	pgPolicy("profiles_insert_own", { as: "permissive", for: "insert", to: ["public"], withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
 	pgPolicy("profiles_select_own", { as: "permissive", for: "select", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))` }),
 	pgPolicy("profiles_update_own", { as: "permissive", for: "update", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))` }),
+]);
+
+export const collaborationIdentities = pgTable("collaboration_identities", {
+	ownerId: text("owner_id").primaryKey().notNull(),
+	publicId: uuid("public_id").defaultRandom().notNull(),
+	emailLookupHash: text("email_lookup_hash").notNull(),
+	emailHashVersion: integer("email_hash_version").default(1).notNull(),
+	discoverableByEmail: boolean("discoverable_by_email").default(true).notNull(),
+	groupInvitePolicy: groupInvitePolicy("group_invite_policy").default('friends_only').notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.ownerId],
+		foreignColumns: [profiles.ownerId],
+		name: "collaboration_identities_owner_id_fkey"
+	}).onDelete("cascade"),
+	unique("collaboration_identities_public_id_key").on(table.publicId),
+	unique("collaboration_identities_email_lookup_hash_key").on(table.emailLookupHash),
+	pgPolicy("collaboration_identities_insert_own", { as: "permissive", for: "insert", to: ["authenticated"], withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))` }),
+	pgPolicy("collaboration_identities_select_own", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))` }),
+	pgPolicy("collaboration_identities_update_own", { as: "permissive", for: "update", to: ["authenticated"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))` }),
+	pgPolicy("collaboration_identities_delete_own", { as: "permissive", for: "delete", to: ["authenticated"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))` }),
+]);
+
+export const collaborationSearchLimits = pgTable("collaboration_search_limits", {
+	requesterId: text("requester_id").primaryKey().notNull(),
+	windowStartedAt: timestamp("window_started_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	attemptCount: integer("attempt_count").default(0).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.requesterId],
+		foreignColumns: [profiles.ownerId],
+		name: "collaboration_search_limits_requester_id_fkey"
+	}).onDelete("cascade"),
+]);
+
+export const friendRequests = pgTable("friend_requests", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	requesterId: text("requester_id").notNull(),
+	recipientId: text("recipient_id").notNull(),
+	status: friendRequestStatus().default('pending').notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	respondedAt: timestamp("responded_at", { withTimezone: true, mode: 'string' }),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.requesterId], foreignColumns: [profiles.ownerId], name: "friend_requests_requester_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.recipientId], foreignColumns: [profiles.ownerId], name: "friend_requests_recipient_id_fkey" }).onDelete("cascade"),
+	uniqueIndex("friend_requests_one_pending_pair_idx").on(sql`least(${table.requesterId}, ${table.recipientId})`, sql`greatest(${table.requesterId}, ${table.recipientId})`).where(sql`${table.status} = 'pending'`),
+	index("friend_requests_requester_created_idx").on(table.requesterId, table.createdAt.desc()),
+	index("friend_requests_recipient_status_idx").on(table.recipientId, table.status, table.createdAt.desc()),
+	pgPolicy("friend_requests_participant_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((auth.jwt() ->> 'sub'::text) IN (requester_id, recipient_id))` }),
+]);
+
+export const friendships = pgTable("friendships", {
+	userLowId: text("user_low_id").notNull(),
+	userHighId: text("user_high_id").notNull(),
+	acceptedRequestId: uuid("accepted_request_id"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.userLowId], foreignColumns: [profiles.ownerId], name: "friendships_user_low_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.userHighId], foreignColumns: [profiles.ownerId], name: "friendships_user_high_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.acceptedRequestId], foreignColumns: [friendRequests.id], name: "friendships_accepted_request_id_fkey" }).onDelete("set null"),
+	primaryKey({ columns: [table.userLowId, table.userHighId], name: "friendships_pkey" }),
+	index("friendships_high_user_idx").on(table.userHighId, table.createdAt.desc()),
+	pgPolicy("friendships_participant_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((auth.jwt() ->> 'sub'::text) IN (user_low_id, user_high_id))` }),
+]);
+
+export const userBlocks = pgTable("user_blocks", {
+	blockerId: text("blocker_id").notNull(),
+	blockedId: text("blocked_id").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.blockerId], foreignColumns: [profiles.ownerId], name: "user_blocks_blocker_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.blockedId], foreignColumns: [profiles.ownerId], name: "user_blocks_blocked_id_fkey" }).onDelete("cascade"),
+	primaryKey({ columns: [table.blockerId, table.blockedId], name: "user_blocks_pkey" }),
+	index("user_blocks_blocked_idx").on(table.blockedId),
+	pgPolicy("user_blocks_blocker_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(blocker_id = (auth.jwt() ->> 'sub'::text))` }),
 ]);
 
 export const playlists = pgTable("playlists", {

@@ -1,14 +1,14 @@
 # Piano di sviluppo delle interazioni sociali
 
 **Stato:** proposta di sviluppo, non ancora una decisione di rilascio  
-**Ultimo aggiornamento:** 2026-07-10  
+**Ultimo aggiornamento:** 2026-07-15
 **Origine:** [GitHub issue #37](https://github.com/Mik1810/PaperDeck/issues/37)
 
 Questo documento trasforma la #37 da promemoria post-MVP in un programma concreto. Non autorizza a rendere pubblici dati esistenti: feed, ranking, preferiti, playlist e note restano privati finché ogni fase non supera il proprio gate.
 
 ## 1. Obiettivo di prodotto
 
-PaperDeck resta un **daily CS triage deck**, non una rete sociale generalista. Le interazioni sociali devono aiutare piccoli gruppi di ricercatori a condividere e discutere una shortlist, senza esporre il feed personale o creare un social graph per default.
+PaperDeck resta un **daily CS triage deck**, non una rete sociale generalista. Le interazioni sociali devono aiutare piccoli gruppi di ricercatori a condividere e discutere una lista di paper, senza esporre il feed personale o creare un social graph pubblico.
 
 Il percorso previsto e':
 
@@ -36,13 +36,36 @@ La UX attuale e' gia' *social-like* (deck, swipe, cuore e bookmark), ma e' indiv
 
 **Regola invariabile:** un'informazione privata non diventa condivisa o pubblica perche' e' tecnicamente disponibile. Deve esistere una scelta esplicita dell'utente, registrata e revocabile.
 
+### Decisioni iniziali su gruppi e amicizie
+
+- Il target iniziale sono piccoli gruppi di ricerca privati.
+- Ogni gruppo contiene una sola lista condivisa di paper.
+- I ruoli iniziali sono owner, admin e member; soltanto owner/admin possono invitare.
+- Essere invitabile non equivale a essere aggiunto: ogni ingresso richiede accettazione esplicita.
+- La policy inviti e' `nobody`, `friends_only` o `anyone`; il default proposto resta `friends_only`.
+- La ricerca account usa soltanto l'email esatta ed e' abilitata di default (opt-out dalle impostazioni), senza autocomplete o ricerca parziale.
+- L'amicizia e' reciproca dopo accettazione; un rifiuto impone 30 giorni di cooldown e il blocco impedisce nuove richieste e inviti.
+- La #94 implementa richieste pending/accepted/declined/cancelled, richieste incrociate che accettano automaticamente, cancel senza cooldown, unfriend senza cooldown e unblock senza ripristino delle relazioni precedenti.
+- Ogni account puo' creare al massimo 10 nuove richieste in 24 ore; richieste duplicate e tutte le transizioni sono idempotenti e serializzate per coppia.
+- L'owner puo' scegliere un successore; altrimenti ownership passa all'admin attivo piu' anziano, poi al membro attivo piu' anziano. Senza altri membri il gruppo viene eliminato.
+- Le amicizie autorizzano discovery e inviti: niente follower, conteggi, suggerimenti di persone o feed sociale nella prima fase.
+
+### Decisioni iniziali sulle notifiche
+
+- Campanella nell'header con badge fino a `99+`.
+- Menu con gli ultimi 20 eventi, azioni inline `Accept`/`Decline` per richieste e inviti, e futura pagina di cronologia completa.
+- Retention delle notifiche informative: 90 giorni; eliminare una notifica non modifica la richiesta o l'invito sorgente.
+- Eventi iniziali: richieste di amicizia, inviti e membership gruppo, ruoli/ownership e paper aggiunti o rimossi dalla lista condivisa.
+- Postgres conserva la notifica durevole; un canale realtime privato pubblica soltanto il segnale di aggiornamento e il client rilegge i dati autorizzati.
+- La futura chat interattiva del gruppo, possibilmente collegata ai paper condivisi, e' un tema esplicito da progettare separatamente prima dell'implementazione.
+
 ## 2. Confini e non-goal
 
 ### Cosa costruiamo
 
 - **Share:** inviare metadati e URL canonico di un paper a un canale esterno.
 - **Follow accademico:** ricevere una vista privata dei paper relativi a topic e, in futuro, a venue o autori canonicalizzati.
-- **Collection condivisa:** una shortlist separata dalle playlist private, con membership e ruoli espliciti.
+- **Gruppo di ricerca:** membership privata con owner/admin/member e una lista condivisa di paper separata dalle playlist personali.
 - **Discussione di gruppo:** rationale o commenti limitati ai membri di una collection.
 - **Pubblicazione:** rendere visibile una collection selezionata, mai una libreria o un comportamento personale implicito.
 
@@ -52,7 +75,7 @@ La UX attuale e' gia' *social-like* (deck, swipe, cuore e bookmark), ma e' indiv
 - messaggi diretti, sincronizzazione contatti, import rubriche o suggerimenti di persone;
 - condivisione automatica di `favorites`, `Read later`, interessi, impression, embedding, reason del ranking o note private;
 - commenti anonimi, HTML/Markdown ricco, allegati o ripubblicazione di PDF;
-- ricerca utenti o profilo pubblico implicito.
+- ricerca utenti parziale, directory pubblica o profilo pubblico implicito; resta ammessa soltanto la ricerca privata per email esatta secondo le impostazioni dell'utente.
 
 Le ultime due categorie possono essere rivalutate solo con un nuovo go/no-go: non sono una conseguenza automatica della #37.
 
@@ -121,8 +144,12 @@ Non estendere silenziosamente le attuali `playlists` private. Sono owner-only ne
 
 ### Identita' collaborative e pubbliche
 
-- `profiles.display_name` e `image_url` restano privati: il display name corrente puo' derivare dall'email Clerk.
-- Per invite-only creare `collaboration_profiles` con nome scelto esplicitamente dall'utente. Nessun email, Clerk ID, interessi o cronologia viene mostrato ai membri.
+- La fondazione invite-only e' implementata dalla #93: il nome pubblico viene scelto esplicitamente come primo passo dell'onboarding, e non deriva mai dall'email Clerk.
+- `collaboration_identities` conserva un UUID pubblico, le preferenze di discovery/invito e soltanto l'HMAC dell'email primaria verificata. Email e Clerk ID non vengono restituiti dalla ricerca.
+- La ricerca e' solo per email esatta, usa POST/server action, applica 10 tentativi al minuto e rende profilo inesistente e profilo non trovabile indistinguibili.
+- Il default e' discovery email attiva (opt-out) e inviti da `friends_only`; un webhook Clerk firmato sincronizza cambio/rimozione dell'email primaria.
+- Nessun interesse, cronologia, libreria o altro dato privato entra nel profilo collaborativo.
+- `friend_requests`, `friendships` e `user_blocks` tengono separati lifecycle, relazione reciproca e blocco direzionale. Un blocco rimuove amicizia/richieste e rende la discovery indisponibile in entrambe le direzioni.
 - Per il pubblico creare piu' tardi `public_profiles`, opt-in e separato, con handle normalizzato e display name scelto. Un profilo pubblico nasce disattivato e non indicizzato.
 
 ### Ruoli
@@ -142,7 +169,7 @@ Un viewer puo' copiare un paper nella **propria** libreria con un'azione esplici
 | --- | --- | --- |
 | Share | nessuno | tutto client-side, nessuna analytics persistita |
 | Follow privati | `topic_subscriptions` | `(owner_id, topic_id)` come chiave; non riusare `user_interests` |
-| Collaboration | `collaboration_profiles`, `shared_collections`, `shared_collection_members`, `shared_collection_invites`, `shared_collection_items`, `shared_collection_activity` | ACL, ruoli, token hashati, revision e audit minimale |
+| Collaboration | `collaboration_identities`, `shared_collections`, `shared_collection_members`, `shared_collection_invites`, `shared_collection_items`, `shared_collection_activity` | UUID pubblico, discovery HMAC, ACL, ruoli, token hashati, revision e audit minimale |
 | Discussione | `shared_collection_comments`, `content_reports`, `user_blocks` | plain text, limiti, stati di moderazione |
 | Pubblico | `public_profiles`, `public_collection_publications`, `privacy_consents` | consenso/versione, handle e pubblicazione selettiva |
 | Operativita' | `moderation_cases`, `moderation_actions`, `security_audit_events`, `export_jobs`, `deletion_jobs` | lifecycle, audit, export e delete verificabili |

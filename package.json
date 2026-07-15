@@ -26,11 +26,14 @@
     "issues:import": "tsx scripts/create-issues.ts",
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:e2e",
+    "test:integration": "node --import tsx --test tests/integration/*.test.ts",
+    "test:integration:clerk": "node --import tsx --test tests/integration/clerk-supabase-live.test.ts",
     "test:unit": "node --conditions react-server --import tsx --test tests/unit/*.test.ts",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/backend": "^3.11.5",
     "@clerk/nextjs": "^7.5.11",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",

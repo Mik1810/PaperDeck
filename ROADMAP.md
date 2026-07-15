@@ -43,6 +43,11 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Paper classici: massimo indicativo 10-15% del feed.
 - Digest: solo in-app nella prima versione.
 - Note personali: post-MVP.
+- Collaborazione post-MVP: piccoli gruppi di ricerca privati, ciascuno con una sola lista condivisa di paper; solo owner/admin invitano membri e ogni invito richiede accettazione.
+- Discovery collaborativa: ricerca account tramite email esatta attiva di default ma disattivabile; amicizie reciproche con cooldown di 30 giorni dopo un rifiuto e nessun social graph pubblico.
+- Ownership gruppi: successore scelto dall'owner, altrimenti admin attivo piu' anziano, poi membro attivo piu' anziano; gruppo eliminato solo se non esistono altri membri.
+- Notifiche collaborative: inbox durevole in-app con badge `99+`, menu degli ultimi 20 eventi, azioni inline e futura cronologia completa; eventi realtime accelerano la UI ma non sostituiscono Postgres.
+- Discussione nei gruppi: possibile chat interattiva collegata ai paper, da progettare separatamente prima di qualsiasi implementazione.
 - Tassonomia interessi: derivata dalle fonti disponibili, poi curata e normalizzata dentro l'app.
 - Vincolo economico: approccio free-first, evitando servizi a pagamento finche' possibile.
 - Caching layer: resta basato su Postgres (tabella `recommendations`, TTL 5 minuti). Redis/KV esterni sono rinviati fino al superamento di threshold definiti (catalogo >100k, GET /feed p95 >2s, QPS sostenuto oltre limiti free tier). Il preferred path post-threshold e' Next.js cache built-in prima di valutare servizi esterni.
@@ -1021,6 +1026,12 @@ Decisione proposta:
 ## Migrazione RLS completata (ex domanda aperta)
 
 La configurazione Clerk JWT + Supabase RLS e' stata completata (vedi `docs/clerk-supabase-rls.md`). Resta da completare il passaggio 3: migrare le repository function user-scoped dal service role al clerk-authenticated client. Tracciato in issue #47.
+
+## Fondazione identita' collaborativa
+
+La prima parte del piano social usa un profilo collaborativo minimale: nome pubblico scelto durante l'onboarding, avatar Clerk, UUID pubblico e ricerca soltanto per email esatta. L'indirizzo non viene salvato; il lookup usa un HMAC server-side sincronizzato da webhook Clerk. La discovery e' opt-out, la policy inviti predefinita e' `friends_only`, e profili inesistenti o non trovabili producono lo stesso risultato.
+
+Le amicizie sono reciproche soltanto dopo accettazione. Il lifecycle supporta invio, richiesta incrociata con accettazione automatica, rifiuto con cooldown di 30 giorni, cancellazione, unfriend, block e unblock. Il blocco rimuove le relazioni attive e nasconde la discovery in entrambe le direzioni; amicizie e richieste non scrivono segnali di ranking.
 
 ## Domande aperte
 

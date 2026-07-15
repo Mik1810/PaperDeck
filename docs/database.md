@@ -179,3 +179,23 @@ These policies assume that Supabase receives a JWT where `sub` is the Clerk user
 Use server-side access for user-specific data until Clerk JWT + Supabase RLS is fully configured and tested.
 
 Do not expose `SUPABASE_SERVICE_ROLE_KEY` to browser code.
+
+## Collaboration identity and friendships
+
+The collaboration domain is separate from private playlists and ranking data:
+
+- `collaboration_identities` maps an immutable public UUID to an owner and a
+  server-HMAC email lookup digest; it never stores the lookup email.
+- `friend_requests` stores pending, accepted, declined, and cancelled lifecycle
+  rows. A partial unique index permits only one pending request per unordered
+  user pair.
+- `friendships` stores one canonical reciprocal pair after acceptance.
+- `user_blocks` stores directional blocks; a block cancels pending requests,
+  removes friendship, and suppresses discovery in both directions.
+
+Authenticated clients can read only rows in which they participate (and only
+their own outgoing blocks). Writes go through security-definer RPCs that derive
+the actor from `auth.jwt() ->> 'sub'`, serialize each pair with a transaction
+advisory lock, enforce a 30-day decline cooldown and 10-new-request daily limit,
+and expose only public collaboration profile fields. These operations do not
+touch `user_paper_interactions`, recommendations, or profile embeddings.

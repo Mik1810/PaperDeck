@@ -23,6 +23,7 @@ export default async function OnboardingPage() {
   return (
     <OnboardingTopicPicker
       devAuthEnabled={isDevAuthEnabled()}
+      initialDisplayName={user.displayName ?? ""}
       topics={topics.map((topic) => ({
         id: topic.id,
         arxivCategory: topic.arxivCategory,

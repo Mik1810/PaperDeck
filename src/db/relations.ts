@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { profiles, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
+import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
 
 export const playlistsRelations = relations(playlists, ({one, many}) => ({
 	profile: one(profiles, {
@@ -25,7 +25,15 @@ export const paperNotesRelations = relations(paperNotes, ({one}) => ({
 	}),
 }));
 
-export const profilesRelations = relations(profiles, ({many}) => ({
+export const profilesRelations = relations(profiles, ({one, many}) => ({
+	collaborationIdentity: one(collaborationIdentities),
+	collaborationSearchLimit: one(collaborationSearchLimits),
+	friendRequestsSent: many(friendRequests, { relationName: "friendRequests_requester" }),
+	friendRequestsReceived: many(friendRequests, { relationName: "friendRequests_recipient" }),
+	friendshipsLow: many(friendships, { relationName: "friendships_low" }),
+	friendshipsHigh: many(friendships, { relationName: "friendships_high" }),
+	blocksCreated: many(userBlocks, { relationName: "userBlocks_blocker" }),
+	blocksReceived: many(userBlocks, { relationName: "userBlocks_blocked" }),
 	playlists: many(playlists),
 	recommendationImpressions: many(recommendationImpressions),
 	userPaperInteractions: many(userPaperInteractions),
@@ -35,6 +43,36 @@ export const profilesRelations = relations(profiles, ({many}) => ({
 	userInterests: many(userInterests),
 	userProfileEmbeddings: many(userProfileEmbeddings),
 	paperNotes: many(paperNotes),
+}));
+
+export const friendRequestsRelations = relations(friendRequests, ({one}) => ({
+	requester: one(profiles, { fields: [friendRequests.requesterId], references: [profiles.ownerId], relationName: "friendRequests_requester" }),
+	recipient: one(profiles, { fields: [friendRequests.recipientId], references: [profiles.ownerId], relationName: "friendRequests_recipient" }),
+}));
+
+export const friendshipsRelations = relations(friendships, ({one}) => ({
+	userLow: one(profiles, { fields: [friendships.userLowId], references: [profiles.ownerId], relationName: "friendships_low" }),
+	userHigh: one(profiles, { fields: [friendships.userHighId], references: [profiles.ownerId], relationName: "friendships_high" }),
+	acceptedRequest: one(friendRequests, { fields: [friendships.acceptedRequestId], references: [friendRequests.id] }),
+}));
+
+export const userBlocksRelations = relations(userBlocks, ({one}) => ({
+	blocker: one(profiles, { fields: [userBlocks.blockerId], references: [profiles.ownerId], relationName: "userBlocks_blocker" }),
+	blocked: one(profiles, { fields: [userBlocks.blockedId], references: [profiles.ownerId], relationName: "userBlocks_blocked" }),
+}));
+
+export const collaborationIdentitiesRelations = relations(collaborationIdentities, ({one}) => ({
+	profile: one(profiles, {
+		fields: [collaborationIdentities.ownerId],
+		references: [profiles.ownerId]
+	}),
+}));
+
+export const collaborationSearchLimitsRelations = relations(collaborationSearchLimits, ({one}) => ({
+	profile: one(profiles, {
+		fields: [collaborationSearchLimits.requesterId],
+		references: [profiles.ownerId]
+	}),
 }));
 
 export const recommendationImpressionsRelations = relations(recommendationImpressions, ({one, many}) => ({
