@@ -23,6 +23,7 @@ Implemented GitHub issue #94 on top of collaboration identity discovery.
 - Added integration coverage for crossed/duplicate requests, authorization, cooldown, idempotency, rate limiting, block visibility, direct-write denial, and ranking isolation.
 - Fixed a legacy-account edge case found during the two-account UI check: Search now lazily creates a missing collaboration identity before sending, and a database trigger rejects any future request whose sender has no public identity. The existing Michael-to-Test-A request was repaired without storing plaintext email.
 - Made a single populated Connections category use the full panel width; the internal two-column layout now activates only when multiple categories are visible.
+- Added the explicit `server-only` boundary to the Clerk service-role webhook after the CI audit correctly rejected the missing module guard.
 
 ## Validation
 

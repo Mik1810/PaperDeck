@@ -1,3 +1,5 @@
+import "server-only";
+
 import { verifyWebhook } from "@clerk/backend/webhooks";
 import { emailLookupHash } from "@/lib/collaboration/email-lookup";
 import { createServiceRoleClient } from "@/lib/supabase/server";
