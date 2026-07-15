@@ -8,6 +8,12 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Added private mutual friendships with transactional requests, crossed-request auto-acceptance, 30-day decline cooldowns, daily rate limits, cancel/unfriend flows, directional blocks, connection management UI, and ranking-isolation tests.
+- Added collaboration identities with an explicit public display name, exact-email HMAC discovery, opt-out visibility, group invitation preferences, a ten-per-minute lookup limit, Clerk email-change synchronization, and RLS isolation tests.
+- Added deterministic A/B/anonymous Supabase RLS isolation tests as the first security gate for cross-user collaboration.
+- Added an automated live A/B smoke test that creates and revokes temporary Clerk sessions and verifies Supabase RLS without manual JWT handling.
+- Moved Clerk RLS test-user email identifiers out of source control and into required local environment configuration.
+- Refined the post-MVP social plan around private research groups, mutual friendships, exact-email discovery with opt-out, deterministic ownership succession, durable realtime-assisted notifications, paper activity events, and a separately gated future group chat.
 - Added a versioned end-to-end social-interactions development plan: recommendation gates, privacy/ACL foundations, metadata sharing, private academic subscriptions, invite-only collections, moderation, and explicit public-release gates.
 - Added a Zod validation layer (`src/lib/schemas/*`) and replaced unsafe `as` casts with `.parse()` in semantic retrieval and the ingest/enrich scripts.
 - Added a catalog search page at `/search` and replaced the redundant `Topics` navigation item with `Search`.
@@ -18,6 +24,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Ensured legacy accounts synchronize a public collaboration identity before sending a friend request, preventing requests that could not be rendered in the recipient's Connections inbox.
 - Hardened scientific-text rendering for common arXiv LaTeX delimiters (`\\(...\\)`, `\\[...\\]`, `$...$`, and `$$...$$`), escaped dollars, and unbalanced delimiters without weakening HTML escaping.
 - Made settings interest edits explicit and recoverable: changes remain local until saved, concurrent toggles are blocked during persistence, failures restore the last confirmed selection, and users see an actionable error.
 - Centralized authenticated navigation links with prefetch disabled by default, preventing background RSC requests from dynamic user-specific routes.

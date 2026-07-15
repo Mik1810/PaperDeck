@@ -11,6 +11,7 @@ const isProtectedRoute = createRouteMatcher([
   "/library(.*)",
   "/onboarding(.*)",
   "/papers(.*)",
+  "/search(.*)",
   "/settings(.*)",
 ]);
 

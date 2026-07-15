@@ -200,7 +200,6 @@ export async function ensureUserProfile(user: AuthenticatedUserContext) {
     .onConflictDoUpdate({
       target: profiles.ownerId,
       set: {
-        displayName: user.displayName,
         imageUrl: user.imageUrl,
         updatedAt: now,
       },

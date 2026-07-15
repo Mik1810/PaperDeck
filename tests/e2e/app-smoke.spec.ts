@@ -138,6 +138,11 @@ async function completeDevOnboardingWithTopics(page: Page) {
 
   expect(response?.status()).toBeLessThan(500);
   await expect(
+    page.getByRole("heading", { exact: true, name: "Your public name" }),
+  ).toBeVisible();
+  await page.getByLabel("Public display name").fill("Playwright Researcher");
+  await page.getByRole("button", { exact: true, name: "Next" }).click();
+  await expect(
     page.getByRole("heading", { exact: true, name: "Macro areas" }),
   ).toBeVisible();
   await page.locator("section button").first().click();
@@ -319,7 +324,7 @@ test.describe("dev-auth app smoke", () => {
   for (const { path, heading } of [
     { path: "/feed", heading: "Today" },
     { path: "/digest", heading: "Digest" },
-    { path: "/onboarding", heading: "Macro areas" },
+    { path: "/onboarding", heading: "Your public name" },
     { path: "/search", heading: "Search" },
     { path: "/library", heading: "Library" },
     { path: "/settings", heading: "Settings" },

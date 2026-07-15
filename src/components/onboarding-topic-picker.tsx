@@ -12,6 +12,7 @@ import {
   topicMacroGroups,
   topicMatchesMacro,
 } from "@/lib/topic-taxonomy";
+import { normalizePublicDisplayName } from "@/lib/collaboration/profile";
 
 export type TopicOption = {
   arxivCategory: string | null;
@@ -25,10 +26,11 @@ export type TopicOption = {
 
 type OnboardingTopicPickerProps = {
   devAuthEnabled?: boolean;
+  initialDisplayName?: string;
   topics: TopicOption[];
 };
 
-const steps = ["Macro", "Categories", "Micro"] as const;
+const steps = ["Profile", "Macro", "Categories", "Micro"] as const;
 const loadingMessages = [
   "Saving your interests",
   "Building your preference vector",
@@ -124,6 +126,7 @@ function SkipOnboardingButton() {
 
 export function OnboardingTopicPicker({
   devAuthEnabled = false,
+  initialDisplayName = "",
   topics,
 }: OnboardingTopicPickerProps) {
   const topicsById = useMemo(
@@ -131,6 +134,7 @@ export function OnboardingTopicPicker({
     [topics],
   );
   const [stepIndex, setStepIndex] = useState(0);
+  const [displayName, setDisplayName] = useState(initialDisplayName);
   const [activeMacroIds, setActiveMacroIds] = useState(
     () => new Set<string>(),
   );
@@ -189,18 +193,25 @@ export function OnboardingTopicPicker({
   ).length;
   const canGoNext =
     stepIndex === 0
-      ? activeMacroIds.size + selectedMacroTopicCount > 0
-      : selectedCategoryTopics.length > 0 || selectedMacroTopicCount > 0;
+      ? [...normalizePublicDisplayName(displayName)].length >= 2 &&
+        [...normalizePublicDisplayName(displayName)].length <= 50
+      : stepIndex === 1
+        ? activeMacroIds.size + selectedMacroTopicCount > 0
+        : selectedCategoryTopics.length > 0 || selectedMacroTopicCount > 0;
   const currentTitle =
     stepIndex === 0
+      ? "Your public name"
+    : stepIndex === 1
       ? "Macro areas"
-      : stepIndex === 1
+      : stepIndex === 2
         ? "Categories"
         : "Microcategories";
   const currentOptions =
     stepIndex === 0
+      ? "profile"
+    : stepIndex === 1
       ? "macro"
-      : stepIndex === 1
+      : stepIndex === 2
         ? "category"
         : "micro";
 
@@ -251,6 +262,7 @@ export function OnboardingTopicPicker({
       {[...selectedTopicIds].map((topicId) => (
         <input key={topicId} name="topicId" type="hidden" value={topicId} />
       ))}
+      <input name="displayName" type="hidden" value={displayName} />
       <OnboardingLoadingOverlay />
 
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-5 sm:px-8">
@@ -296,6 +308,28 @@ export function OnboardingTopicPicker({
                   </h2>
                 </div>
               </div>
+
+              {currentOptions === "profile" ? (
+                <div className="mt-7 max-w-xl">
+                  <label className="block text-sm font-black text-zinc-200">
+                    Public display name
+                    <input
+                      autoComplete="name"
+                      autoFocus
+                      className="mt-3 h-12 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 text-base font-bold text-zinc-50 outline-none transition focus:border-teal-300 focus:ring-2 focus:ring-teal-300/20"
+                      maxLength={50}
+                      minLength={2}
+                      placeholder="Ada Lovelace"
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                    />
+                  </label>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-zinc-500">
+                    People who find you by your exact email will see this name.
+                    Your email always stays private.
+                  </p>
+                </div>
+              ) : null}
 
               {currentOptions === "macro" ? (
                 <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

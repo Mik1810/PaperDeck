@@ -7,12 +7,19 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { MathContent } from "@/components/math-content";
 import { PaperListItem } from "@/components/paper-list-item";
-import { requireOwnerId } from "@/lib/auth/session";
+import { PeopleEmailSearch } from "@/components/people-email-search";
+import { requireUserContext } from "@/lib/auth/session";
 import { searchPapers } from "@/lib/repositories/catalog";
 import {
   getReadLaterCount,
   hasUsableOnboardingState,
+  ensureUserProfile,
 } from "@/lib/repositories/user-data";
+import {
+  getCollaborationSettings,
+  syncCollaborationIdentity,
+} from "@/lib/repositories/collaboration";
+import { validatePublicDisplayName } from "@/lib/collaboration/profile";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +46,19 @@ function searchHref(query: string, page: number) {
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const ownerId = await requireOwnerId();
+  const user = await requireUserContext();
+  const ownerId = user.ownerId;
+  await ensureUserProfile(user);
+
+  const collaboration = await getCollaborationSettings(ownerId);
+  try {
+    validatePublicDisplayName(collaboration.displayName);
+    if (!collaboration.hasIdentity) {
+      await syncCollaborationIdentity(user);
+    }
+  } catch {
+    // Settings provides the recoverable public-name prompt for legacy accounts.
+  }
 
   if (!(await hasUsableOnboardingState(ownerId))) {
     redirect("/onboarding");
@@ -63,6 +82,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       readLaterCount={readLaterCount}
     >
       <section className="space-y-5">
+        <PeopleEmailSearch />
+
         <form
           action="/search"
           className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
