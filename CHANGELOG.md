@@ -24,6 +24,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Hardened the live Clerk/Supabase RLS smoke test so every successfully created temporary session is tracked immediately, cleanup failures fail the test, and missing-user errors never expose configured email identifiers.
 - Moved the mobile PWA update prompt below the header so it no longer blocks bottom navigation, feed actions, or settings controls.
 - Ensured legacy accounts synchronize a public collaboration identity before sending a friend request, preventing requests that could not be rendered in the recipient's Connections inbox.
 - Hardened scientific-text rendering for common arXiv LaTeX delimiters (`\\(...\\)`, `\\[...\\]`, `$...$`, and `$$...$$`), escaped dollars, and unbalanced delimiters without weakening HTML escaping.

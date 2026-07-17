@@ -77,14 +77,13 @@ run("two real Clerk sessions are isolated by Supabase RLS", async () => {
       user.emailAddresses.some(({ emailAddress }) => emailAddress === emailB),
     );
 
-    assert.ok(userA, `Clerk test user not found: ${emailA}`);
-    assert.ok(userB, `Clerk test user not found: ${emailB}`);
+    assert.ok(userA, "Clerk test user A was not found");
+    assert.ok(userB, "Clerk test user B was not found");
 
-    const [sessionA, sessionB] = await Promise.all([
-      clerk.sessions.createSession({ userId: userA.id }),
-      clerk.sessions.createSession({ userId: userB.id }),
-    ]);
-    sessions.push(sessionA.id, sessionB.id);
+    const sessionA = await clerk.sessions.createSession({ userId: userA.id });
+    sessions.push(sessionA.id);
+    const sessionB = await clerk.sessions.createSession({ userId: userB.id });
+    sessions.push(sessionB.id);
 
     const [tokenA, tokenB] = await Promise.all([
       clerk.sessions.getToken(sessionA.id),
@@ -123,8 +122,16 @@ run("two real Clerk sessions are isolated by Supabase RLS", async () => {
     assert.ifError(crossUpdate.error);
     assert.deepEqual(crossUpdate.data, []);
   } finally {
-    await Promise.allSettled(
+    const revocations = await Promise.allSettled(
       sessions.map((sessionId) => clerk.sessions.revokeSession(sessionId)),
+    );
+    const failures = revocations.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    assert.equal(
+      failures.length,
+      0,
+      `Failed to revoke ${failures.length} temporary Clerk session(s)`,
     );
   }
 });
