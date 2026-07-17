@@ -45,7 +45,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Digest: solo in-app nella prima versione.
 - Note personali: post-MVP.
 - Collaborazione post-MVP: piccoli gruppi di ricerca privati, ciascuno con una sola lista condivisa di paper; solo owner/admin invitano membri e ogni invito richiede accettazione.
-- Discovery collaborativa: ricerca account tramite email esatta attiva di default ma disattivabile; amicizie reciproche con cooldown di 30 giorni dopo un rifiuto e nessun social graph pubblico.
+- Discovery collaborativa: ricerca account tramite email esatta disattivata di default e attivabile esplicitamente; amicizie reciproche con cooldown di 30 giorni dopo un rifiuto e nessun social graph pubblico.
 - Ownership gruppi: successore scelto dall'owner, altrimenti admin attivo piu' anziano, poi membro attivo piu' anziano; gruppo eliminato solo se non esistono altri membri.
 - Notifiche collaborative: inbox durevole in-app con badge `99+`, menu degli ultimi 20 eventi, azioni inline e futura cronologia completa; eventi realtime accelerano la UI ma non sostituiscono Postgres.
 - Discussione nei gruppi: possibile chat interattiva collegata ai paper, da progettare separatamente prima di qualsiasi implementazione.
@@ -1032,7 +1032,7 @@ La configurazione Clerk JWT + Supabase RLS e' stata completata (vedi `docs/clerk
 
 ## Fondazione identita' collaborativa
 
-La prima parte del piano social usa un profilo collaborativo minimale: nome pubblico scelto durante l'onboarding, avatar Clerk, UUID pubblico e ricerca soltanto per email esatta. L'indirizzo non viene salvato; il lookup usa un HMAC server-side sincronizzato da webhook Clerk. La discovery e' opt-out, la policy inviti predefinita e' `friends_only`, e profili inesistenti o non trovabili producono lo stesso risultato.
+La prima parte del piano social usa un profilo collaborativo minimale: nome pubblico scelto durante l'onboarding, avatar Clerk, UUID pubblico e ricerca soltanto per email esatta. L'indirizzo non viene salvato; il lookup usa un HMAC server-side sincronizzato da webhook Clerk. La discovery e' opt-in, la policy inviti predefinita e' `friends_only`, e profili inesistenti o non trovabili producono lo stesso risultato.
 
 Le amicizie sono reciproche soltanto dopo accettazione. Il lifecycle supporta invio, richiesta incrociata con accettazione automatica, rifiuto con cooldown di 30 giorni, cancellazione, unfriend, block e unblock. Il blocco rimuove le relazioni attive e nasconde la discovery in entrambe le direzioni; amicizie e richieste non scrivono segnali di ranking.
 

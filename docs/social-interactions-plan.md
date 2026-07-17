@@ -43,7 +43,7 @@ La UX attuale e' gia' *social-like* (deck, swipe, cuore e bookmark), ma e' indiv
 - I ruoli iniziali sono owner, admin e member; soltanto owner/admin possono invitare.
 - Essere invitabile non equivale a essere aggiunto: ogni ingresso richiede accettazione esplicita.
 - La policy inviti e' `nobody`, `friends_only` o `anyone`; il default proposto resta `friends_only`.
-- La ricerca account usa soltanto l'email esatta ed e' abilitata di default (opt-out dalle impostazioni), senza autocomplete o ricerca parziale.
+- La ricerca account usa soltanto l'email esatta ed e' disabilitata di default (opt-in dalle impostazioni), senza autocomplete o ricerca parziale.
 - L'amicizia e' reciproca dopo accettazione; un rifiuto impone 30 giorni di cooldown e il blocco impedisce nuove richieste e inviti.
 - La #94 implementa richieste pending/accepted/declined/cancelled, richieste incrociate che accettano automaticamente, cancel senza cooldown, unfriend senza cooldown e unblock senza ripristino delle relazioni precedenti.
 - Ogni account puo' creare al massimo 10 nuove richieste in 24 ore; richieste duplicate e tutte le transizioni sono idempotenti e serializzate per coppia.
@@ -84,6 +84,9 @@ Le ultime due categorie possono essere rivalutate solo con un nuovo go/no-go: no
 Nessuna beta sociale esterna parte prima di questi gate. Il prototipo client-side di Share puo' essere preparato in parallelo, ma viene rilasciato solo quando il gate di prodotto e' approvato.
 
 ### A — Charter e ricerca utenti
+
+Il charter approvato, la matrice privacy, il threat model, le condizioni di stop
+e il piano per 5–8 interviste sono in `docs/research-group-charter.md`.
 
 **Da fare prima del codice sociale persistente:**
 
@@ -147,7 +150,7 @@ Non estendere silenziosamente le attuali `playlists` private. Sono owner-only ne
 - La fondazione invite-only e' implementata dalla #93: il nome pubblico viene scelto esplicitamente come primo passo dell'onboarding, e non deriva mai dall'email Clerk.
 - `collaboration_identities` conserva un UUID pubblico, le preferenze di discovery/invito e soltanto l'HMAC dell'email primaria verificata. Email e Clerk ID non vengono restituiti dalla ricerca.
 - La ricerca e' solo per email esatta, usa POST/server action, applica 10 tentativi al minuto e rende profilo inesistente e profilo non trovabile indistinguibili.
-- Il default e' discovery email attiva (opt-out) e inviti da `friends_only`; un webhook Clerk firmato sincronizza cambio/rimozione dell'email primaria.
+- Il default e' discovery email disattivata (opt-in) e inviti da `friends_only`; un webhook Clerk firmato sincronizza cambio/rimozione dell'email primaria.
 - Nessun interesse, cronologia, libreria o altro dato privato entra nel profilo collaborativo.
 - `friend_requests`, `friendships` e `user_blocks` tengono separati lifecycle, relazione reciproca e blocco direzionale. Un blocco rimuove amicizia/richieste e rende la discovery indisponibile in entrambe le direzioni.
 - Per il pubblico creare piu' tardi `public_profiles`, opt-in e separato, con handle normalizzato e display name scelto. Un profilo pubblico nasce disattivato e non indicizzato.
@@ -157,11 +160,11 @@ Non estendere silenziosamente le attuali `playlists` private. Sono owner-only ne
 | Ruolo | Legge collection | Modifica item | Gestisce membri/inviti | Cancella o pubblica |
 | --- | --- | --- | --- | --- |
 | Owner | si | si | si | si |
-| Editor | si | si | no | no |
-| Viewer | si | no | no | no |
+| Admin | si | si | si | no |
+| Member | si | aggiunge/rimuove, non riordina | no | no |
 | Outsider/revocato | no, risposta indistinguibile da non trovato | no | no | no |
 
-Un viewer puo' copiare un paper nella **propria** libreria con un'azione esplicita; questa copia non divulga il suo comportamento ne' influenza il ranking degli altri membri.
+Un member puo' copiare un paper nella **propria** libreria con un'azione esplicita; questa copia non divulga il suo comportamento ne' influenza il ranking degli altri membri.
 
 ### Schema futuro, per fasi
 
@@ -242,8 +245,8 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 
 - `requireCollectionPermission(actorOwnerId, collectionId, minimumRole)` e helper di query che non restituiscono dati prima dell'autorizzazione;
 - owner crea/revoca inviti, cambia ruoli, rimuove membri e cancella collection;
-- editor aggiunge/rimuove/riordina paper e poi commenta;
-- viewer legge e copia un paper nella propria libreria;
+- admin crea/revoca inviti, rimuove membri e gestisce la lista, ma non trasferisce ownership o cancella il gruppo;
+- member legge, aggiunge/rimuove paper e copia un paper nella propria libreria, ma non gestisce persone, ruoli o lifecycle;
 - inviti tramite link copiato e consegnato esternamente: non introdurre provider email o import contatti;
 - l'accettazione e' una `POST` autenticata e transazionale; landing e hand-off di login sono `no-store` con `Referrer-Policy: no-referrer`;
 - UUID o URL non rappresentano autorizzazione: una risorsa non accessibile risponde come non trovata.
@@ -257,10 +260,10 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 **Esperienza utente:**
 
 1. L'owner crea una nuova "Shared collection", non converte una playlist privata.
-2. Imposta titolo e descrizione; sceglie viewer o editor.
+2. Imposta titolo e descrizione; i nuovi partecipanti entrano come member.
 3. Copia un invite link a uso singolo, con scadenza e revoca.
 4. Il destinatario effettua login, accetta esplicitamente e vede la collection.
-5. Owner/editor aggiungono, rimuovono e riordinano paper; viewer puo' soltanto leggere e copiare un paper nella propria libreria.
+5. Tutti i membri aggiungono o rimuovono paper; owner/admin possono anche riordinare la lista e ogni membro puo' copiare un paper nella propria libreria.
 6. L'owner vede membri, ruoli e attivita' essenziale; puo' revocare un membro con effetto immediato.
 
 **Matrice di test minima:**
@@ -268,8 +271,8 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 | Caso | Risultato atteso |
 | --- | --- |
 | Owner | legge e amministra tutto |
-| Editor | modifica item ma non ruoli o inviti |
-| Viewer | legge ma non modifica |
+| Admin | gestisce lista, inviti e membri ma non ownership o cancellazione |
+| Member | legge e aggiunge/rimuove paper ma non gestisce utenti o lifecycle |
 | Outsider | non scopre ne' legge la collection |
 | Invito scaduto/revocato | non crea membership |
 | Membro revocato | perde subito read/write e cache non mostra contenuti |
@@ -292,7 +295,7 @@ Solo dopo un pilot sano, aggiungere discussione limitata alla collection.
 
 **Trust minimo gia' in beta:** blocco utente, report di contenuto, audit delle azioni owner/admin e percorso di rimozione. Il fatto che una collection sia invite-only non elimina il bisogno di interrompere abuso o accesso.
 
-**Gate di uscita:** owner e utente possono rimuovere/bloccare/reportare; i test coprono XSS, limiti, revoca e autorizzazione autore/editor/owner/bloccato.
+**Gate di uscita:** owner e utente possono rimuovere/bloccare/reportare; i test coprono XSS, limiti, revoca e autorizzazione autore/member/admin/owner/bloccato.
 
 ### I — Collection unlisted read-only
 
@@ -366,7 +369,7 @@ Lifecycle richiesto:
 1. Migration versionata e test su database vuoto/upgrade.
 2. Aggiornamento coerente di schema SQL, Drizzle, relazioni e repository.
 3. `npm run audit:service-role`, lint, typecheck, unit test e build.
-4. E2E database-backed con owner, editor, viewer e outsider.
+4. E2E database-backed con owner, admin, member e outsider.
 5. Test RLS negativo con Clerk JWT per nuove tabelle.
 6. Verifica PWA/cache, logout/login su device condiviso e route private.
 7. Test di accessibilita', mobile viewport, rollback e messaggi di errore.

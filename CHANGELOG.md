@@ -8,6 +8,7 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Approved the private research-group charter, choosing exact-email discovery opt-in and defining roles, retention, account closure, threat controls, release stops, and research-user validation.
 - Clarified the Clerk/Supabase authorization boundary: Development isolation is proven by deterministic and live A/B tests, while Preview/Production verification and authenticated-route cache/logout hardening are separate release gates.
 
 ### Added

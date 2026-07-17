@@ -9,7 +9,7 @@ Turn the approved direction for private research groups into a release gate.
 ### Scope
 
 - Confirm small private research groups as the initial audience.
-- Document exact-email discovery enabled by default with a Settings opt-out.
+- Document exact-email discovery disabled by default with a Settings opt-in.
 - Complete the data audience, retention, export, delete, account-closure, block, and abuse matrix.
 - Assign an operational owner for privacy, reports, and incidents.
 - Define non-goals: no public directory, followers, people recommendations, public feed, or implicit sharing of private PaperDeck data.
@@ -87,7 +87,7 @@ Create an identity surface separate from private PaperDeck profiles.
 ### Scope
 
 - Add a collaboration profile with user-chosen display name and optional image.
-- Add exact-email discoverability enabled by default with a Settings opt-out.
+- Add exact-email discoverability disabled by default with a Settings opt-in.
 - Add group invite policy: `nobody`, `friends_only`, or `anyone` (default `friends_only`).
 - Implement exact-match lookup only: no prefix search, autocomplete, or public directory.
 - Return a generic result for nonexistent and undiscoverable accounts where possible.
@@ -98,7 +98,7 @@ Create an identity surface separate from private PaperDeck profiles.
 
 ### Done when
 
-- Discovery respects opt-out and resists enumeration.
+- Discovery requires opt-in and resists enumeration.
 - Settings are recoverable and tested on mobile.
 - RLS and application authorization agree.
 
