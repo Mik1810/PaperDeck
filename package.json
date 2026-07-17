@@ -13,6 +13,8 @@
     "enrich:abstracts": "tsx scripts/enrich-missing-abstracts.ts",
     "import:paraphrased": "tsx scripts/import-paraphrased-abstracts.ts",
     "analytics:prune": "tsx scripts/prune-recommendation-impressions.ts",
+    "evaluate:recommendations": "tsx scripts/evaluate-recommendations.ts",
+    "evaluate:recommendations:latency": "tsx scripts/evaluate-recommendations.ts --measure-latency",
     "discover:classics": "tsx scripts/discover-classic-papers.ts",
     "generate:summaries": "tsx scripts/generate-summaries.ts",
     "generate:summaries:py": "uv run scripts/generate_summaries.py",

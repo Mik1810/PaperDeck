@@ -1,5 +1,7 @@
 import type { InteractionType, Paper } from "@/types/paper";
 
+export const FEED_RANKER_VERSION = "paperdeck-hybrid-ranker-v1";
+
 export type RankingTopic = {
   id: string;
   parentId: string | null;

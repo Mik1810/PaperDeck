@@ -227,16 +227,22 @@ run("direct writes remain denied and friendship has no ranking side effects", as
     /row-level security|policy/i,
   );
 
-  const before = await sql!<{ count: string }[]>`
-    select count(*) from user_paper_interactions where owner_id in ${sql!(owners)}
+  const before = await sql!<{ source: string; count: string }[]>`
+    select 'interactions' as source, count(*)::text from user_paper_interactions where owner_id in ${sql!(owners)}
+    union all select 'impressions', count(*)::text from recommendation_impressions where owner_id in ${sql!(owners)}
+    union all select 'recommendations', count(*)::text from recommendations where owner_id in ${sql!(owners)}
+    union all select 'profile_embeddings', count(*)::text from user_profile_embeddings where owner_id in ${sql!(owners)}
   `;
   await asUser(ownerA, (transaction) =>
     transaction`select * from send_friend_request(${publicB}::uuid)`,
   );
-  const afterRows = await sql!<{ count: string }[]>`
-    select count(*) from user_paper_interactions where owner_id in ${sql!(owners)}
+  const afterRows = await sql!<{ source: string; count: string }[]>`
+    select 'interactions' as source, count(*)::text from user_paper_interactions where owner_id in ${sql!(owners)}
+    union all select 'impressions', count(*)::text from recommendation_impressions where owner_id in ${sql!(owners)}
+    union all select 'recommendations', count(*)::text from recommendations where owner_id in ${sql!(owners)}
+    union all select 'profile_embeddings', count(*)::text from user_profile_embeddings where owner_id in ${sql!(owners)}
   `;
-  assert.equal(afterRows[0].count, before[0].count);
+  assert.deepEqual([...afterRows], [...before]);
 });
 
 run("a requester must have a public collaboration identity", async () => {

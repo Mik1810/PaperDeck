@@ -23,6 +23,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Playlist: private nella prima versione.
 - Lettura articolo: apertura del paper o della landing page in una nuova scheda/browser, anche da iPhone.
 - Ranking iniziale: massima aderenza agli interessi dell'utente, non pura popolarita'.
+- Stabilita' ranking: ranker e fixture sono versionati; qualita', copertura, sovrapposizione e latenza devono superare il gate offline in CI prima di ampliare le feature sociali.
 - Il primo feed puo' includere anche paper classici/storici, non solo paper recenti.
 - Swipe left significa "non mi interessa questo paper", non "rimuovi questo topic dai miei interessi".
 - Gli interessi scelti in onboarding restano modificabili dalle impostazioni.
@@ -89,6 +90,7 @@ Aggiornato al 2026-07-03:
   - 2 user profile embeddings MiniLM in `user_profile_embeddings`; il retrieval filtra i profili sul modello corrente.
   - RPC `match_papers_by_embedding` per cosine similarity search attiva con default MiniLM.
 - Feed semantico: profilo utente generato su write da onboarding/settings, con primo batch feed e batch live breve salvati in `recommendations` per evitare reranking completo a ogni refresh.
+- Gate stabilita' raccomandazioni: App CI blocca regressioni deterministiche di NDCG/recall, copertura e sovrapposizione; un workflow separato riporta il p95 del reranker senza renderlo inizialmente bloccante.
 - Onboarding interessi: wizard full-screen scuro e guidato, senza navigazione libera tra step, con controlli separati a destra su desktop.
 - LLM triage summary: implementato.
   - Worker `scripts/generate-summaries.ts` con Jina AI Reader + GitHub Models.

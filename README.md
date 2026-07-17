@@ -63,6 +63,10 @@ The current live ranking uses selected topics, topic hierarchy, recent explicit 
 
 The embedding model is `sentence-transformers/all-MiniLM-L6-v2` (selected via offline benchmark as +17% better than BGE-small), with 384-dimensional vectors stored in pgvector.
 
+Run `npm run evaluate:recommendations` to enforce the versioned offline quality,
+coverage, and repetition gate; latency is reported separately as documented in
+[`docs/recommendation-stability.md`](./docs/recommendation-stability.md).
+
 ## Planned Architecture
 
 - Frontend/backend: Next.js with TypeScript.

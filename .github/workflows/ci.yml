@@ -53,6 +53,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Deterministic recommendation stability gate
+        id: recommendation_stability
+        run: npm run evaluate:recommendations
+
       - name: Build
         run: npm run build
 
@@ -85,7 +89,8 @@ jobs:
           echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| service-role audit | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| lint | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| deterministic recommendation stability | \`${{ steps.recommendation_stability.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| build | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| e2e smoke tests | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "*All checks pass. Ready to deploy.*" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Job status: \`${{ job.status }}\`.*" >> "$GITHUB_STEP_SUMMARY"
