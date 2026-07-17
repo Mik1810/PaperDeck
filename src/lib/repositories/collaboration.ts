@@ -55,7 +55,7 @@ export async function getCollaborationSettings(
 
   return {
     displayName: rows[0]?.displayName ?? "",
-    discoverableByEmail: rows[0]?.discoverableByEmail ?? true,
+    discoverableByEmail: rows[0]?.discoverableByEmail ?? false,
     groupInvitePolicy: rows[0]?.groupInvitePolicy ?? "friends_only",
     hasIdentity: Boolean(rows[0]?.collaborationOwnerId),
   };

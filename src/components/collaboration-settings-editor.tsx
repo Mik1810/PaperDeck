@@ -80,8 +80,8 @@ export function CollaborationSettingsEditor({
             Find me by exact email
           </span>
           <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
-            Your email is never shown. Turning this off makes all exact-email
-            searches return the same unavailable result.
+            Off by default. Turn this on only if you want people who already
+            know your exact email to find this profile. Your email is never shown.
           </span>
         </span>
       </label>

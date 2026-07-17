@@ -187,6 +187,12 @@ test.describe("dev-auth app smoke", () => {
     "Run without PAPERDECK_E2E_DEV_AUTH=false for dev-auth app smoke tests.",
   );
 
+  test.afterAll(async () => {
+    if (hasDatabaseEnv) {
+      await resetDevOwner();
+    }
+  });
+
   test("sign-in exits to the app when dev auth is enabled", async ({
     request,
   }) => {
@@ -319,6 +325,29 @@ test.describe("dev-auth app smoke", () => {
     expect(afterSave.map((row) => row.topic_id).sort()).toEqual(
       [initialTopic.id, newTopic.id].sort(),
     );
+  });
+
+  test("settings presents exact-email discovery as explicit opt-in", async ({
+    page,
+  }) => {
+    test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
+
+    await seedCompletedDevOwner();
+    const response = await page.goto("/settings");
+
+    expect(response?.status()).toBeLessThan(500);
+    const discoveryToggle = page.getByRole("checkbox", {
+      name: /Find me by exact email/,
+    });
+    await expect(discoveryToggle).not.toBeChecked();
+    await expect(
+      page.getByText(/Off by default.*exact email/s),
+    ).toBeVisible();
+
+    await discoveryToggle.check();
+    await expect(discoveryToggle).toBeChecked();
+    await page.reload();
+    await expect(discoveryToggle).not.toBeChecked();
   });
 
   for (const { path, heading } of [

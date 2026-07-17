@@ -51,7 +51,7 @@ create table collaboration_identities (
   public_id uuid not null default gen_random_uuid() unique,
   email_lookup_hash text not null unique check (email_lookup_hash ~ '^[0-9a-f]{64}$'),
   email_hash_version integer not null default 1 check (email_hash_version > 0),
-  discoverable_by_email boolean not null default true,
+  discoverable_by_email boolean not null default false,
   group_invite_policy group_invite_policy not null default 'friends_only',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

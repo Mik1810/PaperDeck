@@ -26,7 +26,7 @@ export const collaborationIdentities = pgTable("collaboration_identities", {
 	publicId: uuid("public_id").defaultRandom().notNull(),
 	emailLookupHash: text("email_lookup_hash").notNull(),
 	emailHashVersion: integer("email_hash_version").default(1).notNull(),
-	discoverableByEmail: boolean("discoverable_by_email").default(true).notNull(),
+	discoverableByEmail: boolean("discoverable_by_email").default(false).notNull(),
 	groupInvitePolicy: groupInvitePolicy("group_invite_policy").default('friends_only').notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),

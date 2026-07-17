@@ -38,7 +38,15 @@ before(async () => {
   `;
   await sql`
     insert into collaboration_identities (owner_id, email_lookup_hash)
-    values (${ownerA}, ${hashA}), (${ownerB}, ${hashB})
+    values (${ownerA}, ${hashA})
+  `;
+  await sql`
+    insert into collaboration_identities (
+      owner_id,
+      email_lookup_hash,
+      discoverable_by_email
+    )
+    values (${ownerB}, ${hashB}, true)
   `;
 });
 
@@ -139,6 +147,52 @@ run("collaboration identities expose only the current owner's private row", asyn
   );
 
   assert.deepEqual([...rows], [{ owner_id: ownerA }]);
+});
+
+run("new collaboration identities are undiscoverable by default", async () => {
+  const defaults = await sql!<{ discoverable_by_email: boolean }[]>`
+    select discoverable_by_email
+    from collaboration_identities
+    where owner_id = ${ownerA}
+  `;
+  const discovery = await asRole("authenticated", { sub: ownerB }, (transaction) =>
+    transaction`select * from find_collaboration_profile(${hashA})`,
+  );
+
+  assert.deepEqual([...defaults], [{ discoverable_by_email: false }]);
+  assert.deepEqual([...discovery], []);
+});
+
+run("owners can explicitly opt in and opt out of exact-email discovery", async () => {
+  const optedIn = await asRole(
+    "authenticated",
+    { sub: ownerA },
+    (transaction) => transaction<{ owner_id: string }[]>`
+      update collaboration_identities
+      set discoverable_by_email = true
+      where owner_id = ${ownerA}
+      returning owner_id
+    `,
+  );
+  const visible = await asRole("authenticated", { sub: ownerB }, (transaction) =>
+    transaction`select * from find_collaboration_profile(${hashA})`,
+  );
+
+  assert.deepEqual([...optedIn], [{ owner_id: ownerA }]);
+  assert.equal(visible.length, 1);
+
+  await asRole("authenticated", { sub: ownerA }, (transaction) => transaction`
+    update collaboration_identities
+    set discoverable_by_email = false
+    where owner_id = ${ownerA}
+  `);
+  const hiddenAgain = await asRole(
+    "authenticated",
+    { sub: ownerB },
+    (transaction) => transaction`select * from find_collaboration_profile(${hashA})`,
+  );
+
+  assert.deepEqual([...hiddenAgain], []);
 });
 
 run("collaboration public ids remain immutable", async () => {
