@@ -38,11 +38,15 @@ before(async () => {
     values (${ownerA}, 'Friend A'), (${ownerB}, 'Friend B'), (${ownerC}, 'Friend C')
   `;
   const identities = await sql<{ owner_id: string; public_id: string }[]>`
-    insert into collaboration_identities (owner_id, email_lookup_hash)
+    insert into collaboration_identities (
+      owner_id,
+      email_lookup_hash,
+      discoverable_by_email
+    )
     values
-      (${ownerA}, ${hashFor(ownerA)}),
-      (${ownerB}, ${hashFor(ownerB)}),
-      (${ownerC}, ${hashFor(ownerC)})
+      (${ownerA}, ${hashFor(ownerA)}, true),
+      (${ownerB}, ${hashFor(ownerB)}, true),
+      (${ownerC}, ${hashFor(ownerC)}, true)
     returning owner_id, public_id
   `;
   publicA = identities.find((row) => row.owner_id === ownerA)!.public_id;
@@ -98,6 +102,12 @@ run("decline applies a requester-specific 30-day cooldown", async () => {
   await asUser(ownerB, (transaction) => transaction`
     select respond_friend_request(${request[0].request_id}::uuid, false)
   `);
+  const repeated = await asUser(ownerB, (transaction) => transaction<{
+    status: string;
+  }[]>`
+    select respond_friend_request(${request[0].request_id}::uuid, false) as status
+  `);
+  assert.equal(repeated[0].status, "declined");
 
   await assert.rejects(
     asUser(ownerA, (transaction) =>
@@ -120,6 +130,12 @@ run("only the recipient can respond to a pending request", async () => {
   await assert.rejects(
     asUser(ownerC, (transaction) => transaction`
       select respond_friend_request(${request[0].request_id}::uuid, true)
+    `),
+    /request_unavailable/,
+  );
+  await assert.rejects(
+    asUser(ownerC, (transaction) => transaction`
+      select cancel_friend_request(${request[0].request_id}::uuid)
     `),
     /request_unavailable/,
   );
@@ -175,12 +191,31 @@ run("new friend requests are limited to ten per rolling day", async () => {
 });
 
 run("blocking cancels relationships and hides discovery in both directions", async () => {
+  const [beforeA, beforeB] = await Promise.all([
+    asUser(ownerA, (transaction) => transaction`
+      select * from find_collaboration_profile(${hashFor(ownerB)})
+    `),
+    asUser(ownerB, (transaction) => transaction`
+      select * from find_collaboration_profile(${hashFor(ownerA)})
+    `),
+  ]);
+  assert.equal(beforeA.length, 1);
+  assert.equal(beforeB.length, 1);
+
   await asUser(ownerA, (transaction) =>
     transaction`select * from send_friend_request(${publicB}::uuid)`,
   );
   await asUser(ownerA, (transaction) =>
     transaction`select block_profile(${publicB}::uuid)`,
   );
+  await asUser(ownerA, (transaction) =>
+    transaction`select block_profile(${publicB}::uuid)`,
+  );
+  const activeBlocks = await sql!`
+    select * from user_blocks
+    where blocker_id = ${ownerA} and blocked_id = ${ownerB}
+  `;
+  assert.equal(activeBlocks.length, 1);
 
   const [viewA, viewB] = await Promise.all([
     asUser(ownerA, (transaction) => transaction`
@@ -208,10 +243,24 @@ run("blocking cancels relationships and hides discovery in both directions", asy
     ),
     /profile_unavailable/,
   );
+  await assert.rejects(
+    asUser(ownerA, (transaction) =>
+      transaction`select * from send_friend_request(${publicB}::uuid)`,
+    ),
+    /profile_unavailable/,
+  );
 
   await asUser(ownerA, (transaction) =>
     transaction`select unblock_profile(${publicB}::uuid)`,
   );
+  await asUser(ownerA, (transaction) =>
+    transaction`select unblock_profile(${publicB}::uuid)`,
+  );
+  const remainingBlocks = await sql!`
+    select * from user_blocks
+    where blocker_id = ${ownerA} and blocked_id = ${ownerB}
+  `;
+  assert.deepEqual([...remainingBlocks], []);
   const afterUnblock = await asUser(ownerB, (transaction) => transaction<{
     relationship_status: string;
   }[]>`select * from send_friend_request(${publicA}::uuid)`);
@@ -221,8 +270,22 @@ run("blocking cancels relationships and hides discovery in both directions", asy
 run("direct writes remain denied and friendship has no ranking side effects", async () => {
   await assert.rejects(
     asUser(ownerA, (transaction) => transaction`
+      insert into friend_requests (requester_id, recipient_id)
+      values (${ownerA}, ${ownerB})
+    `),
+    /row-level security|policy/i,
+  );
+  await assert.rejects(
+    asUser(ownerA, (transaction) => transaction`
       insert into friendships (user_low_id, user_high_id)
       values (${[ownerA, ownerB].sort()[0]}, ${[ownerA, ownerB].sort()[1]})
+    `),
+    /row-level security|policy/i,
+  );
+  await assert.rejects(
+    asUser(ownerA, (transaction) => transaction`
+      insert into user_blocks (blocker_id, blocked_id)
+      values (${ownerA}, ${ownerB})
     `),
     /row-level security|policy/i,
   );
