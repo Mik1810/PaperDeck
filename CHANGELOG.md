@@ -6,6 +6,10 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Clarified the Clerk/Supabase authorization boundary: Development isolation is proven by deterministic and live A/B tests, while Preview/Production verification and authenticated-route cache/logout hardening are separate release gates.
+
 ### Added
 
 - Added a versioned offline recommendation-stability gate: App CI enforces deterministic NDCG, recall, catalog coverage, and cross-profile overlap thresholds, while a separate scheduled/manual workflow reports reranker p95; social-domain ranking isolation is covered separately.

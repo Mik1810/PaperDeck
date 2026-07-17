@@ -1,6 +1,6 @@
 # PaperDeck ROADMAP
 
-Ultimo aggiornamento: 2026-07-03
+Ultimo aggiornamento: 2026-07-18
 
 ## Visione
 
@@ -55,7 +55,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 
 ## Stato implementazione
 
-Aggiornato al 2026-07-03:
+Aggiornato al 2026-07-18:
 
 - Repository, scaffold Next.js, UI skeleton e Clerk auth: completati.
 - Supabase schema iniziale con pgvector, RLS preparata e tabelle MVP: applicato.
@@ -98,7 +98,8 @@ Aggiornato al 2026-07-03:
   - Visualizzati nella pagina paper detail sotto l'abstract.
 - Clerk JWT + Supabase RLS: configurato.
   - `createClerkAuthenticatedClient()` per query Supabase con JWT Clerk + anon key.
-  - RLS policy attive, verificate con smoke test.
+  - Isolamento verificato con test deterministici A/B/anonimo e smoke Clerk Development A/B.
+  - Preview e Production richiedono uno smoke separato prima di abilitare la collaborazione (#104).
 - KaTeX: rendering LaTeX in abstract e summary su detail page e feed card (scelto dopo aver scartato MathJax per via della dimensione bundle e complessita' CDN).
 - Sicurezza: audit service-role completato, checklist rotazione secret documentata.
 - Test: suite Playwright smoke con 5 test dev-auth.

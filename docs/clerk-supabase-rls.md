@@ -4,9 +4,18 @@ This page describes how to configure Clerk JWT templates so Supabase can verify 
 
 ## Current State
 
-The MVP uses `SUPABASE_SERVICE_ROLE_KEY` for all database access via server actions. This bypasses all RLS policies. Access control is done in the application layer by checking `auth().userId` from Clerk.
+The current app repository path uses the direct Postgres connection from
+server-only code. User-scoped operations validate the Clerk owner ID in the
+application layer and include an explicit owner predicate; this path does not
+rely on RLS for enforcement.
 
-The RLS policies in `supabase/schema.sql` are already written and use `auth.jwt() ->> 'sub'` as the owner identifier. They are dormant until Clerk JWTs are configured.
+The RLS policies in `supabase/schema.sql` use `auth.jwt() ->> 'sub'` as the
+owner identifier. Clerk Development and Supabase Third-Party Auth are connected,
+and the policies are verified both by deterministic A/B/anonymous database tests
+and by a live two-session Clerk Development smoke through the Supabase anonymous
+client. Preview and Production remain a separate pre-release gate tracked in
+GitHub issue #104; passing Development does not imply that either deployed
+environment has passed.
 
 ## Setup
 
@@ -38,7 +47,7 @@ After configuration:
 
 ## Architecture
 
-### Before (MVP — service role only):
+### Current app repository path:
 
 ```
 Scripts → createServiceRoleClient() → Supabase (RLS bypassed)
@@ -47,7 +56,7 @@ App   → drizzle-orm → postgres-js → DATABASE_URL → Supabase Postgres
         requireOwnerId() → filters owner_id manually
 ```
 
-### After (with Clerk JWT):
+### RLS-authenticated client path:
 
 ```
 Server Action → auth().getToken()
@@ -71,18 +80,20 @@ Run `npm run audit:service-role` to see the breakdown.
 
 | Scope | Count | Description | Current Client |
 |-------|-------|-------------|---------------|
-| `@user-scoped` | 27 | Reads/writes user-owned data (profile, favorites, interactions, playlists) | Drizzle `db` (service-role) — owner checks in app code |
-| `@admin` | 9 | Shared catalog reads, ranking, embedding refreshes, topic taxonomy | Drizzle `db` (service-role) |
+| `@user-scoped` | 32 | Reads/writes user-owned data (profile, favorites, interactions, playlists) | Drizzle `db` — owner checks in app code |
+| `@admin` | 11 | Shared catalog reads, ranking, embedding refreshes, topic taxonomy | Drizzle `db` |
 
 **Current state (MVP):** Both `@user-scoped` and `@admin` functions use the Drizzle direct connection via `DATABASE_URL`. Owner-id is validated in application code (`requireOwnerId()`). This is acceptable for MVP because:
 - Every user-scoped query includes `WHERE owner_id = ?` or equivalent
 - The audit script (`scripts/audit-service-role.ts`) verifies no service-role key leaks to client bundles
-- RLS policies in `supabase/schema.sql` are written and ready for activation
+- RLS policies in `supabase/schema.sql` are active on the authenticated-client
+  path and covered by isolation tests
 
 **Migration plan:**
 1. Move user-scoped writes (toggleFavorite, toggleReadLater, recordPaperInteraction, etc.) to `createClerkAuthenticatedClient()` 
 2. Move user-scoped reads (getFeedState, getLibraryPageData, etc.) to Clerk client
-3. Activate RLS policies in production
+3. Verify every migrated operation through the RLS-backed client before relying
+   on it as the authorization boundary
 4. Keep admin functions (getAllPapers, getSemanticPaperCandidates, preloadRecommendations) on service role
 
 The `requireOwnerId()` utility in `src/lib/repositories/owner-guard.ts` provides defense-in-depth for all service-role operations that touch user-owned data.
@@ -96,9 +107,9 @@ cannot select, update, delete, or insert data as user B. The test skips when no
 database is configured and always removes its temporary rows.
 
 This deterministic database test does not replace a deployment smoke with real
-Clerk sessions. Preview and production must still verify that Supabase External
-Auth accepts the default Clerk session token before collaboration features are
-enabled.
+Clerk sessions. GitHub issue #104 gates collaboration separately in Preview and
+Production until each target verifies that Supabase accepts its Clerk session
+tokens and enforces isolation.
 
 ### Live A/B Clerk smoke
 
@@ -116,10 +127,10 @@ client, and always revokes the sessions afterward. It never prints tokens or
 needs passwords. The two email identifiers are required local configuration and
 are not stored in the repository.
 
-The smoke verifies that both tokens contain `role=authenticated`, A and B can
+The Development smoke verifies that both tokens contain `role=authenticated`, A and B can
 each see only their own profile, and A cannot update B. It performs no persistent
-data mutation. Run it once against preview and once against production before
-enabling cross-user collaboration.
+data mutation. Preview and Production execution, identity selection, and redacted
+evidence are intentionally deferred to the explicit approval gate in issue #104.
 
 ### Collaboration identity webhook
 

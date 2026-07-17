@@ -49,28 +49,30 @@ labels: area/auth, area:security, area:database, priority:p0, type:enhancement
 
 Parent: #37
 
-Blocked by: research-group charter approval.
-
-Cross-user tables cannot rely only on service-role application checks.
+This issue establishes the Clerk JWT/Supabase RLS foundation required before collaboration work.
 
 ### Scope
 
 - Add deterministic database tests with user A, user B, and an unauthenticated actor.
-- Prove A can read/update only A and cannot read, update, or delete B.
-- Prove missing or manipulated claims fail closed.
-- Add an optional real two-session Clerk JWT smoke against the Supabase anon key.
-- Replace the current count-only smoke with a deterministic isolation diagnostic.
-- Verify Clerk session JWTs against Supabase in local, preview, and production environments.
-- Define authenticated-client and service-role boundaries for collaboration repositories.
-- Add negative RLS fixtures for owner, member, outsider, blocked, and revoked actors.
-- Add route-classification, `no-store`, PWA network-only, and shared-device logout checks.
+- Prove cross-user reads, updates, deletes, and foreign-owner inserts fail closed.
+- Prove missing or unrelated claims cannot read protected rows.
+- Add a real two-session Clerk Development smoke through the Supabase anonymous client.
+- Verify temporary sessions are always revoked and no password or token is persisted.
+- Define and audit authenticated-client and service-role boundaries.
 - Document deployment configuration without exposing secrets.
+
+### Separated follow-ups
+
+- Preview and Production release verification: #104.
+- Owner/admin/member/outsider/revoked group matrix: #95.
+- Authenticated-route cache, PWA, and shared-device logout hardening: #103.
 
 ### Done when
 
+- Deterministic A/B/anonymous negative RLS tests pass.
+- The Clerk Development A/B smoke proves token acceptance and isolation.
 - Cross-user reads and writes are denied by default.
-- Automated negative RLS tests pass.
-- Service-role access remains limited and audited.
+- Service-role access remains limited, server-only, and audited.
 
 ---
 ## Add collaboration profiles and exact-email discovery controls
