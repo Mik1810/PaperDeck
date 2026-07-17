@@ -70,8 +70,13 @@ export function PwaProvider() {
   if (!updateReady) return null;
 
   return (
-    <div className="fixed bottom-[calc(4.5rem+max(0.6rem,env(safe-area-inset-bottom)))] inset-x-0 z-40 mx-auto w-fit max-w-md px-4 md:hidden">
-      <div className="flex items-center gap-3 rounded-xl border border-slate-300 bg-slate-900 px-5 py-3 shadow-xl shadow-slate-900/20">
+    <div className="pointer-events-none fixed inset-x-0 top-[calc(4.75rem+env(safe-area-inset-top))] z-40 mx-auto w-fit max-w-md px-4 md:hidden">
+      <div
+        aria-label="App update"
+        aria-live="polite"
+        className="pointer-events-auto flex items-center gap-3 rounded-xl border border-slate-300 bg-slate-900 px-5 py-3 shadow-xl shadow-slate-900/20"
+        role="region"
+      >
         <span className="text-sm font-bold text-white">
           New version available
         </span>
