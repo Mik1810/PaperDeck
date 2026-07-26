@@ -14,6 +14,7 @@ It:
 
 - fetches Atom XML from the arXiv legacy API;
 - respects the arXiv one-request-every-three-seconds guidance;
+- honors `Retry-After` and uses minute-scale exponential backoff with jitter when arXiv rate-limits shared runner IPs;
 - imports descriptive metadata only: title, abstract, authors, identifiers, categories, timestamps, and external links;
 - links to arXiv abstract/PDF URLs instead of copying or serving PDFs;
 - upserts papers by normalized `arxiv_id`;
@@ -69,6 +70,13 @@ dry_run
 ```
 
 When `dry_run=true`, the workflow passes `--dry-run` to `npm run ingest:arxiv`.
+
+GitHub-hosted runners use shared outbound IPs, so arXiv may return `429` even
+for the first request in a run. The worker treats `429` differently from
+short-lived `5xx` failures and the workflow summary reports whether a failure
+came from arXiv rate limiting, arXiv upstream availability, Supabase
+authentication, or another ingestion stage. Jina is only used by the separate
+paper-summary workflow and cannot cause metadata ingestion to fail.
 
 Required GitHub repository secrets:
 

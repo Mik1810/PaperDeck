@@ -3,6 +3,7 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { XMLParser } from "fast-xml-parser";
 import { arxivCategoryLabels } from "../src/lib/arxiv-categories";
+import { arxivRetryDelayMs } from "../src/lib/arxiv-retry";
 import {
   ArxivFeedSchema,
   ArxivIdRowSchema,
@@ -227,13 +228,22 @@ function parseEntry(entry: Record<string, unknown>): ArxivPaper {
 }
 
 const ARXIV_MAX_RETRIES = 3;
-const ARXIV_RETRY_BASE_MS = 2000;
+
+class ArxivRequestError extends Error {
+  constructor(
+    readonly status: number,
+    statusText: string,
+  ) {
+    super(`arXiv request failed: ${status} ${statusText}`);
+    this.name = "ArxivRequestError";
+  }
+}
 
 function isRetryableStatus(status: number) {
   return status === 429 || status >= 500;
 }
 
-function isNetworkError(error: unknown) {
+function isNetworkError(error: unknown): error is TypeError {
   return error instanceof TypeError && error.message.includes("fetch");
 }
 
@@ -243,9 +253,13 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = AR
       const response = await fetch(url, options);
 
       if (isRetryableStatus(response.status) && attempt < maxRetries) {
-        const waitMs = Math.pow(2, attempt + 1) * ARXIV_RETRY_BASE_MS;
+        const waitMs = arxivRetryDelayMs(
+          response.status,
+          attempt,
+          response.headers.get("retry-after"),
+        );
         console.error(
-          `arXiv HTTP ${response.status} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${waitMs / 1000}s...`,
+          `arXiv HTTP ${response.status} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${Math.round(waitMs / 1000)}s...`,
         );
         await new Promise((resolve) => setTimeout(resolve, waitMs));
         continue;
@@ -253,14 +267,19 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = AR
 
       return response;
     } catch (error) {
-      if (attempt < maxRetries && isNetworkError(error)) {
-        const waitMs = Math.pow(2, attempt + 1) * ARXIV_RETRY_BASE_MS;
-        console.error(
-          `Network error (attempt ${attempt + 1}/${maxRetries + 1}): ${error instanceof Error ? error.message : String(error)}, retrying in ${waitMs / 1000}s...`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-        continue;
+      if (isNetworkError(error)) {
+        if (attempt < maxRetries) {
+          const waitMs = arxivRetryDelayMs(503, attempt, null);
+          console.error(
+            `Network error (attempt ${attempt + 1}/${maxRetries + 1}): ${error.message}, retrying in ${Math.round(waitMs / 1000)}s...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+
+        throw new ArxivRequestError(503, "Network error");
       }
+
       throw error;
     }
   }
@@ -286,7 +305,7 @@ async function fetchArxivPapersForCategory(
   });
 
   if (!response.ok) {
-    throw new Error(`arXiv request failed: ${response.status} ${response.statusText}`);
+    throw new ArxivRequestError(response.status, response.statusText);
   }
 
   const parser = new XMLParser({
@@ -873,4 +892,57 @@ async function main() {
   }
 }
 
-void main();
+function describeIngestionFailure(error: unknown) {
+  if (error instanceof ArxivRequestError) {
+    return {
+      mode: "error",
+      failure:
+        error.status === 429
+          ? "arxiv-rate-limit"
+          : error.status >= 500
+            ? "arxiv-upstream"
+            : "arxiv-request",
+      status: error.status,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      mode: "error",
+      failure: "ingestion",
+      message: error.message,
+    };
+  }
+
+  if (error && typeof error === "object") {
+    const candidate = error as { code?: unknown; message?: unknown; status?: unknown };
+    const message =
+      typeof candidate.message === "string"
+        ? candidate.message
+        : "Supabase request failed";
+    const status =
+      typeof candidate.status === "number" ? candidate.status : undefined;
+    const authFailure =
+      status === 401 || /invalid api key|jwt|unauthorized/i.test(message);
+
+    return {
+      mode: "error",
+      failure: authFailure ? "supabase-auth" : "supabase",
+      ...(typeof candidate.code === "string" ? { code: candidate.code } : {}),
+      ...(status ? { status } : {}),
+      message,
+    };
+  }
+
+  return {
+    mode: "error",
+    failure: "ingestion",
+    message: String(error),
+  };
+}
+
+void main().catch((error) => {
+  console.error(JSON.stringify(describeIngestionFailure(error)));
+  process.exitCode = 1;
+});

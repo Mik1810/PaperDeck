@@ -53,13 +53,26 @@ jobs:
         shell: bash
         run: |
           cmd=(npm run ingest:arxiv)
+          log_file=$(mktemp)
+          trap 'rm -f "$log_file"' EXIT
 
           if [ "$ARXIV_DRY_RUN" = "true" ]; then
             cmd+=(-- --dry-run)
           fi
 
-          output=$("${cmd[@]}" 2>&1 | tee /dev/stderr | tail -1)
-          echo "output=$output" >> "$GITHUB_OUTPUT"
+          set +e
+          "${cmd[@]}" 2>&1 | tee "$log_file" >&2
+          command_status=${PIPESTATUS[0]}
+          set -e
+
+          output=$(tail -1 "$log_file")
+          {
+            echo "output<<PAPERDECK_OUTPUT"
+            echo "$output"
+            echo "PAPERDECK_OUTPUT"
+          } >> "$GITHUB_OUTPUT"
+
+          exit "$command_status"
 
       - name: Summary
         if: always()
@@ -78,6 +91,31 @@ jobs:
           try:
               data = json.loads(raw)
           except json.JSONDecodeError:
+              raise SystemExit(0)
+
+          if data.get("mode") == "error":
+              failure_labels = {
+                  "arxiv-rate-limit": "arXiv rate limit",
+                  "arxiv-upstream": "arXiv upstream",
+                  "arxiv-request": "arXiv request",
+                  "supabase-auth": "Supabase authentication",
+                  "supabase": "Supabase",
+                  "ingestion": "Ingestion",
+              }
+              failure = data.get("failure", "ingestion")
+              label = failure_labels.get(failure, "Ingestion")
+              message = str(data.get("message", "Unknown failure")).replace("`", "'")
+              lines = [
+                  "## arXiv Ingestion · ❌ Failed",
+                  "",
+                  f"**Failure type:** {label}",
+                  f"**Message:** `{message}`",
+              ]
+              if data.get("status"):
+                  lines.append(f"**HTTP status:** {data['status']}")
+              if data.get("code"):
+                  lines.append(f"**Error code:** `{data['code']}`")
+              print("\n".join(lines))
               raise SystemExit(0)
 
           mode_labels = {
