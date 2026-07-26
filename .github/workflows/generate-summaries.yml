@@ -78,13 +78,26 @@ jobs:
         shell: bash
         run: |
           cmd=(npm run generate:summaries)
+          log_file=$(mktemp)
+          trap 'rm -f "$log_file"' EXIT
 
           if [ "$LLM_DRY_RUN" = "true" ]; then
             cmd+=(-- --dry-run)
           fi
 
-          output=$("${cmd[@]}" 2>&1 | tee /dev/stderr | tail -1)
-          echo "output=$output" >> "$GITHUB_OUTPUT"
+          set +e
+          "${cmd[@]}" 2>&1 | tee "$log_file" >&2
+          command_status=${PIPESTATUS[0]}
+          set -e
+
+          output=$(tail -1 "$log_file")
+          {
+            echo "output<<PAPERDECK_OUTPUT"
+            echo "$output"
+            echo "PAPERDECK_OUTPUT"
+          } >> "$GITHUB_OUTPUT"
+
+          exit "$command_status"
 
       - name: Summary
         if: always()

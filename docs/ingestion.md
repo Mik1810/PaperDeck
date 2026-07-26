@@ -377,7 +377,11 @@ It:
 - the paper detail page reads pre-stored summaries — no LLM call on page load;
 - tracks progress in `ingestion_cursors` with key `triage_summary_enrich`.
 
-GitHub Models uses the built-in `GITHUB_TOKEN` in GitHub Actions and requires `permissions: models: read`. The default model is `openai/gpt-4o-mini`.
+GitHub Models uses the built-in `GITHUB_TOKEN` in GitHub Actions and requires
+`permissions: models: read`. An optional non-empty `GITHUB_MODELS_TOKEN` can
+override it for local or dedicated-token runs. The default model is
+`openai/gpt-4o-mini`. The workflow fails when every attempted summary fails,
+while still preserving its structured result in the job summary.
 
 Configuration:
 

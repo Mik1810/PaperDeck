@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import {
+  resolveGitHubModelsToken,
+  summaryRunShouldFail,
+} from "../src/lib/summary-run";
 
 function extractJson(text: string) {
   const trimmed = text.trim();
@@ -151,7 +155,10 @@ function parseArgs(): SummaryConfig {
       process.env.CLOUDFLARE_API_TOKEN ??
       process.env.CLOUDFLARE_AUTH_TOKEN ??
       "",
-    githubToken: process.env.GITHUB_MODELS_TOKEN ?? process.env.GITHUB_TOKEN ?? "",
+    githubToken: resolveGitHubModelsToken(
+      process.env.GITHUB_MODELS_TOKEN,
+      process.env.GITHUB_TOKEN,
+    ),
     openaiApiKey: process.env.OPENAI_API_KEY ?? "",
     jinaApiKey: process.env.JINA_API_KEY ?? null,
     batchSize: Number(
@@ -1137,6 +1144,10 @@ async function main() {
   };
 
   console.log(JSON.stringify(summary));
+
+  if (summaryRunShouldFail(totalGenerated, totalFailed)) {
+    process.exitCode = 1;
+  }
 }
 
 void main();

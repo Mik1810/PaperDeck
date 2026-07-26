@@ -31,6 +31,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made summary generation fall back from an absent dedicated GitHub Models token to the automatic Actions token, and stopped all-failed summary batches from reporting a false-success workflow.
 - Made scheduled arXiv ingestion tolerate shared-runner rate limits by honoring `Retry-After`, using minute-scale exponential backoff with jitter for HTTP 429, and preserving structured failure diagnostics in GitHub job summaries.
 - Restored meaningful block/discovery coverage after the opt-in default change and expanded friendship tests for idempotent decline/block/unblock, bidirectional blocking, outsider denial, and direct-write rejection.
 - Hardened the live Clerk/Supabase RLS smoke test so every successfully created temporary session is tracked immediately, cleanup failures fail the test, and missing-user errors never expose configured email identifiers.
