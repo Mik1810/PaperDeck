@@ -16,3 +16,4 @@
 - Added repeatable `--arxiv-id` targeting for no-write comparison against existing summaries without permitting write-mode overwrites.
 - Narrowed PDF dehyphenation to lowercase word breaks so line-wrapped proper names such as `Qwen3.7-Plus` retain their source spelling.
 - Replaced the legacy global 35-160 word validator with field-specific ranges aligned to the concise synthesis prompt, including 20-80 words for targeted audience guidance.
+- Tightened grounding instructions to exclude merely plausible application domains, preserve propose/implement/adapt/apply distinctions, and attribute every comparison metric explicitly to both the evaluated system and its baseline.

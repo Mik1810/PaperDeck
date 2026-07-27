@@ -52,7 +52,10 @@ SYSTEM_PROMPT = (
     "from the abstract, especially concrete methods, experimental findings, limitations, and "
     "required background. Every factual claim must be supported by the supplied paper text. "
     "Do not invent implications or results. Copy model, dataset, benchmark, method, and system "
-    "names exactly as they appear in the supplied text. "
+    "names exactly as they appear in the supplied text. Use precise relationship verbs: distinguish "
+    "what the authors propose, implement, adapt, apply, evaluate, and merely discuss. When reporting "
+    "a comparison, name both the evaluated system and its baseline in the same sentence so the metric "
+    "cannot be attributed to the wrong method. "
     "Produce a structured JSON summary with exactly these four fields.\n\n"
     '- "why_it_matters": What specific problem or gap does this paper address? '
     "Combine the motivation, a concrete limitation of prior work, and consequences supported "
@@ -66,7 +69,8 @@ SYSTEM_PROMPT = (
     "prior architectures, formal tools, or mathematical frameworks. Target 35-70 words.\n"
     '- "read_if_you_care_about": Who specifically would find this paper most relevant? '
     "Name 2-4 specific research communities, subfields, systems, or application domains grounded "
-    "in the paper; avoid merely adjacent fields. Target 35-70 words.\n\n"
+    "in the supplied text; avoid merely adjacent fields and do not add plausible but unmentioned "
+    "application domains. Target 35-70 words.\n\n"
     "Use only claims supported by the supplied paper text. Do not invent names, metrics, "
     "baselines, results, or prerequisites. Do not include equations, LaTeX commands, or "
     "mathematical expressions; describe mathematical results in plain English and retain exact "
