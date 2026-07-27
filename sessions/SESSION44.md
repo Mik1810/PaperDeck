@@ -11,3 +11,4 @@
 - Replaced first-characters-only PDF truncation with a bounded section-aware sample covering the opening, method, results/evaluation, and conclusion/limitations, while retaining a `--pdf-strategy first` comparison mode.
 - Added stratified method/results/conclusion fallback windows for PDFs whose extracted section headings do not match conventional names.
 - Added deterministic rejection of LaTeX commands and symbolic complexity expressions in generated prose, plus one bounded plain-English retry. A model that insists on reconstructing formulas now fails the paper without writing it.
+- Compared 12,000- and 20,000-character section samples on three papers. The larger sample added source-supported method/result detail with little latency increase, so 20,000 characters became the local default.

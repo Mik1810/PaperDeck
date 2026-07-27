@@ -359,8 +359,8 @@ def main() -> None:
     mode.add_argument("--no-write", action="store_true",
                       help="Call the LLM and validate summaries without writing to Supabase")
     parser.add_argument("--no-pdf", action="store_true", help="Skip PDF download, use abstract only")
-    parser.add_argument("--pdf-chars", type=int, default=12000,
-                        help="Max PDF characters to send to LLM (default: 12000, 0 = unlimited)")
+    parser.add_argument("--pdf-chars", type=int, default=20000,
+                        help="Max PDF characters to send to LLM (default: 20000, 0 = unlimited)")
     parser.add_argument("--pdf-strategy", choices=("sections", "first"), default="sections",
                         help="Select representative sections or only the PDF beginning (default: sections)")
     parser.add_argument("--debug", action="store_true", help="Print raw LLM response on failure")
