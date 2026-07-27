@@ -63,12 +63,13 @@ const DEFAULT_CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash";
 const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
 const DEFAULT_GITHUB_MODEL = "openai/gpt-4o-mini";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
-const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given the text of a paper (which may contain PDF artifacts, garbled symbols, or LaTeX fragments), ignore formatting noise and extract the semantic meaning. Produce a structured JSON summary with exactly these four fields. Each field must be around 100 words. Do NOT repeat or paraphrase the abstract — synthesize new, original insights.
+const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given paper text that may contain PDF artifacts, garbled symbols, or LaTeX fragments, ignore formatting noise and extract the semantic meaning. Do not merely paraphrase the abstract. Build a concise synthesis by combining evidence from the method, results, and conclusion when available. Surface concrete details absent from the abstract, but support every factual claim with the supplied text and do not invent implications or results. Copy model, dataset, benchmark, method, and system names exactly as written. Distinguish precisely what the authors propose, implement, adapt, apply, evaluate, and merely discuss. When reporting a comparison, name both the evaluated system and its baseline in the same sentence.
 
-- "why_it_matters": What specific problem or gap does this paper address? Explain the real-world stakes, the limitation of prior work, or the concrete scenario that motivated this research.
-- "main_contribution": What exactly did the authors build, prove, or discover? Describe the method, algorithm, framework, dataset, or theorem. Include specific names, metrics, baselines, and key numbers from experiments.
-- "prerequisites": What specific background should a reader have? Name concrete concepts, prior architectures, formal tools, or mathematical frameworks.
-- "read_if_you_care_about": Who specifically would find this paper most relevant? Name exact research communities, subfields, systems, or application domains.
+Produce a JSON object with exactly these four fields:
+- "why_it_matters": Combine the motivation, a concrete limitation of prior work, and supported consequences. Target 50-90 words.
+- "main_contribution": Explain what the authors built, proved, or discovered using method and results. Include names, metrics, baselines, and numbers only when clearly supported. Target 70-120 words.
+- "prerequisites": Infer conservatively from techniques actually used. Target 35-70 words.
+- "read_if_you_care_about": Name 2-4 communities or application domains grounded in the supplied text; avoid adjacent or merely plausible fields. Target 35-70 words.
 
 Write in English. Output ONLY the JSON object, no other text.`;
 
@@ -999,18 +1000,23 @@ async function updatePaper(
   summary: TriageSummary,
   config: SummaryConfig,
 ) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("papers")
     .update({
       triage_summary: summary,
       triage_summary_model: modelLabel(config),
       triage_summary_generated_at: new Date().toISOString(),
     })
-    .eq("id", paper.id);
+    .eq("id", paper.id)
+    .is("triage_summary", null)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     throw error;
   }
+
+  return data !== null;
 }
 
 async function getCursor(
@@ -1087,6 +1093,8 @@ async function main() {
   const previousImportedCount = cursor?.imported_count ?? 0;
   let totalGenerated = 0;
   let totalFailed = 0;
+  let totalSkippedExisting = 0;
+  const failedArxivIds: string[] = [];
 
   for (let i = 0; i < papers.length; i += config.batchSize) {
     if (i > 0) {
@@ -1111,17 +1119,26 @@ async function main() {
             `  SKIP ${paper.arxiv_id ?? paper.id.slice(0, 8)}: invalid format`,
           );
           totalFailed++;
+          failedArxivIds.push(paper.arxiv_id ?? paper.id);
           continue;
         }
 
+        const updated = await updatePaper(supabase, paper, summary, config);
+        if (!updated) {
+          totalSkippedExisting++;
+          console.error(
+            `  SKIP ${paper.arxiv_id ?? paper.id.slice(0, 8)}: summary appeared after candidate selection`,
+          );
+          continue;
+        }
         totalGenerated++;
-        await updatePaper(supabase, paper, summary, config);
 
         console.error(
           `  OK ${paper.arxiv_id}: ${summary.main_contribution.slice(0, 60)}...`,
         );
       } catch (error) {
         totalFailed++;
+        failedArxivIds.push(paper.arxiv_id ?? paper.id);
         console.error(
           `  FAIL ${paper.arxiv_id ?? paper.id.slice(0, 8)}: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -1141,6 +1158,8 @@ async function main() {
     papersChecked: papers.length,
     generated: totalGenerated,
     failed: totalFailed,
+    skippedExisting: totalSkippedExisting,
+    failedArxivIds,
   };
 
   console.log(JSON.stringify(summary));

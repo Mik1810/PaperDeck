@@ -17,3 +17,6 @@
 - Narrowed PDF dehyphenation to lowercase word breaks so line-wrapped proper names such as `Qwen3.7-Plus` retain their source spelling.
 - Replaced the legacy global 35-160 word validator with field-specific ranges aligned to the concise synthesis prompt, including 20-80 words for targeted audience guidance.
 - Tightened grounding instructions to exclude merely plausible application domains, preserve propose/implement/adapt/apply distinctions, and attribute every comparison metric explicitly to both the evaluated system and its baseline.
+- Added conditional null-only summary writes for both local and GitHub workers, structured failed arXiv IDs, and race-safe skip reporting so concurrent generation cannot overwrite a summary that appeared after selection.
+- Added fatal local llama.cpp connectivity handling and slow-inference warnings above 60 seconds for monitored long-running Gemma batches.
+- Aligned the GitHub Models fallback prompt with the evidence-synthesis and grounding rules validated against local Gemma.

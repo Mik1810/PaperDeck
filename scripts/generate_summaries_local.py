@@ -99,6 +99,7 @@ SUMMARY_JSON_SCHEMA = {
     "additionalProperties": False,
 }
 ARXIV_PDF = "https://arxiv.org/pdf/{arxiv_id}.pdf"
+SLOW_LLM_SECONDS = 60
 SECTION_GROUPS = [
     ("method", ("method", "methodology", "approach", "framework", "system design")),
     ("results", ("experiment", "experiments", "evaluation", "results", "empirical study")),
@@ -120,6 +121,10 @@ class PaperRow:
     title: str
     abstract: str
     ingested_at: str
+
+
+class LlmServerError(RuntimeError):
+    """The local llama.cpp server cannot complete requests."""
 
 
 class SummaryClient(SupabaseRestClient):
@@ -155,18 +160,23 @@ class SummaryClient(SupabaseRestClient):
             for r in rows
         ]
 
-    def update_summary(self, paper_id: str, summary: dict[str, Any], model_label: str) -> None:
-        self.request_json(
+    def update_summary(self, paper_id: str, summary: dict[str, Any], model_label: str) -> bool:
+        rows = self.request_json(
             "papers",
-            {"id": f"eq.{paper_id}"},
+            {
+                "id": f"eq.{paper_id}",
+                "triage_summary": "is.null",
+                "select": "id",
+            },
             method="PATCH",
             payload={
                 "triage_summary": summary,
                 "triage_summary_model": model_label,
                 "triage_summary_generated_at": utc_now(),
             },
-            prefer="return=minimal",
+            prefer="return=representation",
         )
+        return isinstance(rows, list) and len(rows) == 1
 
 
 def find_section_start(text: str, headings: tuple[str, ...]) -> int | None:
@@ -279,8 +289,11 @@ def call_llm(
         headers={"Content-Type": "application/json"},
     )
 
-    with urllib.request.urlopen(request, timeout=300) as response:
-        body = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=300) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as error:
+        raise LlmServerError(f"Local llama.cpp request failed: {error}") from error
 
     result = body.get("choices", [{}])[0].get("message", {}).get("content", "")
     if not result:
@@ -424,6 +437,8 @@ def main() -> None:
 
     generated = 0
     errors = 0
+    skipped_existing = 0
+    failed_arxiv_ids: list[str] = []
     durations: list[float] = []
 
     for i, paper in enumerate(papers, 1):
@@ -457,7 +472,13 @@ def main() -> None:
                         if attempt == 1 else None
                     ),
                 )
-                durations.append(time.perf_counter() - started_at)
+                duration = time.perf_counter() - started_at
+                durations.append(duration)
+                if duration > SLOW_LLM_SECONDS:
+                    print(
+                        f"  WARNING: local inference took {duration:.1f}s "
+                        f"(threshold {SLOW_LLM_SECONDS}s)"
+                    )
                 summary = extract_json(raw)
                 try:
                     validate_summary(summary)
@@ -472,15 +493,24 @@ def main() -> None:
             if args.no_write:
                 print(f"  OK [{source}] generated in {durations[-1]:.1f}s (not written)")
                 print(json.dumps(summary, ensure_ascii=False, indent=2))
+                generated += 1
             else:
-                client.update_summary(paper.id, summary, model_label)
+                updated = client.update_summary(paper.id, summary, model_label)
+                if not updated:
+                    print("  SKIP: summary appeared after candidate selection")
+                    skipped_existing += 1
+                    continue
                 print(f"  OK [{source}] why_it_matters: {summary['why_it_matters'][:80]}...")
-            generated += 1
+                generated += 1
+        except LlmServerError as error:
+            print(f"  FATAL: {error}")
+            raise
         except Exception as e:
             print(f"  FAIL: {e}")
             if args.debug and raw:
                 print(f"  RAW_RESPONSE:\n{raw[:500]}")
             errors += 1
+            failed_arxiv_ids.append(paper.arxiv_id or paper.id)
 
         if i < len(papers):
             time.sleep(args.delay)
@@ -490,6 +520,8 @@ def main() -> None:
         "model": model_label,
         "generated": generated,
         "errors": errors,
+        "skipped_existing": skipped_existing,
+        "failed_arxiv_ids": failed_arxiv_ids,
         "average_llm_seconds": round(sum(durations) / len(durations), 1) if durations else None,
     }
     print(json.dumps(result))
