@@ -21,6 +21,9 @@ Usage:
 
     # custom PDF text length
     python scripts/generate_summaries_local.py --limit 5 --pdf-chars 16000
+
+    # compare with the legacy first-characters extraction
+    python scripts/generate_summaries_local.py --no-write --pdf-strategy first
 """
 
 from __future__ import annotations
@@ -57,13 +60,17 @@ SYSTEM_PROMPT = (
     '- "read_if_you_care_about": Who specifically would find this paper most relevant? '
     "Name exact research communities, subfields, systems, or application domains.\n\n"
     "Use only claims supported by the supplied paper text. Do not invent names, metrics, "
-    "baselines, results, or prerequisites. If an exact number or formula is uncertain, omit it "
-    "or describe it qualitatively. Preserve mathematical notation exactly as it appears in the "
-    "source; never reconstruct a damaged or incomplete formula. "
+    "baselines, results, or prerequisites. Do not include equations, LaTeX commands, or "
+    "mathematical expressions; describe mathematical results in plain English and retain exact "
+    "numbers only when they are clearly stated in the supplied text. "
     "Write in English. Output ONLY the JSON object, no other text."
 )
 
 REQUIRED_FIELDS = ["why_it_matters", "main_contribution", "prerequisites", "read_if_you_care_about"]
+FORBIDDEN_SUMMARY_MATH = re.compile(
+    r"\\[A-Za-z]+|\b(?:exp|log|sqrt)\s*\(|\bO\s*\(",
+    re.IGNORECASE,
+)
 SUMMARY_JSON_SCHEMA = {
     "type": "object",
     "properties": {
@@ -74,6 +81,11 @@ SUMMARY_JSON_SCHEMA = {
     "additionalProperties": False,
 }
 ARXIV_PDF = "https://arxiv.org/pdf/{arxiv_id}.pdf"
+SECTION_GROUPS = [
+    ("method", ("method", "methodology", "approach", "framework", "system design")),
+    ("results", ("experiment", "experiments", "evaluation", "results", "empirical study")),
+    ("conclusion", ("conclusion", "conclusions", "discussion", "limitations")),
+]
 
 
 def clean_pdf_text(text: str) -> str:
@@ -131,7 +143,53 @@ class SummaryClient(SupabaseRestClient):
         )
 
 
-def fetch_pdf_text(arxiv_id: str, max_chars: int) -> str | None:
+def find_section_start(text: str, headings: tuple[str, ...]) -> int | None:
+    alternatives = "|".join(re.escape(heading) for heading in headings)
+    matches = list(re.finditer(
+        rf"(?im)^[ \t]*(?:\d+(?:\.\d+)*[.)]?[ \t]+)?[^\n]{{0,70}}"
+        rf"\b(?:{alternatives})\b[^\n]{{0,50}}$",
+        text,
+    ))
+    content_matches = [match for match in matches if match.start() >= len(text) * 0.08]
+    match = (content_matches or matches or [None])[0]
+    return match.start() if match else None
+
+
+def select_pdf_text(text: str, max_chars: int, strategy: str) -> tuple[str, list[str]]:
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text, ["full"]
+    if strategy == "first":
+        return text[:max_chars], ["first"]
+
+    opening_budget = max_chars * 40 // 100
+    section_budget = (max_chars - opening_budget) // len(SECTION_GROUPS)
+    chunks = [text[:opening_budget]]
+    labels = ["opening"]
+    ranges = [(0, opening_budget)]
+
+    fallback_positions = (0.30, 0.62, 0.86)
+    for (label, headings), fallback_position in zip(SECTION_GROUPS, fallback_positions):
+        start = find_section_start(text, headings)
+        selected_label = label
+        if start is None:
+            start = int(len(text) * fallback_position)
+            selected_label = f"{label}-sample"
+        end = min(len(text), start + section_budget)
+        if any(start < used_end and end > used_start for used_start, used_end in ranges):
+            start = int(len(text) * fallback_position)
+            end = min(len(text), start + section_budget)
+            selected_label = f"{label}-sample"
+            if any(start < used_end and end > used_start for used_start, used_end in ranges):
+                continue
+        chunks.append(text[start:end])
+        labels.append(selected_label)
+        ranges.append((start, end))
+
+    selected = "\n\n".join(chunks)
+    return selected[:max_chars], labels
+
+
+def fetch_pdf_text(arxiv_id: str, max_chars: int, strategy: str) -> str | None:
     try:
         import fitz
     except ImportError:
@@ -151,16 +209,26 @@ def fetch_pdf_text(arxiv_id: str, max_chars: int) -> str | None:
     doc.close()
 
     text = clean_pdf_text(text)
-    if max_chars > 0 and len(text) > max_chars:
-        text = text[:max_chars]
-    print(f"  Extracted {len(text)} chars from {page_count} pages")
-    return text
+    selected, sections = select_pdf_text(text, max_chars, strategy)
+    print(
+        f"  Extracted {len(text)} chars from {page_count} pages; "
+        f"selected {len(selected)} chars ({', '.join(sections)})"
+    )
+    return selected
 
 
-def call_llm(title: str, text: str, max_tokens: int = 1024) -> str:
+def call_llm(
+    title: str,
+    text: str,
+    max_tokens: int = 1024,
+    correction: str | None = None,
+) -> str:
+    user_content = f"Paper title: {title}\n\n{text}"
+    if correction:
+        user_content += f"\n\nMandatory correction: {correction}"
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"Paper title: {title}\n\n{text}"},
+        {"role": "user", "content": user_content},
     ]
 
     payload = json.dumps({
@@ -273,6 +341,10 @@ def validate_summary(data: dict[str, Any]) -> None:
             raise ValueError(
                 f"{field} must contain 35-160 words, received {word_count}"
             )
+        if FORBIDDEN_SUMMARY_MATH.search(value):
+            raise ValueError(
+                f"{field} contains a forbidden mathematical expression"
+            )
 
 
 def main() -> None:
@@ -289,6 +361,8 @@ def main() -> None:
     parser.add_argument("--no-pdf", action="store_true", help="Skip PDF download, use abstract only")
     parser.add_argument("--pdf-chars", type=int, default=12000,
                         help="Max PDF characters to send to LLM (default: 12000, 0 = unlimited)")
+    parser.add_argument("--pdf-strategy", choices=("sections", "first"), default="sections",
+                        help="Select representative sections or only the PDF beginning (default: sections)")
     parser.add_argument("--debug", action="store_true", help="Print raw LLM response on failure")
     parser.add_argument("--max-tokens", type=int, default=2048,
                         help="Max output tokens for LLM (default: 2048)")
@@ -328,18 +402,39 @@ def main() -> None:
             source = "abstract"
 
             if paper.arxiv_id and not args.no_pdf:
-                pdf_text = fetch_pdf_text(paper.arxiv_id, args.pdf_chars)
+                pdf_text = fetch_pdf_text(paper.arxiv_id, args.pdf_chars, args.pdf_strategy)
                 if pdf_text and len(pdf_text) > 200:
                     content = pdf_text
                     source = "pdf"
                 else:
                     print(f"  PDF too short or failed, falling back to abstract")
 
-            started_at = time.perf_counter()
-            raw = call_llm(paper.title, content, max_tokens=args.max_tokens)
-            durations.append(time.perf_counter() - started_at)
-            summary = extract_json(raw)
-            validate_summary(summary)
+            summary: dict[str, Any] | None = None
+            for attempt in range(2):
+                started_at = time.perf_counter()
+                raw = call_llm(
+                    paper.title,
+                    content,
+                    max_tokens=args.max_tokens,
+                    correction=(
+                        "Rewrite all four fields without dollar delimiters, backslash commands, "
+                        "equations, or symbolic complexity expressions. Explain the result only "
+                        "in plain English."
+                        if attempt == 1 else None
+                    ),
+                )
+                durations.append(time.perf_counter() - started_at)
+                summary = extract_json(raw)
+                try:
+                    validate_summary(summary)
+                    break
+                except ValueError as validation_error:
+                    if attempt == 0 and "forbidden mathematical" in str(validation_error):
+                        print("  Retrying once to remove mathematical notation")
+                        continue
+                    raise
+            if summary is None:
+                raise RuntimeError("No summary generated")
             if args.no_write:
                 print(f"  OK [{source}] generated in {durations[-1]:.1f}s (not written)")
                 print(json.dumps(summary, ensure_ascii=False, indent=2))

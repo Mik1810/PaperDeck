@@ -14,7 +14,8 @@ This project follows Semantic Versioning.
 
 ### Added
 
-- Added a no-write inference mode for evaluating local llama.cpp/Unsloth triage summaries before updating Supabase, with strict structured output and source-grounding validation.
+- Added a no-write inference mode for evaluating local llama.cpp/Unsloth triage summaries before updating Supabase, with strict structured output, source-grounding validation, and a bounded plain-English retry for model-generated equations.
+- Added section-aware PDF sampling to local summary generation so a fixed context budget covers methods, results, and conclusions instead of only the start of each paper.
 - Added a versioned offline recommendation-stability gate: App CI enforces deterministic NDCG, recall, catalog coverage, and cross-profile overlap thresholds, while a separate scheduled/manual workflow reports reranker p95; social-domain ranking isolation is covered separately.
 - Added private mutual friendships with transactional requests, crossed-request auto-acceptance, 30-day decline cooldowns, daily rate limits, cancel/unfriend flows, directional blocks, connection management UI, and ranking-isolation tests.
 - Added collaboration identities with an explicit public display name, exact-email HMAC discovery, opt-out visibility, group invitation preferences, a ten-per-minute lookup limit, Clerk email-change synchronization, and RLS isolation tests.
