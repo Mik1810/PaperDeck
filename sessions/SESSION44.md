@@ -12,3 +12,6 @@
 - Added stratified method/results/conclusion fallback windows for PDFs whose extracted section headings do not match conventional names.
 - Added deterministic rejection of LaTeX commands and symbolic complexity expressions in generated prose, plus one bounded plain-English retry. A model that insists on reconstructing formulas now fails the paper without writing it.
 - Compared 12,000- and 20,000-character section samples on three papers. The larger sample added source-supported method/result detail with little latency increase, so 20,000 characters became the local default.
+- Reframed the local prompt around evidence synthesis across labeled paper sections rather than either abstract paraphrase or unsupported "original insights", with shorter field-specific targets and conservative audience/prerequisite inference.
+- Added repeatable `--arxiv-id` targeting for no-write comparison against existing summaries without permitting write-mode overwrites.
+- Narrowed PDF dehyphenation to lowercase word breaks so line-wrapped proper names such as `Qwen3.7-Plus` retain their source spelling.

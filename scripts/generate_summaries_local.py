@@ -45,20 +45,28 @@ LLAMA_CPP_BASE = os.getenv("LLAMA_CPP_URL", "http://localhost:43307").rstrip("/"
 
 SYSTEM_PROMPT = (
     "You are a research paper summarizer for CS researchers. "
-    "Given the text of a paper (which may contain PDF artifacts, garbled symbols, or LaTeX fragments), "
-    "ignore formatting noise and extract the semantic meaning. "
-    "Produce a structured JSON summary with exactly these four fields. "
-    "Each field must be around 100 words. "
-    "Do NOT repeat or paraphrase the abstract — synthesize new, original insights.\n\n"
+    "Given labeled excerpts from a paper (which may contain PDF artifacts, garbled symbols, "
+    "or LaTeX fragments), ignore formatting noise and extract the semantic meaning. "
+    "Do not merely paraphrase the abstract. Build a concise synthesis by combining evidence "
+    "from the opening, method, results, and conclusion. Surface useful details that are absent "
+    "from the abstract, especially concrete methods, experimental findings, limitations, and "
+    "required background. Every factual claim must be supported by the supplied paper text. "
+    "Do not invent implications or results. Copy model, dataset, benchmark, method, and system "
+    "names exactly as they appear in the supplied text. "
+    "Produce a structured JSON summary with exactly these four fields.\n\n"
     '- "why_it_matters": What specific problem or gap does this paper address? '
-    "Explain the real-world stakes, the limitation of prior work, or the concrete scenario that motivated this research.\n"
+    "Combine the motivation, a concrete limitation of prior work, and consequences supported "
+    "by the conclusion. Target 50-90 words.\n"
     '- "main_contribution": What exactly did the authors build, prove, or discover? '
     "Describe the method, algorithm, framework, dataset, or theorem. "
-    "Include specific names, metrics, baselines, and key numbers from experiments.\n"
+    "Use both method and results when available. Include specific names, metrics, baselines, "
+    "and key numbers only when clearly supported. Target 70-120 words.\n"
     '- "prerequisites": What specific background should a reader have? '
-    "Name concrete concepts, prior architectures, formal tools, or mathematical frameworks.\n"
+    "Infer conservatively from techniques actually used in the method. Name concrete concepts, "
+    "prior architectures, formal tools, or mathematical frameworks. Target 35-70 words.\n"
     '- "read_if_you_care_about": Who specifically would find this paper most relevant? '
-    "Name exact research communities, subfields, systems, or application domains.\n\n"
+    "Name 2-4 specific research communities, subfields, systems, or application domains grounded "
+    "in the paper; avoid merely adjacent fields. Target 35-70 words.\n\n"
     "Use only claims supported by the supplied paper text. Do not invent names, metrics, "
     "baselines, results, or prerequisites. Do not include equations, LaTeX commands, or "
     "mathematical expressions; describe mathematical results in plain English and retain exact "
@@ -90,7 +98,7 @@ SECTION_GROUPS = [
 
 def clean_pdf_text(text: str) -> str:
     text = re.sub(r"(\n\s*){3,}", "\n\n", text)
-    text = re.sub(r"-\n(\S)", r"\1", text)
+    text = re.sub(r"(?<=[a-z])-\n(?=[a-z])", "", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
@@ -105,17 +113,25 @@ class PaperRow:
 
 
 class SummaryClient(SupabaseRestClient):
-    def select_papers(self, limit: int) -> list[PaperRow]:
-        rows = self.request_json(
-            "papers",
-            {
-                "select": "id,arxiv_id,title,abstract,ingested_at",
-                "triage_summary": "is.null",
-                "abstract": "not.is.null",
-                "order": "ingested_at.desc",
-                "limit": str(limit),
-            },
-        )
+    def select_papers(
+        self,
+        limit: int,
+        arxiv_ids: list[str] | None = None,
+        include_summarized: bool = False,
+    ) -> list[PaperRow]:
+        params = {
+            "select": "id,arxiv_id,title,abstract,ingested_at",
+            "abstract": "not.is.null",
+            "order": "ingested_at.desc",
+            "limit": str(limit),
+        }
+        if not include_summarized:
+            params["triage_summary"] = "is.null"
+        if arxiv_ids:
+            params["arxiv_id"] = f"in.({','.join(arxiv_ids)})"
+            params["order"] = "arxiv_id.asc"
+
+        rows = self.request_json("papers", params)
         if not isinstance(rows, list):
             return []
         return [
@@ -163,7 +179,7 @@ def select_pdf_text(text: str, max_chars: int, strategy: str) -> tuple[str, list
 
     opening_budget = max_chars * 40 // 100
     section_budget = (max_chars - opening_budget) // len(SECTION_GROUPS)
-    chunks = [text[:opening_budget]]
+    chunks = [f"[OPENING]\n{text[:opening_budget]}"]
     labels = ["opening"]
     ranges = [(0, opening_budget)]
 
@@ -181,7 +197,8 @@ def select_pdf_text(text: str, max_chars: int, strategy: str) -> tuple[str, list
             selected_label = f"{label}-sample"
             if any(start < used_end and end > used_start for used_start, used_end in ranges):
                 continue
-        chunks.append(text[start:end])
+        section_name = selected_label.removesuffix("-sample").upper()
+        chunks.append(f"[{section_name}]\n{text[start:end]}")
         labels.append(selected_label)
         ranges.append((start, end))
 
@@ -353,6 +370,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate paper summaries via local llama.cpp server.")
     parser.add_argument("--limit", type=int, default=int(os.getenv("SUMMARY_LIMIT", "5")),
                         help="Maximum papers to process (default: 5)")
+    parser.add_argument("--arxiv-id", action="append", default=[],
+                        help="Target an arXiv ID; repeatable and allowed for existing summaries only in no-write mode")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true",
                       help="List candidates without calling the LLM")
@@ -371,7 +390,11 @@ def main() -> None:
     args = parser.parse_args()
 
     client = SummaryClient()
-    papers = client.select_papers(args.limit)
+    papers = client.select_papers(
+        args.limit,
+        args.arxiv_id,
+        include_summarized=args.no_write and bool(args.arxiv_id),
+    )
 
     print(f"Found {len(papers)} papers without summary")
 
