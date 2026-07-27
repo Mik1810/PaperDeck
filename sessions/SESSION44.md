@@ -20,3 +20,4 @@
 - Added conditional null-only summary writes for both local and GitHub workers, structured failed arXiv IDs, and race-safe skip reporting so concurrent generation cannot overwrite a summary that appeared after selection.
 - Added fatal local llama.cpp connectivity handling and slow-inference warnings above 60 seconds for monitored long-running Gemma batches.
 - Aligned the GitHub Models fallback prompt with the evidence-synthesis and grounding rules validated against local Gemma.
+- Added an optional atomically checkpointed, secret-free local JSON report with run status, progress, timing, skipped writes, and failed arXiv IDs so long batches can be handed off without an attached agent.

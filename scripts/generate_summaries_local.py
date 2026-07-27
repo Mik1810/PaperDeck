@@ -37,6 +37,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from embedding_common import SupabaseRestClient, load_local_env, utc_now
@@ -388,6 +389,19 @@ def validate_summary(data: dict[str, Any]) -> None:
             )
 
 
+def write_report(path: Path | None, payload: dict[str, Any]) -> None:
+    if path is None:
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(f"{path.suffix}.tmp")
+    temporary_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary_path.replace(path)
+
+
 def main() -> None:
     load_local_env()
 
@@ -411,6 +425,8 @@ def main() -> None:
                         help="Max output tokens for LLM (default: 2048)")
     parser.add_argument("--delay", type=float, default=1.0,
                         help="Delay in seconds between LLM calls (default: 1)")
+    parser.add_argument("--report", type=Path,
+                        help="Atomically checkpoint a secret-free JSON run report")
     args = parser.parse_args()
 
     client = SummaryClient()
@@ -434,12 +450,40 @@ def main() -> None:
         return
 
     model_label = os.getenv("LLAMA_CPP_MODEL_LABEL", "local-llama.cpp")
+    run_started_at = utc_now()
 
     generated = 0
     errors = 0
     skipped_existing = 0
     failed_arxiv_ids: list[str] = []
     durations: list[float] = []
+
+    def checkpoint(
+        status: str,
+        processed: int,
+        last_arxiv_id: str | None = None,
+        fatal_error: str | None = None,
+    ) -> None:
+        write_report(args.report, {
+            "status": status,
+            "mode": "no-write" if args.no_write else "write",
+            "model": model_label,
+            "started_at": run_started_at,
+            "updated_at": utc_now(),
+            "selected": len(papers),
+            "processed": processed,
+            "generated": generated,
+            "errors": errors,
+            "skipped_existing": skipped_existing,
+            "failed_arxiv_ids": failed_arxiv_ids,
+            "last_arxiv_id": last_arxiv_id,
+            "average_llm_seconds": (
+                round(sum(durations) / len(durations), 1) if durations else None
+            ),
+            "fatal_error": fatal_error,
+        })
+
+    checkpoint("running", 0)
 
     for i, paper in enumerate(papers, 1):
         arxiv_label = paper.arxiv_id or "NO_ARXIV"
@@ -460,7 +504,7 @@ def main() -> None:
 
             summary: dict[str, Any] | None = None
             for attempt in range(2):
-                started_at = time.perf_counter()
+                inference_started_at = time.perf_counter()
                 raw = call_llm(
                     paper.title,
                     content,
@@ -472,7 +516,7 @@ def main() -> None:
                         if attempt == 1 else None
                     ),
                 )
-                duration = time.perf_counter() - started_at
+                duration = time.perf_counter() - inference_started_at
                 durations.append(duration)
                 if duration > SLOW_LLM_SECONDS:
                     print(
@@ -504,6 +548,7 @@ def main() -> None:
                 generated += 1
         except LlmServerError as error:
             print(f"  FATAL: {error}")
+            checkpoint("failed", i - 1, paper.arxiv_id, str(error))
             raise
         except Exception as e:
             print(f"  FAIL: {e}")
@@ -511,6 +556,7 @@ def main() -> None:
                 print(f"  RAW_RESPONSE:\n{raw[:500]}")
             errors += 1
             failed_arxiv_ids.append(paper.arxiv_id or paper.id)
+        checkpoint("running", i, paper.arxiv_id)
 
         if i < len(papers):
             time.sleep(args.delay)
@@ -525,6 +571,7 @@ def main() -> None:
         "average_llm_seconds": round(sum(durations) / len(durations), 1) if durations else None,
     }
     print(json.dumps(result))
+    checkpoint("completed", len(papers), papers[-1].arxiv_id if papers else None)
 
     if errors > 0 and generated == 0:
         raise SystemExit(1)
