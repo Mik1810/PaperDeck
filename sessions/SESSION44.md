@@ -15,3 +15,4 @@
 - Reframed the local prompt around evidence synthesis across labeled paper sections rather than either abstract paraphrase or unsupported "original insights", with shorter field-specific targets and conservative audience/prerequisite inference.
 - Added repeatable `--arxiv-id` targeting for no-write comparison against existing summaries without permitting write-mode overwrites.
 - Narrowed PDF dehyphenation to lowercase word breaks so line-wrapped proper names such as `Qwen3.7-Plus` retain their source spelling.
+- Replaced the legacy global 35-160 word validator with field-specific ranges aligned to the concise synthesis prompt, including 20-80 words for targeted audience guidance.

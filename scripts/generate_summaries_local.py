@@ -75,6 +75,12 @@ SYSTEM_PROMPT = (
 )
 
 REQUIRED_FIELDS = ["why_it_matters", "main_contribution", "prerequisites", "read_if_you_care_about"]
+SUMMARY_WORD_RANGES = {
+    "why_it_matters": (40, 100),
+    "main_contribution": (55, 130),
+    "prerequisites": (25, 80),
+    "read_if_you_care_about": (20, 80),
+}
 FORBIDDEN_SUMMARY_MATH = re.compile(
     r"\\[A-Za-z]+|\b(?:exp|log|sqrt)\s*\(|\bO\s*\(",
     re.IGNORECASE,
@@ -354,9 +360,10 @@ def validate_summary(data: dict[str, Any]) -> None:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{field} must be a non-empty string")
         word_count = len(value.split())
-        if not 35 <= word_count <= 160:
+        minimum, maximum = SUMMARY_WORD_RANGES[field]
+        if not minimum <= word_count <= maximum:
             raise ValueError(
-                f"{field} must contain 35-160 words, received {word_count}"
+                f"{field} must contain {minimum}-{maximum} words, received {word_count}"
             )
         if FORBIDDEN_SUMMARY_MATH.search(value):
             raise ValueError(
