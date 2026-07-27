@@ -56,10 +56,23 @@ SYSTEM_PROMPT = (
     "Name concrete concepts, prior architectures, formal tools, or mathematical frameworks.\n"
     '- "read_if_you_care_about": Who specifically would find this paper most relevant? '
     "Name exact research communities, subfields, systems, or application domains.\n\n"
+    "Use only claims supported by the supplied paper text. Do not invent names, metrics, "
+    "baselines, results, or prerequisites. If an exact number or formula is uncertain, omit it "
+    "or describe it qualitatively. Preserve mathematical notation exactly as it appears in the "
+    "source; never reconstruct a damaged or incomplete formula. "
     "Write in English. Output ONLY the JSON object, no other text."
 )
 
 REQUIRED_FIELDS = ["why_it_matters", "main_contribution", "prerequisites", "read_if_you_care_about"]
+SUMMARY_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        field: {"type": "string"}
+        for field in REQUIRED_FIELDS
+    },
+    "required": REQUIRED_FIELDS,
+    "additionalProperties": False,
+}
 ARXIV_PDF = "https://arxiv.org/pdf/{arxiv_id}.pdf"
 
 
@@ -155,6 +168,14 @@ def call_llm(title: str, text: str, max_tokens: int = 1024) -> str:
         "max_tokens": max_tokens,
         "temperature": 0.3,
         "stream": False,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "triage_summary",
+                "strict": True,
+                "schema": SUMMARY_JSON_SCHEMA,
+            },
+        },
     }).encode("utf-8")
 
     request = urllib.request.Request(
@@ -188,15 +209,70 @@ def extract_json(raw: str) -> dict[str, Any]:
         raise ValueError("No JSON object found in response")
     json_str = raw[start:end + 1]
 
-    json_str = re.sub(r"\\(?![\"\\/bfnrtu])", r"\\\\", json_str)
+    json_str = escape_ambiguous_json_backslashes(json_str)
 
     return json.loads(json_str)
 
 
+def escape_ambiguous_json_backslashes(value: str) -> str:
+    """Preserve model-emitted LaTeX commands inside JSON strings."""
+    result: list[str] = []
+    in_string = False
+    index = 0
+
+    while index < len(value):
+        char = value[index]
+        if char == '"':
+            in_string = not in_string
+            result.append(char)
+            index += 1
+            continue
+
+        if not in_string or char != "\\":
+            result.append(char)
+            index += 1
+            continue
+
+        next_char = value[index + 1] if index + 1 < len(value) else ""
+        if next_char in {'"', "\\", "/"}:
+            result.extend((char, next_char))
+            index += 2
+            continue
+
+        unicode_escape = (
+            next_char == "u"
+            and index + 5 < len(value)
+            and all(c in "0123456789abcdefABCDEF" for c in value[index + 2:index + 6])
+        )
+        if unicode_escape:
+            result.extend(value[index:index + 6])
+            index += 6
+            continue
+
+        result.append("\\\\")
+        index += 1
+
+    return "".join(result)
+
+
 def validate_summary(data: dict[str, Any]) -> None:
-    missing = [f for f in REQUIRED_FIELDS if not data.get(f)]
-    if missing:
-        raise ValueError(f"Missing required fields: {missing}")
+    fields = set(data)
+    required = set(REQUIRED_FIELDS)
+    if fields != required:
+        raise ValueError(
+            f"Summary fields must be exactly {REQUIRED_FIELDS}; "
+            f"missing={sorted(required - fields)}, extra={sorted(fields - required)}"
+        )
+
+    for field in REQUIRED_FIELDS:
+        value = data[field]
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field} must be a non-empty string")
+        word_count = len(value.split())
+        if not 35 <= word_count <= 160:
+            raise ValueError(
+                f"{field} must contain 35-160 words, received {word_count}"
+            )
 
 
 def main() -> None:
