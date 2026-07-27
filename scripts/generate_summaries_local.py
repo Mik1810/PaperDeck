@@ -10,6 +10,9 @@ Usage:
     # dry-run: list candidates without calling the LLM
     python scripts/generate_summaries_local.py --dry-run
 
+    # generate and validate summaries without writing to Supabase
+    python scripts/generate_summaries_local.py --no-write --limit 5
+
     # write mode, abstract-only (skip PDF fetch)
     python scripts/generate_summaries_local.py --no-pdf --limit 10
 
@@ -202,7 +205,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate paper summaries via local llama.cpp server.")
     parser.add_argument("--limit", type=int, default=int(os.getenv("SUMMARY_LIMIT", "5")),
                         help="Maximum papers to process (default: 5)")
-    parser.add_argument("--dry-run", action="store_true", help="List candidates without calling the LLM")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true",
+                      help="List candidates without calling the LLM")
+    mode.add_argument("--no-write", action="store_true",
+                      help="Call the LLM and validate summaries without writing to Supabase")
     parser.add_argument("--no-pdf", action="store_true", help="Skip PDF download, use abstract only")
     parser.add_argument("--pdf-chars", type=int, default=12000,
                         help="Max PDF characters to send to LLM (default: 12000, 0 = unlimited)")
@@ -229,10 +236,11 @@ def main() -> None:
         print(json.dumps({"mode": "write", "generated": 0}))
         return
 
-    model_label = os.getenv("LLAMA_CPP_MODEL_LABEL", "gemma4-e2b:local-llama.cpp")
+    model_label = os.getenv("LLAMA_CPP_MODEL_LABEL", "local-llama.cpp")
 
     generated = 0
     errors = 0
+    durations: list[float] = []
 
     for i, paper in enumerate(papers, 1):
         arxiv_label = paper.arxiv_id or "NO_ARXIV"
@@ -251,11 +259,17 @@ def main() -> None:
                 else:
                     print(f"  PDF too short or failed, falling back to abstract")
 
+            started_at = time.perf_counter()
             raw = call_llm(paper.title, content, max_tokens=args.max_tokens)
+            durations.append(time.perf_counter() - started_at)
             summary = extract_json(raw)
             validate_summary(summary)
-            client.update_summary(paper.id, summary, model_label)
-            print(f"  OK [{source}] why_it_matters: {summary['why_it_matters'][:80]}...")
+            if args.no_write:
+                print(f"  OK [{source}] generated in {durations[-1]:.1f}s (not written)")
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                client.update_summary(paper.id, summary, model_label)
+                print(f"  OK [{source}] why_it_matters: {summary['why_it_matters'][:80]}...")
             generated += 1
         except Exception as e:
             print(f"  FAIL: {e}")
@@ -266,12 +280,17 @@ def main() -> None:
         if i < len(papers):
             time.sleep(args.delay)
 
-    print(json.dumps({
-        "mode": "write",
+    result = {
+        "mode": "no-write" if args.no_write else "write",
         "model": model_label,
         "generated": generated,
         "errors": errors,
-    }))
+        "average_llm_seconds": round(sum(durations) / len(durations), 1) if durations else None,
+    }
+    print(json.dumps(result))
+
+    if errors > 0 and generated == 0:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
