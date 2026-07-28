@@ -326,7 +326,17 @@ src/lib/repositories/semantic-retrieval.ts
   -> returns semantic scores and retrieval diagnostics to the existing reranker
 ```
 
-If no user profile embedding exists, or if the semantic candidate set is empty after filtering seen papers, PaperDeck falls back to the topic/feedback ranking over the shared catalog.
+The IVFFlat RPC uses ten probes for its 100-list index. The pgvector default of
+one probe can visit too few rows to satisfy `match_count` even when the catalog
+has enough matching embeddings.
+
+If no user profile embedding exists, PaperDeck falls back to topic/feedback
+ranking over the shared catalog. If semantic retrieval succeeds but fewer than
+50 unseen candidates remain, PaperDeck reranks the full catalog with semantic
+scores retained for matched papers and fills the remaining deck from
+deduplicated catalog candidates. Each live score records `semantic` or
+`catalog_fallback` provenance. A fresh cached batch with fewer than ten visible
+papers is treated as exhausted and regenerated.
 
 Wizard completion persists the first ranked deck to `recommendations` with model version `paperdeck-initial-feed-v2`; `/feed` consumes that fresh batch before live candidates. When `/feed` has to recompute live candidates, it stores the visible live batch asynchronously with model version `paperdeck-live-feed-v1` so near-term refreshes avoid rerunning semantic retrieval and TypeScript reranking.
 
@@ -338,6 +348,7 @@ Wizard completion persists the first ranked deck to `recommendations` with model
 - whether the pgvector RPC was attempted;
 - RPC match count;
 - loaded candidate paper count;
+- semantic and catalog-fill result counts;
 - embedding model name;
 - fallback reason, including profile-missing, refresh failure, no matches, missing paper rows, or reranker filtering all candidates;
 - profile refresh status/reason when the feed lazily tries to build a missing user profile vector.

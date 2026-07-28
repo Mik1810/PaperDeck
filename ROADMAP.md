@@ -90,6 +90,7 @@ Aggiornato al 2026-07-18:
   - 2 user profile embeddings MiniLM in `user_profile_embeddings`; il retrieval filtra i profili sul modello corrente.
   - RPC `match_papers_by_embedding` per cosine similarity search attiva con default MiniLM.
 - Feed semantico: profilo utente generato su write da onboarding/settings, con primo batch feed e batch live breve salvati in `recommendations` per evitare reranking completo a ogni refresh.
+  - Retrieval IVFFlat con 10 probe; batch cache sotto 10 risultati visibili vengono rigenerati e deck semantici sotto 50 candidati non visti vengono completati dal catalogo mantenendo la provenienza del candidato.
 - Gate stabilita' raccomandazioni: App CI mantiene un sanity check sintetico separato da una baseline discriminante con rilevanza graduata, profili sovrapposti, feedback, paper gia' visti e segnali in conflitto; blocca regressioni medie e del profilo peggiore su NDCG/recall, exposure coverage, sovrapposizione e seen-paper leakage. Un workflow separato riporta il p95 del reranker senza renderlo inizialmente bloccante.
 - Onboarding interessi: wizard full-screen scuro e guidato, senza navigazione libera tra step, con controlli separati a destra su desktop.
 - LLM triage summary: implementato.

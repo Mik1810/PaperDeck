@@ -17,7 +17,7 @@ import {
   userPaperInteractions,
 } from "@/db/schema";
 import {
-  isFeedHiddenAction,
+  buildSeenPaperIds,
   rankFeedPapers,
   type RankedPaper,
   type RankingInteraction,
@@ -30,6 +30,8 @@ import {
   INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
   LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
   isFreshRecommendationBatch,
+  isUsableRecommendationBatchSize,
+  needsCatalogRecommendationFill,
 } from "@/lib/recommendation-batches";
 import {
   addToOwnedPlaylist,
@@ -63,7 +65,7 @@ type RecommendationImpressionBatch = {
   impressionIdsByPaperId: Map<string, string>;
 };
 
-type RecommendationBatchSource = "initial_batch" | "live";
+type RecommendationBatchSource = "initial_batch" | "live_batch";
 
 type RankedFeedData = {
   rankedPapers: RankedPaper[];
@@ -358,10 +360,12 @@ type FeedState = {
 };
 
 type LiveRankedFeedResult = {
+  catalogFillCount: number;
   rankedPapers: RankedPaper[];
   semanticDiagnostics: SemanticRetrievalDiagnostics;
   semanticFallbackReason:
     | SemanticRetrievalFallbackReason
+    | "insufficient_unseen_candidates"
     | "ranker_filtered_all"
     | null;
 };
@@ -400,15 +404,18 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
       .limit(200),
   ]);
 
+  const favoriteIds = new Set(favRows.map((r) => r.paperId));
+  const readLaterIds = new Set(rlPlaylist.map((r) => r.paperId));
+
   return {
     selectedTopicIds: new Set(interests.map((r) => r.topicId)),
     userState: {
-      favoriteIds: new Set(favRows.map((r) => r.paperId)),
-      readLaterIds: new Set(rlPlaylist.map((r) => r.paperId)),
-      seenIds: new Set(
-        interactionRows
-          .filter((r) => isFeedHiddenAction(r.action))
-          .map((r) => r.paperId),
+      favoriteIds,
+      readLaterIds,
+      seenIds: buildSeenPaperIds(
+        favoriteIds,
+        readLaterIds,
+        interactionRows,
       ),
       interactions: interactionRows,
     },
@@ -428,7 +435,8 @@ async function buildLiveRankedFeed(
     "semantic_retrieval",
     getSemanticPaperCandidates(ownerId),
   );
-  const papers = semanticCandidates.papers.length
+  const hasSemanticCandidates = semanticCandidates.papers.length > 0;
+  const papers = hasSemanticCandidates
     ? semanticCandidates.papers
     : await measureAsync(timings, "paper_loading", getAllPapers());
 
@@ -442,21 +450,39 @@ async function buildLiveRankedFeed(
     ),
   );
 
-  let semanticFallbackReason = semanticCandidates.diagnostics.fallbackReason;
+  let semanticFallbackReason: LiveRankedFeedResult["semanticFallbackReason"] =
+    semanticCandidates.diagnostics.fallbackReason;
 
-  if (!rankedPapers.length && semanticCandidates.papers.length) {
-    semanticFallbackReason = "ranker_filtered_all";
+  if (
+    hasSemanticCandidates &&
+    needsCatalogRecommendationFill(rankedPapers.length)
+  ) {
+    semanticFallbackReason = rankedPapers.length
+      ? "insufficient_unseen_candidates"
+      : "ranker_filtered_all";
     const fallbackPapers = await measureAsync(
       timings,
       "fallback_paper_loading",
       getAllPapers(),
     );
     rankedPapers = measureSync(timings, "fallback_ranking", () =>
-      rankFeedPapers(fallbackPapers, topics, selectedTopicIds, state),
+      rankFeedPapers(
+        fallbackPapers,
+        topics,
+        selectedTopicIds,
+        state,
+        semanticCandidates.semanticScores,
+      ),
     );
   }
 
   return {
+    catalogFillCount: rankedPapers
+      .slice(0, INITIAL_FEED_RECOMMENDATION_COUNT)
+      .filter(
+        (paper) =>
+          paper.rankingScoreComponents.source === "catalog_fallback",
+      ).length,
     rankedPapers,
     semanticDiagnostics: semanticCandidates.diagnostics,
     semanticFallbackReason,
@@ -486,7 +512,7 @@ async function getLatestLiveRecommendationBatch(
     limit,
     modelVersion: LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
     ownerId,
-    source: "live",
+    source: "live_batch",
     state,
   });
 }
@@ -552,7 +578,7 @@ async function getLatestRecommendationBatch({
   const papersById = new Map(papers.map((paper) => [paper.id, paper]));
 
   return visibleRows
-    .map((row) => {
+    .map((row): RankedPaper | null => {
       const paper = papersById.get(row.paperId);
 
       if (!paper) {
@@ -687,8 +713,7 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
     storedCount: stored.storedCount,
     semantic: {
       used: Boolean(
-        liveFeed.semanticDiagnostics.candidateCount &&
-          !liveFeed.semanticFallbackReason,
+        liveFeed.semanticDiagnostics.candidateCount,
       ),
       requestedCount: liveFeed.semanticDiagnostics.requestedCount,
       rpcAttempted: liveFeed.semanticDiagnostics.rpcAttempted,
@@ -696,6 +721,7 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
       candidateCount: liveFeed.semanticDiagnostics.candidateCount,
       model: liveFeed.semanticDiagnostics.model,
       fallbackReason: liveFeed.semanticFallbackReason,
+      catalogFillCount: liveFeed.catalogFillCount,
     },
   });
 
@@ -718,7 +744,7 @@ async function getRankedFeedData(ownerId: string): Promise<RankedFeedData> {
     getLatestInitialRecommendationBatch(ownerId, state),
   );
 
-  if (rankedPapers.length) {
+  if (isUsableRecommendationBatchSize(rankedPapers.length)) {
     return {
       feedState,
       liveBatchToCache: [],
@@ -734,7 +760,7 @@ async function getRankedFeedData(ownerId: string): Promise<RankedFeedData> {
     getLatestLiveRecommendationBatch(ownerId, state),
   );
 
-  if (rankedPapers.length) {
+  if (isUsableRecommendationBatchSize(rankedPapers.length)) {
     return {
       feedState,
       liveBatchToCache: [],
@@ -782,6 +808,16 @@ export async function getFeedPageData(ownerId: string) {
     recommendationImpressionId:
       impressionBatch.impressionIdsByPaperId.get(paper.id),
   }));
+  const candidateSourceCounts = Object.fromEntries(
+    [...new Set(visiblePapers.map((paper) => paper.rankingScoreComponents.source))]
+      .sort()
+      .map((source) => [
+        source,
+        visiblePapers.filter(
+          (paper) => paper.rankingScoreComponents.source === source,
+        ).length,
+      ]),
+  );
 
   if (feedData.liveBatchToCache.length) {
     after(async () => {
@@ -800,6 +836,7 @@ export async function getFeedPageData(ownerId: string) {
     ownerId,
     totalMs: Math.round(performance.now() - startedAt),
     source: feedData.source,
+    candidateSourceCounts,
     timings,
     rankedCount: rankedPapers.length,
     recommendationImpressionBatchId: impressionBatch.batchId,

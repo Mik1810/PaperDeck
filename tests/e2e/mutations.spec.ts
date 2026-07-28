@@ -335,6 +335,29 @@ test.describe("recommendation analytics", () => {
     }).toBe(activeImpression.id);
   });
 
+  test("browser back advances past a paper opened from the deck", async ({
+    page,
+  }) => {
+    test.skip(!devAuthEnabled, "Requires dev auth.");
+    test.skip(!hasDb, "Requires DATABASE_URL.");
+
+    const response = await page.goto("/feed");
+
+    expect(response?.status()).toBeLessThan(500);
+    const openLink = page.getByRole("link", { name: "Open" });
+    const openedPaperHref = await openLink.getAttribute("href");
+
+    expect(openedPaperHref).toMatch(/^\/papers\//);
+    await openLink.click();
+    await expect(page).toHaveURL(new RegExp(`${openedPaperHref}$`));
+    await page.goBack();
+    await expect(page).toHaveURL(/\/feed$/);
+    await expect(page.getByRole("link", { name: "Open" })).not.toHaveAttribute(
+      "href",
+      openedPaperHref!,
+    );
+  });
+
   test("ignores invalid or mismatched impression ids without failing mutations", async ({
     request,
   }) => {

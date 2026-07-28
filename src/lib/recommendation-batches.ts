@@ -1,8 +1,20 @@
 export const INITIAL_FEED_RECOMMENDATION_COUNT = 50;
+export const MIN_USABLE_RECOMMENDATION_BATCH_COUNT = 10;
 export const INITIAL_FEED_RECOMMENDATION_MODEL_VERSION =
   "paperdeck-initial-feed-v2";
 export const LIVE_FEED_RECOMMENDATION_MODEL_VERSION = "paperdeck-live-feed-v1";
 export const INITIAL_FEED_RECOMMENDATION_MAX_AGE_MS = 5 * 60 * 1000;
+
+export function isUsableRecommendationBatchSize(count: number) {
+  return count >= MIN_USABLE_RECOMMENDATION_BATCH_COUNT;
+}
+
+export function needsCatalogRecommendationFill(
+  count: number,
+  targetCount = INITIAL_FEED_RECOMMENDATION_COUNT,
+) {
+  return count < targetCount;
+}
 
 export function isFreshRecommendationBatch(
   generatedAt: string,

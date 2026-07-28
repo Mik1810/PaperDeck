@@ -97,6 +97,10 @@ sequenceDiagram
   end
   alt semantic candidates loaded
     Repo->>Ranker: Rank semantic candidate set with topic and feedback signals
+    opt fewer than 50 unseen candidates remain
+      Repo->>Supabase: Load shared catalog papers
+      Repo->>Ranker: Rerank catalog while retaining matched semantic scores
+    end
   else fallback needed
     Repo->>Supabase: Load shared catalog papers
     Repo->>Ranker: Rank catalog with topic and feedback signals

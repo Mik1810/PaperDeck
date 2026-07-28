@@ -34,6 +34,7 @@ type PaperCardProps = {
     paperId: string,
     recommendationImpressionId?: string,
   ) => void | Promise<void>;
+  onOpen?: (paperId: string) => void;
 };
 
 export function PaperCard({
@@ -42,6 +43,7 @@ export function PaperCard({
   isFavorite = false,
   isSaved = false,
   onDismissSubmit,
+  onOpen,
 }: PaperCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
@@ -160,11 +162,12 @@ export function PaperCard({
         <Link
           className="col-span-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white hover:bg-slate-800"
           href={`/papers/${paper.id}`}
-          onClick={() =>
+          onClick={() => {
+            onOpen?.(paper.id);
             recordOpenDetail(paper.id, {
               recommendationImpressionId: paper.recommendationImpressionId,
-            })
-          }
+            });
+          }}
         >
           <MoveRight aria-hidden="true" size={18} strokeWidth={2.5} />
           Open

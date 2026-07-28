@@ -18,6 +18,7 @@ import type { FeedPaper } from "@/types/paper";
 const SWIPE_THRESHOLD = 100;
 const EXIT_VELOCITY = 500;
 const EXIT_DURATION = 0.3;
+const OPENED_FEED_PAPER_STORAGE_KEY = "paperdeck:opened-feed-paper";
 
 function SwipeOverlay({
   direction,
@@ -149,6 +150,28 @@ export function FeedDeck({
     });
   }, [queueSignature]);
 
+  useEffect(() => {
+    const openedPaperId = sessionStorage.getItem(
+      OPENED_FEED_PAPER_STORAGE_KEY,
+    );
+
+    if (!openedPaperId) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      sessionStorage.removeItem(OPENED_FEED_PAPER_STORAGE_KEY);
+      setPaperDismissed(openedPaperId, true);
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [setPaperDismissed]);
+
+  const handleOpen = useCallback((paperId: string) => {
+    sessionStorage.setItem(OPENED_FEED_PAPER_STORAGE_KEY, paperId);
+    setPaperDismissed(paperId, true);
+  }, [setPaperDismissed]);
+
   const handleDismissSubmit = useCallback(async function (
     paperId: string,
     recommendationImpressionId?: string,
@@ -271,6 +294,7 @@ export function FeedDeck({
                     : null
                 }
                 onDismissSubmit={handleDismissSubmit}
+                onOpen={handleOpen}
                 paper={visibleActivePaper}
               />
             </motion.div>

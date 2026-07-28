@@ -44,6 +44,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Prevented semantic candidate starvation by raising the IVFFlat RPC probe count from one to ten, regenerating nearly exhausted cached batches, and filling short post-filter semantic decks from the deduplicated catalog with explicit candidate provenance.
+- Kept current favorites and Read later items out of the active deck even when their historical interaction rows are absent, and advanced the local deck before opening a paper so browser Back does not restore an already-opened sequence.
+
 - Expanded PWA cache coverage to visit authenticated HTML and request RSC data before proving that neither response enters Cache Storage.
 - Made summary generation fall back from an absent dedicated GitHub Models token to the automatic Actions token, and stopped all-failed summary batches from reporting a false-success workflow.
 - Made scheduled arXiv ingestion tolerate shared-runner rate limits by honoring `Retry-After`, using minute-scale exponential backoff with jitter for HTTP 429, and preserving structured failure diagnostics in GitHub job summaries.

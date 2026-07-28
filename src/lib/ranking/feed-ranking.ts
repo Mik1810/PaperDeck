@@ -25,7 +25,11 @@ export type RankingScoreComponents = {
   recency: number;
   classic: number;
   total: number;
-  source: "live" | "initial_batch";
+  source:
+    | "semantic"
+    | "catalog_fallback"
+    | "initial_batch"
+    | "live_batch";
 };
 
 export type RankedPaper = Paper & {
@@ -64,6 +68,22 @@ const feedHiddenActions = new Set<InteractionType>([
 
 export function isFeedHiddenAction(action: InteractionType) {
   return feedHiddenActions.has(action);
+}
+
+export function buildSeenPaperIds(
+  favoriteIds: Iterable<string>,
+  readLaterIds: Iterable<string>,
+  interactions: RankingInteraction[],
+) {
+  const seenIds = new Set([...favoriteIds, ...readLaterIds]);
+
+  for (const interaction of interactions) {
+    if (isFeedHiddenAction(interaction.action)) {
+      seenIds.add(interaction.paperId);
+    }
+  }
+
+  return seenIds;
 }
 
 function getAncestorIds(
@@ -176,7 +196,9 @@ function scorePaper(paper: Paper, context: RankingContext): RankingScoreComponen
     recency: recencyScore,
     classic: classicScore,
     total,
-    source: "live",
+    source: context.semanticScores?.has(paper.id)
+      ? "semantic"
+      : "catalog_fallback",
   };
 }
 

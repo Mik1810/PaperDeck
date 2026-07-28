@@ -568,6 +568,7 @@ returns table (
 language sql
 stable
 set search_path = public
+set ivfflat.probes = 10
 as $$
   select
     papers.id as paper_id,

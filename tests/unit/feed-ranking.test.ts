@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test, { describe } from "node:test";
-import { rankFeedPapers } from "../../src/lib/ranking/feed-ranking";
+import {
+  buildSeenPaperIds,
+  rankFeedPapers,
+} from "../../src/lib/ranking/feed-ranking";
 import type { Paper } from "../../src/types/paper";
 
 function paper(overrides: Partial<Paper> & { id: string }): Paper {
@@ -53,7 +56,7 @@ describe("rankFeedPapers score components", () => {
       components.recency +
       components.classic;
 
-    assert.equal(components.source, "live");
+    assert.equal(components.source, "semantic");
     assert.equal(components.semantic, 60);
     assert.equal(components.topic, 90);
     assert.equal(components.feedback, 36);
@@ -84,6 +87,22 @@ describe("rankFeedPapers score components", () => {
     assert.equal(ranked[0].rankingScoreComponents.semantic, 108);
   });
 
+  test("distinguishes semantic candidates from catalog fill candidates", () => {
+    const ranked = rankFeedPapers(
+      [paper({ id: "semantic" }), paper({ id: "catalog" })],
+      [{ id: "topic-a", parentId: null }],
+      new Set(["topic-a"]),
+      {
+        seenIds: new Set(),
+        interactions: [],
+      },
+      new Map([["semantic", 0.5]]),
+    );
+
+    assert.equal(ranked[0].rankingScoreComponents.source, "semantic");
+    assert.equal(ranked[1].rankingScoreComponents.source, "catalog_fallback");
+  });
+
   test("uses already_read as positive feedback for related papers", () => {
     const ranked = rankFeedPapers(
       [
@@ -102,4 +121,21 @@ describe("rankFeedPapers score components", () => {
     assert.equal(ranked[0].rankingScoreComponents.feedback, 18);
     assert.match(ranked[0].recommendationReason, /recent Topic A feedback/);
   });
+});
+
+test("current favorites and Read later items remain hidden without interaction history", () => {
+  const seenIds = buildSeenPaperIds(
+    ["favorite"],
+    ["read-later"],
+    [
+      { action: "open_detail", paperId: "opened" },
+      { action: "seen", paperId: "impression-only" },
+    ],
+  );
+
+  assert.deepEqual([...seenIds].sort(), [
+    "favorite",
+    "opened",
+    "read-later",
+  ]);
 });

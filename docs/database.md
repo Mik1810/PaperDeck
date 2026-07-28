@@ -134,7 +134,7 @@ The schema now includes `papers.embedding_content_hash`, `topic_embeddings`, and
 
 Remote verification on 2026-07-03 found 571 embedded paper rows for MiniLM, 66 MiniLM topic rows plus 66 historical BGE-small topic rows, and 2 MiniLM user profile rows plus 2 historical BGE-small profile rows.
 
-`match_papers_by_embedding(query_embedding, match_count, embedding_model_filter)` performs pgvector top-K retrieval over `papers.embedding` and returns `paper_id` plus `semantic_score`. The feed repository uses it only when a stored user profile embedding exists.
+`match_papers_by_embedding(query_embedding, match_count, embedding_model_filter)` performs pgvector top-K retrieval over `papers.embedding` and returns `paper_id` plus `semantic_score`. Its 100-list IVFFlat index is queried with ten probes so the RPC can satisfy the requested candidate count with useful recall. The feed repository uses it only when a stored user profile embedding exists.
 
 `src/lib/repositories/user-profile-embeddings.ts` writes `user_profile_embeddings` from stored topic vectors during onboarding/settings updates. It does not call an embedding model; it only aggregates vectors that already exist in Supabase and clears stale stored profiles when no source vectors are available. The older interaction-aware refresh path remains available for future background refresh work.
 
@@ -156,13 +156,14 @@ Current behavior:
 - child/parent topic matches still count with lower weight;
 - `open_detail`, `favorite`, `save_to_playlist`, `read`, and `already_read` add positive topic feedback;
 - `dismiss` and `not_interested` add negative topic feedback;
-- papers with `open_detail`, `dismiss`, `favorite`, `save_to_playlist`, `not_interested`, `read`, or `already_read` are hidden from the active deck.
+- papers with `open_detail`, `dismiss`, `favorite`, `save_to_playlist`, `not_interested`, `read`, or `already_read` are hidden from the active deck;
+- current favorites and `Read later` items are also authoritative hidden state, so pruning or resetting interaction history cannot make them reappear.
 
 `Already read` and `Not interested` are recorded from the paper detail page. `already_read` has the same positive weight as the legacy `read` signal. Removing a paper from `Read later` deletes the playlist item but does not add negative feedback.
 
 Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
 
-Current integration already supports this path: onboarding/settings writes create the stored user vector from selected topic embeddings. `/feed` first tries a fresh `recommendations` preload batch from the wizard, then a fresh live `recommendations` batch. Without a batch, if `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic candidates with pgvector, applies the existing TypeScript reranker, and stores the visible live batch asynchronously. Without a stored user vector, it falls back to the topic/feedback ranking.
+Current integration already supports this path: onboarding/settings writes create the stored user vector from selected topic embeddings. `/feed` first tries a fresh `recommendations` preload batch from the wizard, then a fresh live `recommendations` batch. Cached batches below the ten-visible-paper floor are regenerated. Without a usable batch, if `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic candidates with pgvector and applies the existing TypeScript reranker. When fewer than 50 unseen semantic candidates remain, the same reranker fills the deck from the full catalog while retaining semantic scores and recording per-paper candidate provenance. Without a stored user vector, it uses the topic/feedback catalog ranking.
 
 ## RLS Notes
 
