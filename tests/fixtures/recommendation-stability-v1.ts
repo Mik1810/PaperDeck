@@ -36,7 +36,9 @@ export const recommendationStabilityV1: RecommendationEvaluationScenario[] =
       papers,
       topics,
       selectedTopicIds: [id],
-      relevantPaperIds,
+      relevanceGrades: Object.fromEntries(
+        relevantPaperIds.map((paperId) => [paperId, 1]),
+      ),
       semanticScores: Object.fromEntries(
         papers.map((candidate, index) => [
           candidate.id,

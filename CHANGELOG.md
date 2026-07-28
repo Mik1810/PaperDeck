@@ -8,6 +8,7 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Split recommendation evaluation into an explicitly perfect synthetic sanity check and a harder blocking baseline with graded relevance, overlapping profiles, noisy semantic scores, feedback, seen papers, conflicting rank signals, worst-profile floors, and zero seen-paper leakage.
 - Migrated Clerk authorization from deprecated path matching in `src/proxy.ts` to resource-level guards on every privileged page, Route Handler, and Server Action while retaining Clerk request context, authorized-party validation, and cache policy.
 - Classified authenticated and personalized routes under an explicit private/no-store browser and CDN policy while leaving PWA static assets cacheable.
 - Made exact-email collaboration discovery opt-in for new and existing identities, with explicit Settings consent and regression coverage for the undiscoverable default.

@@ -6,14 +6,29 @@ import {
 } from "./feed-ranking";
 import type { Paper } from "../../types/paper";
 
+export const RECOMMENDATION_SANITY_FIXTURE_VERSION =
+  "paperdeck-recommendation-sanity-v1";
 export const RECOMMENDATION_STABILITY_FIXTURE_VERSION =
-  "paperdeck-recommendation-stability-v1";
+  "paperdeck-recommendation-stability-v2";
+
+export const RECOMMENDATION_SANITY_THRESHOLDS = {
+  meanNdcgAtK: 1,
+  minNdcgAtK: 1,
+  meanRecallAtK: 1,
+  minRecallAtK: 1,
+  catalogExposureCoverageAtK: 1,
+  maxMeanPairwiseOverlapAtK: 0,
+  maxSeenLeakageCount: 0,
+} as const;
 
 export const RECOMMENDATION_STABILITY_THRESHOLDS = {
-  meanNdcgAtK: 0.9,
-  meanRecallAtK: 0.75,
-  catalogCoverageAtK: 0.8,
-  maxMeanPairwiseOverlapAtK: 0.25,
+  meanNdcgAtK: 0.88,
+  minNdcgAtK: 0.75,
+  meanRecallAtK: 0.8,
+  minRecallAtK: 0.65,
+  catalogExposureCoverageAtK: 0.55,
+  maxMeanPairwiseOverlapAtK: 0.35,
+  maxSeenLeakageCount: 0,
 } as const;
 
 export const RECOMMENDATION_RERANK_LATENCY_REFERENCE_MS = 25;
@@ -26,7 +41,14 @@ export type RecommendationEvaluationScenario = {
   seenPaperIds?: string[];
   interactions?: RankingInteraction[];
   semanticScores?: Record<string, number>;
-  relevantPaperIds: string[];
+  relevanceGrades: Record<string, number>;
+};
+
+export type RecommendationScenarioMetrics = {
+  scenarioId: string;
+  ndcgAtK: number;
+  recallAtK: number;
+  seenLeakageCount: number;
 };
 
 export type RecommendationStabilityMetrics = {
@@ -35,34 +57,64 @@ export type RecommendationStabilityMetrics = {
   topK: number;
   scenarioCount: number;
   meanNdcgAtK: number;
+  minNdcgAtK: number;
   meanRecallAtK: number;
-  catalogCoverageAtK: number;
+  minRecallAtK: number;
+  catalogExposureCoverageAtK: number;
   meanPairwiseOverlapAtK: number;
+  seenLeakageCount: number;
+  scenarios: RecommendationScenarioMetrics[];
   p95RerankLatencyMs: number | null;
+};
+
+export type RecommendationStabilityThresholds = {
+  meanNdcgAtK: number;
+  minNdcgAtK: number;
+  meanRecallAtK: number;
+  minRecallAtK: number;
+  catalogExposureCoverageAtK: number;
+  maxMeanPairwiseOverlapAtK: number;
+  maxSeenLeakageCount: number;
 };
 
 function mean(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function ndcgAtK(ids: string[], relevantIds: Set<string>, topK: number) {
-  const gains = ids.slice(0, topK).map((id, index) =>
-    relevantIds.has(id) ? 1 / Math.log2(index + 2) : 0,
+function ndcgAtK(
+  ids: string[],
+  relevanceGrades: Record<string, number>,
+  topK: number,
+) {
+  const gains = ids.slice(0, topK).map(
+    (id, index) => (relevanceGrades[id] ?? 0) / Math.log2(index + 2),
   );
-  const idealCount = Math.min(relevantIds.size, topK);
-  const ideal = Array.from(
-    { length: idealCount },
-    (_, index) => 1 / Math.log2(index + 2),
-  );
+  const ideal = Object.values(relevanceGrades)
+    .filter((grade) => grade > 0)
+    .sort((left, right) => right - left)
+    .slice(0, topK)
+    .map((grade, index) => grade / Math.log2(index + 2));
   return ideal.length
     ? gains.reduce((sum, gain) => sum + gain, 0) /
         ideal.reduce((sum, gain) => sum + gain, 0)
     : 0;
 }
 
-function recallAtK(ids: string[], relevantIds: Set<string>, topK: number) {
+function recallAtK(
+  ids: string[],
+  relevanceGrades: Record<string, number>,
+  topK: number,
+) {
+  const relevantIds = new Set(
+    Object.entries(relevanceGrades)
+      .filter(([, grade]) => grade > 0)
+      .map(([id]) => id),
+  );
   if (!relevantIds.size) return 0;
-  return ids.slice(0, topK).filter((id) => relevantIds.has(id)).length / relevantIds.size;
+  return (
+    ids.slice(0, topK).filter((id) => relevantIds.has(id)).length /
+    relevantIds.size
+  );
 }
 
 function percentile95(values: number[]) {
@@ -100,7 +152,11 @@ function rankScenario(scenario: RecommendationEvaluationScenario) {
 
 export function evaluateRecommendationStability(
   scenarios: RecommendationEvaluationScenario[],
-  options: { topK?: number; latencyIterations?: number } = {},
+  options: {
+    topK?: number;
+    latencyIterations?: number;
+    fixtureVersion?: string;
+  } = {},
 ): RecommendationStabilityMetrics {
   if (!scenarios.length) throw new Error("At least one evaluation scenario is required");
   const topK = options.topK ?? 4;
@@ -114,6 +170,18 @@ export function evaluateRecommendationStability(
     ),
   );
   const recommendedIds = new Set(rankedIds.flatMap((ids) => ids.slice(0, topK)));
+  const scenarioMetrics = rankedIds.map((ids, index) => {
+    const scenario = scenarios[index];
+    const seenIds = new Set(scenario.seenPaperIds ?? []);
+    return {
+      scenarioId: scenario.id,
+      ndcgAtK: ndcgAtK(ids, scenario.relevanceGrades, topK),
+      recallAtK: recallAtK(ids, scenario.relevanceGrades, topK),
+      seenLeakageCount: ids
+        .slice(0, topK)
+        .filter((id) => seenIds.has(id)).length,
+    };
+  });
   const latencySamples: number[] = [];
 
   for (let iteration = 0; iteration < (options.latencyIterations ?? 0); iteration += 1) {
@@ -126,39 +194,55 @@ export function evaluateRecommendationStability(
 
   return {
     rankerVersion: FEED_RANKER_VERSION,
-    fixtureVersion: RECOMMENDATION_STABILITY_FIXTURE_VERSION,
+    fixtureVersion:
+      options.fixtureVersion ?? RECOMMENDATION_STABILITY_FIXTURE_VERSION,
     topK,
     scenarioCount: scenarios.length,
-    meanNdcgAtK: mean(
-      rankedIds.map((ids, index) =>
-        ndcgAtK(ids, new Set(scenarios[index].relevantPaperIds), topK),
-      ),
+    meanNdcgAtK: mean(scenarioMetrics.map((metrics) => metrics.ndcgAtK)),
+    minNdcgAtK: Math.min(
+      ...scenarioMetrics.map((metrics) => metrics.ndcgAtK),
     ),
-    meanRecallAtK: mean(
-      rankedIds.map((ids, index) =>
-        recallAtK(ids, new Set(scenarios[index].relevantPaperIds), topK),
-      ),
+    meanRecallAtK: mean(scenarioMetrics.map((metrics) => metrics.recallAtK)),
+    minRecallAtK: Math.min(
+      ...scenarioMetrics.map((metrics) => metrics.recallAtK),
     ),
-    catalogCoverageAtK: eligibleIds.size ? recommendedIds.size / eligibleIds.size : 0,
+    catalogExposureCoverageAtK: eligibleIds.size
+      ? recommendedIds.size / eligibleIds.size
+      : 0,
     meanPairwiseOverlapAtK: pairwiseOverlap(rankedIds, topK),
+    seenLeakageCount: scenarioMetrics.reduce(
+      (total, metrics) => total + metrics.seenLeakageCount,
+      0,
+    ),
+    scenarios: scenarioMetrics,
     p95RerankLatencyMs: percentile95(latencySamples),
   };
 }
 
 export function recommendationStabilityFailures(
   metrics: RecommendationStabilityMetrics,
+  thresholds: RecommendationStabilityThresholds,
 ) {
   const failures: string[] = [];
-  if (metrics.meanNdcgAtK < RECOMMENDATION_STABILITY_THRESHOLDS.meanNdcgAtK)
+  if (metrics.meanNdcgAtK < thresholds.meanNdcgAtK)
     failures.push("meanNdcgAtK");
-  if (metrics.meanRecallAtK < RECOMMENDATION_STABILITY_THRESHOLDS.meanRecallAtK)
+  if (metrics.minNdcgAtK < thresholds.minNdcgAtK)
+    failures.push("minNdcgAtK");
+  if (metrics.meanRecallAtK < thresholds.meanRecallAtK)
     failures.push("meanRecallAtK");
-  if (metrics.catalogCoverageAtK < RECOMMENDATION_STABILITY_THRESHOLDS.catalogCoverageAtK)
-    failures.push("catalogCoverageAtK");
+  if (metrics.minRecallAtK < thresholds.minRecallAtK)
+    failures.push("minRecallAtK");
+  if (
+    metrics.catalogExposureCoverageAtK <
+    thresholds.catalogExposureCoverageAtK
+  )
+    failures.push("catalogExposureCoverageAtK");
   if (
     metrics.meanPairwiseOverlapAtK >
-    RECOMMENDATION_STABILITY_THRESHOLDS.maxMeanPairwiseOverlapAtK
+    thresholds.maxMeanPairwiseOverlapAtK
   )
     failures.push("meanPairwiseOverlapAtK");
+  if (metrics.seenLeakageCount > thresholds.maxSeenLeakageCount)
+    failures.push("seenLeakageCount");
   return failures;
 }
