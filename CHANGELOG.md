@@ -8,6 +8,7 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Migrated Clerk authorization from deprecated path matching in `src/proxy.ts` to resource-level guards on every privileged page, Route Handler, and Server Action while retaining Clerk request context, authorized-party validation, and cache policy.
 - Classified authenticated and personalized routes under an explicit private/no-store browser and CDN policy while leaving PWA static assets cacheable.
 - Made exact-email collaboration discovery opt-in for new and existing identities, with explicit Settings consent and regression coverage for the undiscoverable default.
 - Approved the private research-group charter, choosing exact-email discovery opt-in and defining roles, retention, account closure, threat controls, release stops, and research-user validation.
@@ -15,6 +16,7 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Added a source-discovered authentication inventory test that rejects new unguarded App Router pages, Route Handlers, and Server Actions while requiring signature verification for the public Clerk webhook.
 - Added an opt-in Clerk Development shared-device cache smoke that signs in as test user A, creates a temporary private marker, signs out, signs in as B, proves HTML/RSC/API/history/Cache Storage isolation, and verifies exact playlist/session cleanup.
 - Added a no-write inference mode for evaluating local llama.cpp/Unsloth triage summaries before updating Supabase, with strict structured output, source-grounding validation, and a bounded plain-English retry for model-generated equations.
 - Added section-aware PDF sampling to local summary generation so a 20,000-character context budget covers methods, results, and conclusions instead of only the start of each paper.

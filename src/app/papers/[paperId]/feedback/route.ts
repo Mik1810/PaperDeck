@@ -19,6 +19,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ paperId: string }> },
 ) {
+  const ownerId = await requireOwnerId();
   const { paperId } = await params;
   const formData = await request.formData();
   const action = formData.get("action");
@@ -29,7 +30,6 @@ export async function POST(
     });
   }
 
-  const ownerId = await requireOwnerId();
   await recordPaperInteraction(ownerId, paperId, action, "detail");
 
   after(async () => {

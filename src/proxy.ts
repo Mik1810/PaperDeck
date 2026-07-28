@@ -1,4 +1,4 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 import {
@@ -10,21 +10,9 @@ const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(",")
   .map((party) => party.trim())
   .filter(Boolean);
 
-const isProtectedRoute = createRouteMatcher([
-  "/feed(.*)",
-  "/digest(.*)",
-  "/library(.*)",
-  "/onboarding(.*)",
-  "/papers(.*)",
-  "/search(.*)",
-  "/settings(.*)",
-]);
-
-const clerkProtectedRoutes = clerkMiddleware(async (auth, request) => {
-  if (isProtectedRoute(request)) {
-    await auth.protect();
-  }
-}, authorizedParties?.length ? { authorizedParties } : undefined);
+const clerkRequestMiddleware = clerkMiddleware(
+  authorizedParties?.length ? { authorizedParties } : undefined,
+);
 
 function applyCachePolicy(response: Response, request: NextRequest) {
   if (
@@ -54,7 +42,7 @@ export default async function proxy(
 
   const response = isDevAuthEnabled()
     ? NextResponse.next()
-    : await clerkProtectedRoutes(request, event);
+    : await clerkRequestMiddleware(request, event);
 
   return applyCachePolicy(response ?? NextResponse.next(), request);
 }

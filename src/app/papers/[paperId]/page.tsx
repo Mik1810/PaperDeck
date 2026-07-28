@@ -37,8 +37,8 @@ function SummaryRow({ label, text }: { label: string; text: string }) {
 }
 
 export default async function PaperDetailPage({ params }: PaperDetailPageProps) {
-  const { paperId } = await params;
   const ownerId = await requireOwnerId();
+  const { paperId } = await params;
 
   if (!(await hasUsableOnboardingState(ownerId))) {
     redirect("/onboarding");

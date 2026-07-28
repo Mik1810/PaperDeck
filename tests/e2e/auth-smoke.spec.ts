@@ -18,9 +18,37 @@ test.describe("Clerk auth smoke", () => {
   });
 
   test("unauthenticated protected pages land on sign-in", async ({ page }) => {
-    for (const path of ["/feed", "/onboarding"]) {
+    for (const path of [
+      "/",
+      "/feed",
+      "/digest",
+      "/library",
+      "/onboarding",
+      "/papers/not-a-paper",
+      "/search",
+      "/settings",
+    ]) {
       await page.goto(path);
       await expect(page).toHaveURL(/\/sign-in/);
+    }
+  });
+
+  test("unauthenticated RSC and mutation requests are rejected", async ({
+    request,
+  }) => {
+    const rsc = await request.get("/feed", {
+      headers: { RSC: "1" },
+      maxRedirects: 0,
+    });
+    expect(await rsc.text()).toContain("NEXT_REDIRECT");
+
+    for (const path of ["/api/deck", "/papers/not-a-paper/feedback"]) {
+      const response = await request.post(path, {
+        data: {},
+        maxRedirects: 0,
+      });
+      expect(response.status()).toBe(307);
+      expect(response.headers().location).toContain("/sign-in");
     }
   });
 });

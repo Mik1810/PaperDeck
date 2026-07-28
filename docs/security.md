@@ -27,7 +27,19 @@ Required controls:
 - Preview and Production release checks verify effective response headers and absence of Vercel cache hits;
 - a same-browser A/logout/B smoke must prove that no personalized marker from A reaches B through the DOM, browser history, RSC/API responses, or Cache Storage.
 
-The Clerk matcher remains a separate authentication concern. Cache-policy work must not remove or weaken route protection as an incidental refactor.
+## Resource-Level Authentication
+
+PaperDeck follows Clerk's resource-based protection model. `clerkMiddleware()` remains in `src/proxy.ts` to establish Clerk request context, validate configured authorized parties, and apply cross-cutting response policy, but it is not an authorization boundary.
+
+Every privileged server resource enforces authentication where data or mutations are accessed:
+
+- App Router pages call `requireOwnerId()` or `requireUserContext()` before loading user data;
+- Route Handlers authenticate before parsing or mutating request data;
+- every exported Server Action reaches the same resource-level guards;
+- the public Clerk webhook verifies its signature before using the service-role client;
+- sign-in and sign-up are the only explicitly public pages.
+
+`tests/unit/auth-resource-protection.test.ts` discovers pages, Route Handlers, and Server Actions and fails when a new server resource lacks a guard. This complements runtime anonymous/authenticated browser checks and avoids relying on URL-pattern authorization, which cannot protect Server Actions invoked by ID.
 
 The live Clerk cache smoke is intentionally separate from default App CI. It uses only Clerk Development users configured through local environment variables, never logs their email addresses, stores no passwords or tokens, disables Playwright screenshots/traces/video, and performs exact server-only cleanup of its random playlist marker. Pre-existing Clerk sessions are snapshotted and excluded from cleanup.
 
