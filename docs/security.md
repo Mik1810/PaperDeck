@@ -15,6 +15,22 @@ This document keeps PaperDeck's operational security checklists close to the cod
 
 Never paste real secret values into GitHub issues, commit messages, logs, docs, screenshots, or session files.
 
+## Authenticated Response Caching
+
+PaperDeck treats authentication entry points, personalized HTML, RSC/data responses, APIs, and mutations as private no-store responses. The route classification is centralized in `src/lib/security/route-cache-policy.ts`; explicit PWA assets remain cacheable.
+
+Required controls:
+
+- personalized responses declare browser and CDN no-store policies;
+- the service worker never stores authenticated navigations or dynamic Next.js/RSC requests;
+- static assets and the offline shell remain available;
+- Preview and Production release checks verify effective response headers and absence of Vercel cache hits;
+- a same-browser A/logout/B smoke must prove that no personalized marker from A reaches B through the DOM, browser history, RSC/API responses, or Cache Storage.
+
+The Clerk matcher remains a separate authentication concern. Cache-policy work must not remove or weaken route protection as an incidental refactor.
+
+The live Clerk cache smoke is intentionally separate from default App CI. It uses only Clerk Development users configured through local environment variables, never logs their email addresses, stores no passwords or tokens, disables Playwright screenshots/traces/video, and performs exact server-only cleanup of its random playlist marker. Pre-existing Clerk sessions are snapshotted and excluded from cleanup.
+
 ## Emergency Rotation Checklist
 
 Use this when a secret may have leaked.

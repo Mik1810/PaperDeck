@@ -8,12 +8,14 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Classified authenticated and personalized routes under an explicit private/no-store browser and CDN policy while leaving PWA static assets cacheable.
 - Made exact-email collaboration discovery opt-in for new and existing identities, with explicit Settings consent and regression coverage for the undiscoverable default.
 - Approved the private research-group charter, choosing exact-email discovery opt-in and defining roles, retention, account closure, threat controls, release stops, and research-user validation.
 - Clarified the Clerk/Supabase authorization boundary: Development isolation is proven by deterministic and live A/B tests, while Preview/Production verification and authenticated-route cache/logout hardening are separate release gates.
 
 ### Added
 
+- Added an opt-in Clerk Development shared-device cache smoke that signs in as test user A, creates a temporary private marker, signs out, signs in as B, proves HTML/RSC/API/history/Cache Storage isolation, and verifies exact playlist/session cleanup.
 - Added a no-write inference mode for evaluating local llama.cpp/Unsloth triage summaries before updating Supabase, with strict structured output, source-grounding validation, and a bounded plain-English retry for model-generated equations.
 - Added section-aware PDF sampling to local summary generation so a 20,000-character context budget covers methods, results, and conclusions instead of only the start of each paper.
 - Grounded local triage prompts in labeled paper sections, emphasizing cross-section synthesis over abstract paraphrase while constraining unsupported implications and adjacent audiences.
@@ -39,6 +41,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Expanded PWA cache coverage to visit authenticated HTML and request RSC data before proving that neither response enters Cache Storage.
 - Made summary generation fall back from an absent dedicated GitHub Models token to the automatic Actions token, and stopped all-failed summary batches from reporting a false-success workflow.
 - Made scheduled arXiv ingestion tolerate shared-runner rate limits by honoring `Retry-After`, using minute-scale exponential backoff with jitter for HTTP 429, and preserving structured failure diagnostics in GitHub job summaries.
 - Restored meaningful block/discovery coverage after the opt-in default change and expanded friendship tests for idempotent decline/block/unblock, bidirectional blocking, outsider denial, and direct-write rejection.

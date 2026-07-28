@@ -49,8 +49,21 @@ test.describe("PWA cache policy", () => {
       .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
       .toBe(true);
 
-    const navigationCacheCheck = `/offline.html?nav-cache-check=${Date.now()}`;
-    await page.goto(navigationCacheCheck);
+    const navigationCacheCheck = `/feed?nav-cache-check=${Date.now()}`;
+    await page.goto(navigationCacheCheck, {
+      waitUntil: "domcontentloaded",
+    });
+
+    await page.goto(`/offline.html?cache-inspection=${Date.now()}`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    const rscCacheCheck = `/feed?_rsc=cache-check-${Date.now()}`;
+    await page.evaluate(async (url) => {
+      await fetch(url, {
+        headers: { RSC: "1" },
+      });
+    }, rscCacheCheck);
 
     const cachedUrls = await page.evaluate(async () => {
       const urls: string[] = [];
@@ -72,6 +85,7 @@ test.describe("PWA cache policy", () => {
     expect(cachedUrls).toContain("/offline.html");
     expect(cachedUrls).not.toContain("/feed");
     expect(cachedUrls).not.toContain(navigationCacheCheck);
+    expect(cachedUrls).not.toContain(rscCacheCheck);
 
     await context.setOffline(true);
     await page.goto(`/feed?offline-check=${Date.now()}`, {

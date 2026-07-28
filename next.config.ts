@@ -1,10 +1,18 @@
 import type { NextConfig } from "next";
+import {
+  PRIVATE_CACHE_HEADER_SOURCES,
+  privateNoStoreHeaders,
+} from "./src/lib/security/route-cache-policy";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   async headers() {
     return [
+      ...PRIVATE_CACHE_HEADER_SOURCES.map((source) => ({
+        source,
+        headers: [...privateNoStoreHeaders()],
+      })),
       {
         source: "/(.*)",
         headers: [

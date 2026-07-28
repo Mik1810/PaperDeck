@@ -1,6 +1,10 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
+import {
+  privateNoStoreHeaders,
+  shouldUsePrivateNoStore,
+} from "@/lib/security/route-cache-policy";
 
 const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(",")
   .map((party) => party.trim())
@@ -8,6 +12,7 @@ const authorizedParties = process.env.CLERK_AUTHORIZED_PARTIES?.split(",")
 
 const isProtectedRoute = createRouteMatcher([
   "/feed(.*)",
+  "/digest(.*)",
   "/library(.*)",
   "/onboarding(.*)",
   "/papers(.*)",
@@ -21,12 +26,37 @@ const clerkProtectedRoutes = clerkMiddleware(async (auth, request) => {
   }
 }, authorizedParties?.length ? { authorizedParties } : undefined);
 
-export default function proxy(request: NextRequest, event: NextFetchEvent) {
-  if (isDevAuthEnabled()) {
-    return NextResponse.next();
+function applyCachePolicy(response: Response, request: NextRequest) {
+  if (
+    shouldUsePrivateNoStore({
+      pathname: request.nextUrl.pathname,
+      method: request.method,
+    })
+  ) {
+    for (const header of privateNoStoreHeaders()) {
+      response.headers.set(header.key, header.value);
+    }
   }
 
-  return clerkProtectedRoutes(request, event);
+  return response;
+}
+
+export default async function proxy(
+  request: NextRequest,
+  event: NextFetchEvent,
+) {
+  if (
+    process.env.PAPERDECK_CLERK_CACHE_SMOKE === "true" &&
+    /^\/sign-(?:in|up)(?:\/|$)/.test(request.nextUrl.pathname)
+  ) {
+    return applyCachePolicy(NextResponse.next(), request);
+  }
+
+  const response = isDevAuthEnabled()
+    ? NextResponse.next()
+    : await clerkProtectedRoutes(request, event);
+
+  return applyCachePolicy(response ?? NextResponse.next(), request);
 }
 
 export const config = {

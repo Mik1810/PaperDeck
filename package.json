@@ -32,6 +32,7 @@
     "test:integration:clerk": "node --import tsx --test tests/integration/clerk-supabase-live.test.ts",
     "test:unit": "node --conditions react-server --import tsx --test tests/unit/*.test.ts",
     "test:e2e": "playwright test",
+    "test:e2e:clerk-cache": "playwright test --config=playwright.clerk-cache.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -53,6 +54,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.2.14",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/katex": "^0.16.8",
