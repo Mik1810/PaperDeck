@@ -84,11 +84,18 @@
   single-project Supabase topology support the shared-database conclusion
   without exposing any environment value.
 
-## Pending Production application gate
+## Production application gate
 
-- Keep the implementation unmerged until a separate Production deployment
-  decision.
-- The database prerequisite is satisfied. The remaining gate is to merge and
-  deploy the webhook code, verify that unsigned requests are rejected, inspect
-  deployment/runtime health, and close issue #107 only after the post-deploy
-  checks pass.
+- Marked PR #108 ready and squash-merged it to `main` after explicit approval.
+  The App CI check was still pending and was not awaited; the Vercel Preview
+  checks had passed.
+- The automatic Vercel Production deployment for merge commit `43e99e4`
+  reached `READY`.
+- A single unsigned `POST /api/webhooks/clerk` returned `400` before any
+  service-role client creation or data access.
+- Vercel reported no webhook-specific or project-wide runtime errors in the
+  post-deploy 30-minute window. The only observed request status on the new
+  deployment was the expected unsigned-smoke `400`.
+- No signed event, Clerk user, session, group, membership, collaboration
+  identity, or other application data was created, deleted, or modified during
+  the Production application verification.
