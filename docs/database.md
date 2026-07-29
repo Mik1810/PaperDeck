@@ -165,6 +165,11 @@ Embedding similarity will replace or augment this ranking once paper embeddings 
 
 Current integration already supports this path: onboarding/settings writes create the stored user vector from selected topic embeddings. `/feed` first tries a fresh `recommendations` preload batch from the wizard, then a fresh live `recommendations` batch. Cached batches below the ten-visible-paper floor are regenerated. Without a usable batch, if `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic candidates with pgvector and applies the existing TypeScript reranker. When fewer than 50 unseen semantic candidates remain, the same reranker fills the deck from the full catalog while retaining semantic scores and recording per-paper candidate provenance. Without a stored user vector, it uses the topic/feedback catalog ranking.
 
+New recommendation rows persist that provenance in nullable
+`recommendations.candidate_source`, constrained to `semantic` or
+`catalog_fallback`. Historical rows remain `NULL` and retain their broader
+`initial_batch` or `live_batch` source label when reconstructed.
+
 ## RLS Notes
 
 `supabase/schema.sql` includes RLS policies written for a future Clerk JWT integration:

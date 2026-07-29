@@ -44,7 +44,7 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
-- Prevented semantic candidate starvation by raising the IVFFlat RPC probe count from one to ten, regenerating nearly exhausted cached batches, and filling short post-filter semantic decks from the deduplicated catalog with explicit candidate provenance.
+- Prevented semantic candidate starvation by raising the IVFFlat RPC probe count from one to ten, regenerating nearly exhausted cached batches, and filling short post-filter semantic decks from the deduplicated catalog with candidate provenance persisted across cache reads.
 - Kept current favorites and Read later items out of the active deck even when their historical interaction rows are absent, and advanced the local deck before opening a paper so browser Back does not restore an already-opened sequence.
 
 - Expanded PWA cache coverage to visit authenticated HTML and request RSC data before proving that neither response enters Cache Storage.

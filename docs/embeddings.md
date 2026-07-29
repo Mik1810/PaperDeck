@@ -335,8 +335,10 @@ ranking over the shared catalog. If semantic retrieval succeeds but fewer than
 50 unseen candidates remain, PaperDeck reranks the full catalog with semantic
 scores retained for matched papers and fills the remaining deck from
 deduplicated catalog candidates. Each live score records `semantic` or
-`catalog_fallback` provenance. A fresh cached batch with fewer than ten visible
-papers is treated as exhausted and regenerated.
+`catalog_fallback` provenance, which new recommendation rows persist across
+cache reads. Historical rows without provenance retain their broader batch
+source label. A fresh cached batch with fewer than ten visible papers is treated
+as exhausted and regenerated.
 
 Wizard completion persists the first ranked deck to `recommendations` with model version `paperdeck-initial-feed-v2`; `/feed` consumes that fresh batch before live candidates. When `/feed` has to recompute live candidates, it stores the visible live batch asynchronously with model version `paperdeck-live-feed-v1` so near-term refreshes avoid rerunning semantic retrieval and TypeScript reranking.
 

@@ -18,6 +18,7 @@ import {
 } from "@/db/schema";
 import {
   buildSeenPaperIds,
+  isRecommendationCandidateSource,
   rankFeedPapers,
   type RankedPaper,
   type RankingInteraction,
@@ -32,6 +33,8 @@ import {
   isFreshRecommendationBatch,
   isUsableRecommendationBatchSize,
   needsCatalogRecommendationFill,
+  recommendationModelVersionForFeedSource,
+  type RecommendationFeedSource,
 } from "@/lib/recommendation-batches";
 import {
   addToOwnedPlaylist,
@@ -71,7 +74,7 @@ type RankedFeedData = {
   rankedPapers: RankedPaper[];
   feedState: FeedState;
   timings: Record<string, number>;
-  source: "initial_batch" | "live_batch" | "live_rank";
+  source: RecommendationFeedSource;
   liveBatchToCache: RankedPaper[];
 };
 
@@ -116,15 +119,10 @@ function isUuid(value: string) {
   return uuidPattern.test(value);
 }
 
-function recommendationModelVersionFor(paper: RankedPaper) {
-  return paper.rankingScoreComponents.source === "initial_batch"
-    ? INITIAL_FEED_RECOMMENDATION_MODEL_VERSION
-    : LIVE_FEED_RECOMMENDATION_MODEL_VERSION;
-}
-
 async function recordRecommendationImpressions(
   ownerId: string,
   papers: RankedPaper[],
+  modelVersion: string,
 ): Promise<RecommendationImpressionBatch> {
   if (!papers.length) {
     return {
@@ -135,7 +133,6 @@ async function recordRecommendationImpressions(
 
   const batchId = randomUUID();
   const shownAt = new Date().toISOString();
-  const modelVersion = recommendationModelVersionFor(papers[0]);
   const rows = await db
     .insert(recommendationImpressions)
     .values(
@@ -551,6 +548,7 @@ async function getLatestRecommendationBatch({
 
   const recommendationRows = await db
     .select({
+      candidateSource: recommendations.candidateSource,
       paperId: recommendations.paperId,
       reason: recommendations.reason,
       score: recommendations.score,
@@ -597,7 +595,9 @@ async function getLatestRecommendationBatch({
           recency: 0,
           classic: 0,
           total: row.score,
-          source,
+          source: isRecommendationCandidateSource(row.candidateSource)
+            ? row.candidateSource
+            : source,
         },
       };
     })
@@ -642,6 +642,11 @@ async function insertRecommendationBatch(
 
   await db.insert(recommendations).values(
     batch.map((paper) => ({
+      candidateSource: isRecommendationCandidateSource(
+        paper.rankingScoreComponents.source,
+      )
+        ? paper.rankingScoreComponents.source
+        : null,
       ownerId,
       paperId: paper.id,
       score: paper.rankingScore,
@@ -801,7 +806,11 @@ export async function getFeedPageData(ownerId: string) {
   const impressionBatch = await measureAsync(
     timings,
     "recommendation_impressions",
-    recordRecommendationImpressions(ownerId, visiblePapers),
+    recordRecommendationImpressions(
+      ownerId,
+      visiblePapers,
+      recommendationModelVersionForFeedSource(feedData.source),
+    ),
   );
   const feedPapers: FeedPaper[] = visiblePapers.map((paper) => ({
     ...paper,

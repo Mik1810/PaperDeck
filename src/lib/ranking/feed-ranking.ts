@@ -17,6 +17,16 @@ export type UserPaperRankingState = {
   interactions: RankingInteraction[];
 };
 
+export type RecommendationCandidateSource =
+  | "semantic"
+  | "catalog_fallback";
+
+export function isRecommendationCandidateSource(
+  value: string | null | undefined,
+): value is RecommendationCandidateSource {
+  return value === "semantic" || value === "catalog_fallback";
+}
+
 export type RankingScoreComponents = {
   semantic: number;
   topic: number;
@@ -25,11 +35,7 @@ export type RankingScoreComponents = {
   recency: number;
   classic: number;
   total: number;
-  source:
-    | "semantic"
-    | "catalog_fallback"
-    | "initial_batch"
-    | "live_batch";
+  source: RecommendationCandidateSource | "initial_batch" | "live_batch";
 };
 
 export type RankedPaper = Paper & {

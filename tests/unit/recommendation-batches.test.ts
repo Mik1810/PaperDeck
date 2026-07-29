@@ -3,10 +3,12 @@ import test from "node:test";
 import {
   INITIAL_FEED_RECOMMENDATION_COUNT,
   INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+  LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
   MIN_USABLE_RECOMMENDATION_BATCH_COUNT,
   isFreshRecommendationBatch,
   isUsableRecommendationBatchSize,
   needsCatalogRecommendationFill,
+  recommendationModelVersionForFeedSource,
 } from "../../src/lib/recommendation-batches";
 
 test("initial feed batch constants are stable", () => {
@@ -21,6 +23,21 @@ test("initial feed batch constants are stable", () => {
 test("recommendation batches below the visible floor are regenerated", () => {
   assert.equal(isUsableRecommendationBatchSize(9), false);
   assert.equal(isUsableRecommendationBatchSize(10), true);
+});
+
+test("batch source retains the correct impression model version", () => {
+  assert.equal(
+    recommendationModelVersionForFeedSource("initial_batch"),
+    INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
+  );
+  assert.equal(
+    recommendationModelVersionForFeedSource("live_batch"),
+    LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
+  );
+  assert.equal(
+    recommendationModelVersionForFeedSource("live_rank"),
+    LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
+  );
 });
 
 test("semantic candidate shortages trigger catalog fill", () => {

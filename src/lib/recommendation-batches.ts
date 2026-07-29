@@ -5,6 +5,19 @@ export const INITIAL_FEED_RECOMMENDATION_MODEL_VERSION =
 export const LIVE_FEED_RECOMMENDATION_MODEL_VERSION = "paperdeck-live-feed-v1";
 export const INITIAL_FEED_RECOMMENDATION_MAX_AGE_MS = 5 * 60 * 1000;
 
+export type RecommendationFeedSource =
+  | "initial_batch"
+  | "live_batch"
+  | "live_rank";
+
+export function recommendationModelVersionForFeedSource(
+  source: RecommendationFeedSource,
+) {
+  return source === "initial_batch"
+    ? INITIAL_FEED_RECOMMENDATION_MODEL_VERSION
+    : LIVE_FEED_RECOMMENDATION_MODEL_VERSION;
+}
+
 export function isUsableRecommendationBatchSize(count: number) {
   return count >= MIN_USABLE_RECOMMENDATION_BATCH_COUNT;
 }

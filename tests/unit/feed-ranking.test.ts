@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { describe } from "node:test";
 import {
   buildSeenPaperIds,
+  isRecommendationCandidateSource,
   rankFeedPapers,
 } from "../../src/lib/ranking/feed-ranking";
 import type { Paper } from "../../src/types/paper";
@@ -121,6 +122,13 @@ describe("rankFeedPapers score components", () => {
     assert.equal(ranked[0].rankingScoreComponents.feedback, 18);
     assert.match(ranked[0].recommendationReason, /recent Topic A feedback/);
   });
+});
+
+test("candidate provenance accepts only persisted live ranking sources", () => {
+  assert.equal(isRecommendationCandidateSource("semantic"), true);
+  assert.equal(isRecommendationCandidateSource("catalog_fallback"), true);
+  assert.equal(isRecommendationCandidateSource("live_batch"), false);
+  assert.equal(isRecommendationCandidateSource(null), false);
 });
 
 test("current favorites and Read later items remain hidden without interaction history", () => {

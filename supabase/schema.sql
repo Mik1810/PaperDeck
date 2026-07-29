@@ -242,6 +242,9 @@ create table recommendations (
   paper_id uuid not null references papers(id) on delete cascade,
   score real not null,
   reason text,
+  candidate_source text
+    constraint recommendations_candidate_source_check
+    check (candidate_source in ('semantic', 'catalog_fallback')),
   model_version text,
   generated_at timestamptz not null default now(),
   seen_at timestamptz,

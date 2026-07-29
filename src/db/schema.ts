@@ -1,4 +1,4 @@
-import { pgTable, pgPolicy, text, timestamp, foreignKey, unique, uuid, boolean, index, real, integer, uniqueIndex, vector, jsonb, primaryKey, pgEnum } from "drizzle-orm/pg-core"
+import { pgTable, pgPolicy, text, timestamp, foreignKey, unique, uuid, boolean, check, index, real, integer, uniqueIndex, vector, jsonb, primaryKey, pgEnum } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const interactionType = pgEnum("interaction_type", ['seen', 'open_detail', 'dismiss', 'favorite', 'save_to_playlist', 'read', 'not_interested', 'already_read'])
@@ -181,6 +181,7 @@ export const recommendations = pgTable("recommendations", {
 	paperId: uuid("paper_id").notNull(),
 	score: real().notNull(),
 	reason: text(),
+	candidateSource: text("candidate_source").$type<"semantic" | "catalog_fallback">(),
 	modelVersion: text("model_version"),
 	generatedAt: timestamp("generated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	seenAt: timestamp("seen_at", { withTimezone: true, mode: 'string' }),
@@ -197,6 +198,7 @@ export const recommendations = pgTable("recommendations", {
 			foreignColumns: [papers.id],
 			name: "recommendations_paper_id_fkey"
 		}).onDelete("cascade"),
+	check("recommendations_candidate_source_check", sql`${table.candidateSource} is null or ${table.candidateSource} in ('semantic', 'catalog_fallback')`),
 	unique("recommendations_owner_id_paper_id_generated_at_key").on(table.ownerId, table.paperId, table.generatedAt),
 	pgPolicy("recommendations_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
 ]);
