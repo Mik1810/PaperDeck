@@ -375,8 +375,8 @@ export async function deleteResearchGroup(
   });
 }
 
-// Runs the deterministic group-domain account-closure routine.
-// The Clerk webhook is intentionally not wired until Development verification.
+// Runs the lower-level deterministic group-domain account-closure routine.
+// The Clerk webhook uses an atomic RPC wrapper that also removes the identity.
 /** @admin */
 export async function handleResearchGroupAccountClosure(ownerId: string) {
   requireOwnerId(ownerId, "handleResearchGroupAccountClosure");

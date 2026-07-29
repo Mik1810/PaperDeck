@@ -48,6 +48,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Discovery collaborativa: ricerca account tramite email esatta disattivata di default e attivabile esplicitamente; amicizie reciproche con cooldown di 30 giorni dopo un rifiuto e nessun social graph pubblico.
 - Ownership gruppi: successore scelto dall'owner, altrimenti admin attivo piu' anziano, poi membro attivo piu' anziano; gruppo eliminato solo se non esistono altri membri.
 - Fondazione gruppi: dominio `research_groups` separato dalle playlist private, membership come unica fonte dell'owner, ACL centralizzata e kill switch database-backed per letture/scritture.
+- Chiusura account Clerk: il webhook verificato usa una sola RPC service-role transazionale per completare successione/rimozione membership prima di eliminare l'identita' collaborativa; migrazione e gate sintetico sono verificati sul progetto Supabase condiviso, mentre il deployment dell'app Production resta un gate separato.
 - Notifiche collaborative: inbox durevole in-app con badge `99+`, menu degli ultimi 20 eventi, azioni inline e futura cronologia completa; eventi realtime accelerano la UI ma non sostituiscono Postgres.
 - Discussione nei gruppi: possibile chat interattiva collegata ai paper, da progettare separatamente prima di qualsiasi implementazione.
 - Tassonomia interessi: derivata dalle fonti disponibili, poi curata e normalizzata dentro l'app.

@@ -1,6 +1,7 @@
 import "server-only";
 
-import { verifyWebhook } from "@clerk/backend/webhooks";
+import { handleDeletedClerkUser } from "@/lib/clerk/user-deletion";
+import { verifyWebhook } from "@/lib/clerk/webhook-verification";
 import { emailLookupHash } from "@/lib/collaboration/email-lookup";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
@@ -29,14 +30,7 @@ export async function POST(request: Request) {
   const supabase = createServiceRoleClient();
 
   if (event.type === "user.deleted") {
-    const { error } = await supabase
-      .from("collaboration_identities")
-      .delete()
-      .eq("owner_id", ownerId);
-
-    return error
-      ? new Response("Identity sync failed", { status: 500 })
-      : new Response(null, { status: 204 });
+    return handleDeletedClerkUser(ownerId, supabase);
   }
 
   const primaryEmail = event.data.email_addresses.find(
