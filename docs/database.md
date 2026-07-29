@@ -120,16 +120,29 @@ only by `service_role` and transfers ownership to the selected active successor,
 otherwise the oldest active admin, then oldest active member, with `member_id`
 as a deterministic tie-break. A group is deleted only if nobody can succeed.
 
+The #107 migration adds `handle_clerk_user_deleted(owner_id)`, also executable
+only by `service_role`. One RPC invocation calls the group lifecycle routine and
+then deletes the matching `collaboration_identities` row in the same PostgreSQL
+transaction. A failure in either phase rolls back both; repeated or concurrent
+delivery performs the lifecycle work at most once and returns zero counts after
+completion. The function does not delete the Clerk user, profile, private
+playlists, notes, ranking signals, sessions, or tokens.
+
 The foundation is versioned in
 `supabase/migrations/20260729105307_add_private_research_groups.sql`, followed
 by the RLS optimization migration. Both were validated against an isolated
 PostgreSQL 17 cluster and applied to Supabase Development with read/write
-switches disabled. Production remains unchanged.
+switches disabled. The #107 lifecycle wrapper is also applied to Development:
+the locally signed synthetic webhook gate passed, exact fixture cleanup was
+verified, both switches remain disabled, and only `service_role` can execute
+the wrapper. Production remains unchanged.
 
-Development verification includes both the nine-case synthetic PostgreSQL suite
-and a real Clerk A/B JWT smoke. The live smoke temporarily exercises owner,
-outsider, member, and revoked access, then verifies zero group rows and restores
-both runtime switches to disabled.
+Development verification includes the nine-case synthetic PostgreSQL suite, a
+real Clerk A/B JWT smoke, and the synthetic account-deletion webhook gate. The
+live tests temporarily exercise owner, outsider, member, revoked, succession,
+owner-only deletion, unrelated membership removal, and duplicate-delivery
+behavior, then verify zero temporary rows and restore both runtime switches to
+disabled.
 
 ### Worker Tables
 

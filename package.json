@@ -30,6 +30,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
     "test:integration:clerk": "node --import tsx --test tests/integration/clerk-supabase-live.test.ts",
+    "test:integration:clerk-deletion": "node --conditions react-server --import tsx --test tests/integration/clerk-user-deletion-webhook-live.test.ts",
     "test:unit": "node --conditions react-server --import tsx --test tests/unit/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:clerk-cache": "playwright test --config=playwright.clerk-cache.config.ts",
@@ -65,6 +66,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "sharp": "^0.35.3",
+    "standardwebhooks": "1.0.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"

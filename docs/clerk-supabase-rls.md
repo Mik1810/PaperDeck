@@ -146,11 +146,22 @@ remove stale lookup hashes promptly when that address changes or disappears:
 3. Store its signing secret as `CLERK_WEBHOOK_SIGNING_SECRET`.
 
 The route verifies the webhook signature before using the service role. It
-never logs or persists the raw address, preserves user-selected names and
-preferences, and removes the collaboration identity when no verified primary
-email or safe public name remains. Onboarding and Settings also perform an
-authenticated lazy sync, so local development does not require a public webhook
-receiver.
+never logs or persists the raw address and preserves user-selected names and
+preferences. Created/updated events remove the collaboration identity when no
+verified primary email or safe public name remains. Onboarding and Settings
+also perform an authenticated lazy sync, so local development does not require
+a public webhook receiver.
+
+The #107 implementation sends `user.deleted` through one service-role-only
+RPC. PostgreSQL first performs deterministic research-group succession/removal
+and then deletes the collaboration identity in the same transaction. Duplicate
+delivery is a successful no-op; any RPC or transport error returns a generic
+`500` so Clerk retries. The route does not delete the Clerk account or revoke
+sessions because the event is emitted only after Clerk has already deleted the
+user. The migration and locally signed synthetic webhook gate passed in
+Development with exact fixture cleanup, disabled group switches, and
+service-role-only execution. Production remains a separate approval gate, and
+the route change must not reach it before all prerequisite migrations.
 
 ## Files
 

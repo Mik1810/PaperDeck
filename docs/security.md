@@ -37,7 +37,15 @@ Every privileged server resource enforces authentication where data or mutations
 - Route Handlers authenticate before parsing or mutating request data;
 - every exported Server Action reaches the same resource-level guards;
 - the public Clerk webhook verifies its signature before using the service-role client;
+- the verified `user.deleted` path is designed as one service-role-only
+  PostgreSQL RPC so group succession and collaboration identity cleanup commit
+  or roll back together;
 - sign-in and sign-up are the only explicitly public pages.
+
+The #107 atomic deletion path must not be deployed before its database function
+exists in the target environment. Clerk retries `4xx`/`5xx` webhook responses,
+so the RPC is idempotent and failures return a generic `500` without logging
+owner identifiers, email addresses, hashes, payloads, tokens, or secrets.
 
 `tests/unit/auth-resource-protection.test.ts` discovers pages, Route Handlers, and Server Actions and fails when a new server resource lacks a guard. This complements runtime anonymous/authenticated browser checks and avoids relying on URL-pattern authorization, which cannot protect Server Actions invoked by ID.
 
