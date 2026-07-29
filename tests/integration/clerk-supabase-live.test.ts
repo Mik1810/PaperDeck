@@ -1,17 +1,23 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { createClerkClient } from "@clerk/backend";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
+import postgres, { type Sql } from "postgres";
 
 loadEnvConfig(process.cwd());
 
 const clerkSecretKey = process.env.CLERK_SECRET_KEY;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const databaseUrl = process.env.DATABASE_URL;
 const emailA = process.env.PAPERDECK_RLS_USER_A_EMAIL;
 const emailB = process.env.PAPERDECK_RLS_USER_B_EMAIL;
-const run = clerkSecretKey && supabaseUrl && supabaseAnonKey ? test : test.skip;
+const run =
+  clerkSecretKey && supabaseUrl && supabaseAnonKey && databaseUrl
+    ? test
+    : test.skip;
 
 type SessionClaims = {
   exp?: number;
@@ -64,6 +70,11 @@ run("two real Clerk sessions are isolated by Supabase RLS", async () => {
   assert.notEqual(emailA, emailB, "The two test emails must be different");
   const clerk = createClerkClient({ secretKey: clerkSecretKey });
   const sessions: string[] = [];
+  let sql: Sql | undefined;
+  let groupId: string | undefined;
+  let originalSettings:
+    | { reads_enabled: boolean; writes_enabled: boolean }
+    | undefined;
 
   try {
     const { data: users } = await clerk.users.getUserList({
@@ -93,6 +104,47 @@ run("two real Clerk sessions are isolated by Supabase RLS", async () => {
     const ownerB = requireFreshIdentity(tokenB.jwt, "User B");
     assert.notEqual(ownerA, ownerB, "The two Clerk users must be different");
 
+    assert.ok(databaseUrl);
+    sql = postgres(databaseUrl, { max: 1 });
+    const settings = await sql<{
+      reads_enabled: boolean;
+      writes_enabled: boolean;
+    }[]>`
+      select reads_enabled, writes_enabled
+      from private.research_group_runtime_settings
+      where singleton
+    `;
+    assert.equal(settings.length, 1, "Research-group runtime settings are missing");
+    originalSettings = settings[0];
+    assert.equal(
+      originalSettings.reads_enabled,
+      false,
+      "Refusing to run while research-group reads are already enabled",
+    );
+    assert.equal(
+      originalSettings.writes_enabled,
+      false,
+      "Refusing to run while research-group writes are already enabled",
+    );
+    await sql`
+      update private.research_group_runtime_settings
+      set reads_enabled = true, writes_enabled = true, updated_at = now()
+      where singleton
+    `;
+
+    groupId = await sql.begin(async (transaction) => {
+      const [group] = await transaction<{ id: string }[]>`
+        insert into research_groups (name)
+        values (${`Clerk RLS ${randomUUID()}`})
+        returning id
+      `;
+      await transaction`
+        insert into research_group_members (group_id, member_id, role)
+        values (${group.id}::uuid, ${ownerA}, 'owner')
+      `;
+      return group.id;
+    });
+
     const clientA = authenticatedClient(tokenA.jwt);
     const clientB = authenticatedClient(tokenB.jwt);
     const [viewA, viewB] = await Promise.all([
@@ -121,17 +173,127 @@ run("two real Clerk sessions are isolated by Supabase RLS", async () => {
 
     assert.ifError(crossUpdate.error);
     assert.deepEqual(crossUpdate.data, []);
+
+    const [groupForOwner, groupForOutsider] = await Promise.all([
+      clientA
+        .from("research_groups")
+        .select("id")
+        .eq("id", groupId),
+      clientB
+        .from("research_groups")
+        .select("id")
+        .eq("id", groupId),
+    ]);
+    assert.ifError(groupForOwner.error);
+    assert.ifError(groupForOutsider.error);
+    assert.deepEqual(groupForOwner.data, [{ id: groupId }]);
+    assert.deepEqual(groupForOutsider.data, []);
+
+    await sql`
+      insert into research_group_members (group_id, member_id, role)
+      values (${groupId}::uuid, ${ownerB}, 'member')
+    `;
+
+    const [groupForMember, ownerMembership, memberMembership] =
+      await Promise.all([
+        clientB
+          .from("research_groups")
+          .select("id")
+          .eq("id", groupId),
+        clientA
+          .from("research_group_members")
+          .select("member_id, role")
+          .eq("group_id", groupId),
+        clientB
+          .from("research_group_members")
+          .select("member_id, role")
+          .eq("group_id", groupId),
+      ]);
+    assert.ifError(groupForMember.error);
+    assert.ifError(ownerMembership.error);
+    assert.ifError(memberMembership.error);
+    assert.deepEqual(groupForMember.data, [{ id: groupId }]);
+    assert.deepEqual(ownerMembership.data, [
+      { member_id: ownerA, role: "owner" },
+    ]);
+    assert.deepEqual(memberMembership.data, [
+      { member_id: ownerB, role: "member" },
+    ]);
+
+    const [directGroupWrite, directMembershipWrite] = await Promise.all([
+      clientA
+        .from("research_groups")
+        .update({ name: "Forbidden direct write" })
+        .eq("id", groupId),
+      clientB.from("research_group_members").insert({
+        group_id: groupId,
+        member_id: ownerB,
+        role: "admin",
+      }),
+    ]);
+    assert.equal(directGroupWrite.error?.code, "42501");
+    assert.equal(directMembershipWrite.error?.code, "42501");
+
+    await sql`
+      update research_group_members
+      set revoked_at = now(), updated_at = now()
+      where group_id = ${groupId}::uuid and member_id = ${ownerB}
+    `;
+
+    const [groupAfterRevocation, membershipAfterRevocation] =
+      await Promise.all([
+        clientB
+          .from("research_groups")
+          .select("id")
+          .eq("id", groupId),
+        clientB
+          .from("research_group_members")
+          .select("member_id")
+          .eq("group_id", groupId),
+      ]);
+    assert.ifError(groupAfterRevocation.error);
+    assert.ifError(membershipAfterRevocation.error);
+    assert.deepEqual(groupAfterRevocation.data, []);
+    assert.deepEqual(membershipAfterRevocation.data, []);
   } finally {
-    const revocations = await Promise.allSettled(
-      sessions.map((sessionId) => clerk.sessions.revokeSession(sessionId)),
+    const cleanupTasks: Promise<unknown>[] = sessions.map((sessionId) =>
+      clerk.sessions.revokeSession(sessionId),
     );
-    const failures = revocations.filter(
+    cleanupTasks.push(
+      (async () => {
+        if (!sql) return;
+
+        try {
+          if (groupId) {
+            await sql`
+              delete from research_groups
+              where id = ${groupId}::uuid
+            `;
+          }
+          if (originalSettings) {
+            await sql`
+              update private.research_group_runtime_settings
+              set
+                reads_enabled = ${originalSettings.reads_enabled},
+                writes_enabled = ${originalSettings.writes_enabled},
+                updated_at = now()
+              where singleton
+            `;
+          }
+        } finally {
+          await sql.end();
+        }
+      })(),
+    );
+
+    const cleanupResults = await Promise.allSettled(cleanupTasks);
+    const failures = cleanupResults.filter(
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
     assert.equal(
       failures.length,
       0,
-      `Failed to revoke ${failures.length} temporary Clerk session(s)`,
+      `Failed ${failures.length} Clerk session or database cleanup task(s)`,
     );
   }
 });

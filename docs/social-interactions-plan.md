@@ -124,7 +124,7 @@ Oggi i dati user-scoped passano dal server con controlli di ownership applicativ
 
 Prima di una beta invite-only:
 
-1. Creare un evaluator centrale, ad esempio `requireCollectionPermission(actorOwnerId, collectionId, role)`. Ogni read e write deve chiamarlo; conoscere un UUID non concede accesso.
+1. Usare l'evaluator centrale `requireResearchGroupPermission(actorOwnerId, groupId, minimumRole, operation)`. Ogni read e write deve chiamarlo; conoscere un UUID non concede accesso.
 2. Attivare e testare Clerk JWT + RLS almeno per le nuove tabelle cross-user; il controllo server-side resta una seconda difesa.
 3. Aggiungere una matrice di route: pubblico, autenticato, invito, amministrativo. Le route nuove non diventano accessibili per omissione dal proxy.
 4. Introdurre feature flag e kill switch per share, inviti, pubblicazione e commenti. Il rollback deve poter revocare inviti e rimettere le collection in stato privato.
@@ -143,7 +143,7 @@ Prima di una beta invite-only:
 | Privato utente | feed, impression, interessi, favorite, `Read later`, note, embedding | mai leggibile da altri utenti |
 | Collaborazione | collection, membership, inviti, item condivisi, attivita' | accessibile soltanto secondo un ACL esplicito |
 
-Non estendere silenziosamente le attuali `playlists` private. Sono owner-only nel modello e nelle policy; aggiungere una sola colonna `visibility` rischia di esporre playlist, note o semantiche private. La prima collaborazione usa un dominio separato `shared_collections`, riusando soltanto i pattern UI e di ordinamento gia' affidabili.
+Non estendere silenziosamente le attuali `playlists` private. Sono owner-only nel modello e nelle policy; aggiungere una sola colonna `visibility` rischia di esporre playlist, note o semantiche private. La prima collaborazione usa il dominio separato `research_groups`, riusando soltanto i pattern UI e di ordinamento gia' affidabili.
 
 ### Identita' collaborative e pubbliche
 
@@ -172,8 +172,8 @@ Un member puo' copiare un paper nella **propria** libreria con un'azione esplici
 | --- | --- | --- |
 | Share | nessuno | tutto client-side, nessuna analytics persistita |
 | Follow privati | `topic_subscriptions` | `(owner_id, topic_id)` come chiave; non riusare `user_interests` |
-| Collaboration | `collaboration_identities`, `shared_collections`, `shared_collection_members`, `shared_collection_invites`, `shared_collection_items`, `shared_collection_activity` | UUID pubblico, discovery HMAC, ACL, ruoli, token hashati, revision e audit minimale |
-| Discussione | `shared_collection_comments`, `content_reports`, `user_blocks` | plain text, limiti, stati di moderazione |
+| Collaboration | `collaboration_identities`, `research_groups`, `research_group_members`, `research_group_invites`, `research_group_items`, `research_group_activity` | UUID pubblico, discovery HMAC, ACL, ruoli, token hashati, revision e audit minimale |
+| Discussione | `research_group_comments`, `content_reports`, `user_blocks` | plain text, limiti, stati di moderazione |
 | Pubblico | `public_profiles`, `public_collection_publications`, `privacy_consents` | consenso/versione, handle e pubblicazione selettiva |
 | Operativita' | `moderation_cases`, `moderation_actions`, `security_audit_events`, `export_jobs`, `deletion_jobs` | lifecycle, audit, export e delete verificabili |
 
@@ -187,7 +187,7 @@ flowchart TD
   B --> C[ACL, RLS, privacy e operativita']
   B --> D[Share metadati]
   C --> E[Follow privati di topic]
-  C --> F[Fondazione shared collections]
+  C --> F[Fondazione research groups]
   F --> G[Beta collection invite-only]
   G --> H[Commenti e activity di gruppo]
   H --> I[Unlisted read-only]
@@ -229,21 +229,20 @@ Questo non e' ancora un follow tra persone. Serve a dire "voglio tenere sotto co
 
 **Gate di uscita:** il follow e' un'intenzione privata chiaramente distinguibile dagli interessi di personalizzazione.
 
-### F — Fondazione delle collection condivise
+### F — Fondazione dei gruppi di ricerca privati
 
 Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 
-**Migration proposta:**
+**Fondazione #95:**
 
-- `shared_collections`: `id`, `owner_id`, `title`, `description` plain text, `state` (`invite_only`, poi `unlisted`/`public`), `revision`, timestamp e lifecycle;
-- `shared_collection_members`: collection, membro, ruolo, invitante, join e revoca; indici per collection e membro attivo;
-- `shared_collection_invites`: ruolo richiesto, digest HMAC/SHA-256 di token casuale, scadenza, singolo uso, creatore, accettazione e revoca. Il token raw non entra mai nel database, nei log o nelle analytics;
-- `shared_collection_items`: collection, paper, posizione, `added_by`, data;
-- `shared_collection_activity`: eventi append-only minimi (invito, join, aggiunta, rimozione, riordino, revoca), senza copiare note private o body di commenti.
+- `research_groups`: nome, descrizione plain text, stato `active`/`archived`, successore selezionato, `revision`, timestamp e lifecycle;
+- `research_group_members`: gruppo, membro, ruolo, join e revoca; un solo owner attivo e indici per ACL e successione;
+- `private.research_group_runtime_settings`: kill switch separati per letture e scritture, entrambi disattivati di default;
+- `research_group_invites`, `research_group_items` e `research_group_activity` restano nelle issue successive. I token invito raw non entreranno mai nel database, nei log o nelle analytics.
 
 **API e autorizzazione:**
 
-- `requireCollectionPermission(actorOwnerId, collectionId, minimumRole)` e helper di query che non restituiscono dati prima dell'autorizzazione;
+- `requireResearchGroupPermission(actorOwnerId, groupId, minimumRole, operation)` e helper di query che non restituiscono dati prima dell'autorizzazione;
 - owner crea/revoca inviti, cambia ruoli, rimuove membri e cancella collection;
 - admin crea/revoca inviti, rimuove membri e gestisce la lista, ma non trasferisce ownership o cancella il gruppo;
 - member legge, aggiunge/rimuove paper e copia un paper nella propria libreria, ma non gestisce persone, ruoli o lifecycle;
@@ -251,7 +250,7 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 - l'accettazione e' una `POST` autenticata e transazionale; landing e hand-off di login sono `no-store` con `Referrer-Policy: no-referrer`;
 - UUID o URL non rappresentano autorizzazione: una risorsa non accessibile risponde come non trovata.
 
-**Concorrenza e rollback:** lock transazionali su collection/invito/membership; `revision`/expected revision per il riordino; conflitto `409` con dati freschi, non last-write-wins; kill switch che blocca nuovi inviti e revoca accessi; nessuna migrazione automatica di playlist esistenti, soprattutto `Read later`.
+**Concorrenza e rollback:** le rare chiusure account sono serializzate da un advisory lock dedicato; ogni chiusura ordina e blocca i gruppi in modo deterministico e mantiene la transazione breve. Questo evita di promuovere in modo permanente un successore che viene chiuso nello stesso momento. Le operazioni future useranno lock su gruppo/invito/membership e `revision`/expected revision per il riordino; conflitto `409` con dati freschi, non last-write-wins. Il kill switch blocca letture e scritture; nessuna migrazione automatica di playlist esistenti, soprattutto `Read later`.
 
 **Gate di uscita:** ACL centrale, RLS delle nuove tabelle e test cross-user superati prima di mostrare una collection a un utente esterno all'owner.
 
@@ -287,7 +286,7 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 
 Solo dopo un pilot sano, aggiungere discussione limitata alla collection.
 
-- `shared_collection_comments` separata da `paper_notes`;
+- `research_group_comments` separata da `paper_notes`;
 - commento plain text, lunghezza limitata, opzionalmente legato a un paper;
 - autore modifica/elimina il proprio contenuto; owner puo' nascondere o rimuovere contenuto nel proprio gruppo;
 - activity log e inbox in-app; niente email/push, mention, thread profondi, allegati o HTML nella prima iterazione;
@@ -414,7 +413,7 @@ Queste issue non vengono create automaticamente con questo documento. Dopo appro
 2. `Social interaction charter: audience, privacy matrix and threat model`.
 3. `Share a paper metadata and canonical external link`.
 4. `Private topic subscriptions without ranking side effects`.
-5. `Collaboration ACL and Clerk JWT/RLS gate for shared collections`.
+5. `Collaboration ACL and Clerk JWT/RLS gate for research groups`.
 6. `Shared collections schema, invitations and cross-user authorization tests`.
 7. `Invite-only shared collection UI and pilot rollout`.
 8. `Shared comments, activity and in-app inbox`.

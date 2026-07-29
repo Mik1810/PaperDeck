@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
+import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
 
 export const playlistsRelations = relations(playlists, ({one, many}) => ({
 	profile: one(profiles, {
@@ -34,6 +34,8 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	friendshipsHigh: many(friendships, { relationName: "friendships_high" }),
 	blocksCreated: many(userBlocks, { relationName: "userBlocks_blocker" }),
 	blocksReceived: many(userBlocks, { relationName: "userBlocks_blocked" }),
+	researchGroupMemberships: many(researchGroupMembers),
+	selectedSuccessorForGroups: many(researchGroups),
 	playlists: many(playlists),
 	recommendationImpressions: many(recommendationImpressions),
 	userPaperInteractions: many(userPaperInteractions),
@@ -59,6 +61,25 @@ export const friendshipsRelations = relations(friendships, ({one}) => ({
 export const userBlocksRelations = relations(userBlocks, ({one}) => ({
 	blocker: one(profiles, { fields: [userBlocks.blockerId], references: [profiles.ownerId], relationName: "userBlocks_blocker" }),
 	blocked: one(profiles, { fields: [userBlocks.blockedId], references: [profiles.ownerId], relationName: "userBlocks_blocked" }),
+}));
+
+export const researchGroupsRelations = relations(researchGroups, ({one, many}) => ({
+	selectedSuccessor: one(profiles, {
+		fields: [researchGroups.selectedSuccessorId],
+		references: [profiles.ownerId]
+	}),
+	memberships: many(researchGroupMembers),
+}));
+
+export const researchGroupMembersRelations = relations(researchGroupMembers, ({one}) => ({
+	group: one(researchGroups, {
+		fields: [researchGroupMembers.groupId],
+		references: [researchGroups.id]
+	}),
+	profile: one(profiles, {
+		fields: [researchGroupMembers.memberId],
+		references: [profiles.ownerId]
+	}),
 }));
 
 export const collaborationIdentitiesRelations = relations(collaborationIdentities, ({one}) => ({

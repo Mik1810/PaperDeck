@@ -17,6 +17,8 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Added the #95 private research-group foundation: separate group and membership tables, owner/admin/member ACL, private database-backed read/write switches, RLS self-membership isolation, deterministic transactional ownership succession, safe public member projections, and negative PostgreSQL integration coverage. The migrations are applied to Development with both switches disabled; Production remains unchanged.
+- Extended the live Clerk/Supabase integration smoke with a temporary private group, proving real-JWT owner, outsider, member, and revoked behavior plus self-only raw membership reads, direct-write denial, verified database cleanup, flag restoration, and temporary-session revocation.
 - Added a source-discovered authentication inventory test that rejects new unguarded App Router pages, Route Handlers, and Server Actions while requiring signature verification for the public Clerk webhook.
 - Added an opt-in Clerk Development shared-device cache smoke that signs in as test user A, creates a temporary private marker, signs out, signs in as B, proves HTML/RSC/API/history/Cache Storage isolation, and verifies exact playlist/session cleanup.
 - Added a no-write inference mode for evaluating local llama.cpp/Unsloth triage summaries before updating Supabase, with strict structured output, source-grounding validation, and a bounded plain-English retry for model-generated equations.

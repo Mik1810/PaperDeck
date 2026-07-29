@@ -35,6 +35,9 @@ Current implementation:
 - `src/lib/repositories/user-data.ts` persists profiles, interests, favorites, default `Read later`, playlist items, Read later toggles, and user-paper interactions via Drizzle.
 - `src/lib/ranking/feed-ranking.ts` computes the current MVP feed ranking from selected topics, recent user feedback, and seen-paper penalties.
 - `src/app/actions.ts` exposes server actions for onboarding and paper interactions.
+- `research_groups` and `research_group_members` form a separate private
+  collaboration domain. Their repository uses one centralized owner/admin/member
+  permission evaluator before returning data or mutating rows.
 
 The service-role key remains server-only and must never be imported into client components.
 
@@ -97,6 +100,36 @@ These tables contain or derive ownership from `owner_id`.
 - `topic_embeddings`
 
 These are shared paper and topic catalog data. Authenticated users can read them once Clerk JWT integration is active.
+
+### Private Research-Group Tables
+
+- `research_groups`
+- `research_group_members`
+
+Membership is the single ownership source: each group must have exactly one
+active `owner`. A selected successor must be an active non-owner member.
+Authenticated Data API clients receive group rows only through RLS and can read
+only their own raw membership row; they have no direct write grants. Server-side
+member lists project public collaboration UUID, display name, image, role, and
+join date without returning Clerk IDs, emails, or HMAC values.
+
+`private.research_group_runtime_settings` holds independent read and write
+switches, both disabled by default. The private schema is not exposed through
+the Data API. `handle_research_group_account_closure(owner_id)` is executable
+only by `service_role` and transfers ownership to the selected active successor,
+otherwise the oldest active admin, then oldest active member, with `member_id`
+as a deterministic tie-break. A group is deleted only if nobody can succeed.
+
+The foundation is versioned in
+`supabase/migrations/20260729105307_add_private_research_groups.sql`, followed
+by the RLS optimization migration. Both were validated against an isolated
+PostgreSQL 17 cluster and applied to Supabase Development with read/write
+switches disabled. Production remains unchanged.
+
+Development verification includes both the nine-case synthetic PostgreSQL suite
+and a real Clerk A/B JWT smoke. The live smoke temporarily exercises owner,
+outsider, member, and revoked access, then verifies zero group rows and restores
+both runtime switches to disabled.
 
 ### Worker Tables
 
