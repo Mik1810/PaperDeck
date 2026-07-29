@@ -1,6 +1,44 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("PWA cache policy", () => {
+  test("does not announce the first service worker install as an update", async ({
+    context,
+    page,
+  }) => {
+    await page.goto("/offline.html");
+    await page.evaluate(async () => {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(
+        registrations.map((registration) => registration.unregister()),
+      );
+
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+    });
+    await page.close();
+
+    const firstVisit = await context.newPage();
+    await firstVisit.setViewportSize({ width: 390, height: 844 });
+    await firstVisit.goto("/feed", { waitUntil: "domcontentloaded" });
+
+    await expect
+      .poll(() =>
+        firstVisit.evaluate(async () => {
+          const registrations =
+            await navigator.serviceWorker.getRegistrations();
+          return (
+            registrations.length === 1 &&
+            Boolean(navigator.serviceWorker.controller)
+          );
+        }),
+      )
+      .toBe(true);
+
+    await expect(
+      firstVisit.getByRole("region", { name: "App update" }),
+    ).toHaveCount(0);
+  });
+
   test("keeps authenticated navigations out of Cache Storage", async ({
     context,
     page,

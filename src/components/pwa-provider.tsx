@@ -28,11 +28,16 @@ export function PwaProvider() {
       setUpdateReady(true);
     }
 
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
+    function handleControllerChange() {
       if (updateDetected) {
         showUpdate();
       }
-    });
+    }
+
+    navigator.serviceWorker.addEventListener(
+      "controllerchange",
+      handleControllerChange,
+    );
 
     navigator.serviceWorker
       .register("/sw.js", { scope: "/" })
@@ -40,18 +45,20 @@ export function PwaProvider() {
         if (cancelled) return;
 
         if (registration.waiting) {
-          showUpdate();
+          if (navigator.serviceWorker.controller) {
+            showUpdate();
+          }
           return;
         }
 
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           if (!worker) return;
-          updateDetected = true;
+          updateDetected = Boolean(navigator.serviceWorker.controller);
 
           worker.addEventListener("statechange", () => {
             if (worker.state === "installed") {
-              if (navigator.serviceWorker.controller) {
+              if (updateDetected && navigator.serviceWorker.controller) {
                 showUpdate();
               }
             }
@@ -64,6 +71,10 @@ export function PwaProvider() {
 
     return () => {
       cancelled = true;
+      navigator.serviceWorker.removeEventListener(
+        "controllerchange",
+        handleControllerChange,
+      );
     };
   }, []);
 
