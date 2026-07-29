@@ -137,7 +137,7 @@ also used by Vercel Production; there is no separate Production database. The
 #107 lifecycle wrapper is applied there: the locally signed synthetic webhook
 gate passed, exact fixture cleanup was verified, both switches remain disabled,
 and only `service_role` can execute the wrapper. The Production application
-remains unchanged until its separately approved deployment.
+deploys the matching verified Clerk deletion handler.
 
 Development verification includes the nine-case synthetic PostgreSQL suite, a
 real Clerk A/B JWT smoke, and the synthetic account-deletion webhook gate. The

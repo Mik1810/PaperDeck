@@ -160,9 +160,9 @@ delivery is a successful no-op; any RPC or transport error returns a generic
 sessions because the event is emitted only after Clerk has already deleted the
 user. The migration and locally signed synthetic webhook gate passed on the
 shared PaperDeck Supabase project with exact fixture cleanup, disabled group
-switches, and service-role-only execution. The Production application
-deployment remains a separate approval gate; its database prerequisite is
-already satisfied.
+switches, and service-role-only execution. The matching application handler is
+deployed in Production; an unsigned-request smoke and runtime error scan passed
+after deployment.
 
 ## Files
 
