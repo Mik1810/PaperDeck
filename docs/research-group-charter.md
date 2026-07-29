@@ -2,6 +2,12 @@
 
 Status: approved on 2026-07-18 for the initial invite-only pilot.
 
+Implementation status: the local #95 foundation defines `research_groups`,
+`research_group_members`, centralized ACL checks, private database-backed
+read/write switches, and deterministic account-closure succession. The
+migration defaults both switches to disabled and is applied to Development.
+Production remains unchanged.
+
 ## Product boundary
 
 PaperDeck may help small private research groups maintain one shared paper list.
@@ -70,11 +76,19 @@ Shared papers remain with a surviving group. Any retained provenance is detached
 from the closed account and displayed generically as `Former member`. No private
 profile, email, Clerk identifier, or ranking data survives through that label.
 
+The #95 database routine currently owns only the research-group part of this
+sequence. Wiring it into the Clerk deletion webhook and implementing complete
+PaperDeck account erasure remain explicit release work; neither is implied by
+the schema migration.
+
 ## Operational ownership
 
 The project maintainer owns privacy requests, abuse reports, and security
 incidents during the pilot. The maintainer may disable collaboration immediately
-through the feature flag or kill switch. Operational notes containing personal
+through two database-backed switches: reads and writes. Both default to off.
+Disabling reads makes groups unavailable through RLS; disabling writes blocks
+server-side group mutations while account-closure cleanup remains available.
+Operational notes containing personal
 or incident-sensitive information stay in a private operations log, not the
 repository or GitHub issues.
 

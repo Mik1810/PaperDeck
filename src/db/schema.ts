@@ -1,4 +1,4 @@
-import { pgTable, pgPolicy, text, timestamp, foreignKey, unique, uuid, boolean, check, index, real, integer, uniqueIndex, vector, jsonb, primaryKey, pgEnum } from "drizzle-orm/pg-core"
+import { pgTable, pgPolicy, text, timestamp, foreignKey, unique, uuid, boolean, check, index, real, integer, uniqueIndex, vector, jsonb, primaryKey, pgEnum, bigint } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const interactionType = pgEnum("interaction_type", ['seen', 'open_detail', 'dismiss', 'favorite', 'save_to_playlist', 'read', 'not_interested', 'already_read'])
@@ -6,6 +6,8 @@ export const paperAccess = pgEnum("paper_access", ['open', 'publisher', 'unknown
 export const paperSource = pgEnum("paper_source", ['arxiv', 'semantic_scholar', 'openalex', 'dblp', 'crossref', 'manual'])
 export const groupInvitePolicy = pgEnum("group_invite_policy", ['nobody', 'friends_only', 'anyone'])
 export const friendRequestStatus = pgEnum("friend_request_status", ['pending', 'accepted', 'declined', 'cancelled'])
+export const researchGroupRole = pgEnum("research_group_role", ['owner', 'admin', 'member'])
+export const researchGroupState = pgEnum("research_group_state", ['active', 'archived'])
 
 
 export const profiles = pgTable("profiles", {
@@ -97,6 +99,57 @@ export const userBlocks = pgTable("user_blocks", {
 	primaryKey({ columns: [table.blockerId, table.blockedId], name: "user_blocks_pkey" }),
 	index("user_blocks_blocked_idx").on(table.blockedId),
 	pgPolicy("user_blocks_blocker_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(blocker_id = (auth.jwt() ->> 'sub'::text))` }),
+]);
+
+export const researchGroups = pgTable("research_groups", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	name: text().notNull(),
+	description: text(),
+	state: researchGroupState().default('active').notNull(),
+	selectedSuccessorId: text("selected_successor_id"),
+	revision: bigint({ mode: "number" }).default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	archivedAt: timestamp("archived_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	foreignKey({
+		columns: [table.selectedSuccessorId],
+		foreignColumns: [profiles.ownerId],
+		name: "research_groups_selected_successor_id_fkey"
+	}).onDelete("set null"),
+	index("research_groups_selected_successor_idx").on(table.selectedSuccessorId).where(sql`${table.selectedSuccessorId} is not null`),
+	check("research_groups_name_check", sql`char_length(btrim(${table.name})) between 2 and 80`),
+	check("research_groups_description_check", sql`${table.description} is null or char_length(${table.description}) <= 500`),
+	check("research_groups_revision_check", sql`${table.revision} > 0`),
+	check("research_groups_archive_state_check", sql`(${table.state} = 'active' and ${table.archivedAt} is null) or (${table.state} = 'archived' and ${table.archivedAt} is not null)`),
+	pgPolicy("research_groups_active_member_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`${table.state} = 'active' and (select private.research_groups_reads_enabled()) and (select private.research_group_is_active_member(${table.id}))` }),
+]);
+
+export const researchGroupMembers = pgTable("research_group_members", {
+	groupId: uuid("group_id").notNull(),
+	memberId: text("member_id").notNull(),
+	role: researchGroupRole().notNull(),
+	joinedAt: timestamp("joined_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	revokedAt: timestamp("revoked_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	foreignKey({
+		columns: [table.groupId],
+		foreignColumns: [researchGroups.id],
+		name: "research_group_members_group_id_fkey"
+	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.memberId],
+		foreignColumns: [profiles.ownerId],
+		name: "research_group_members_member_id_fkey"
+	}).onDelete("cascade"),
+	primaryKey({ columns: [table.groupId, table.memberId], name: "research_group_members_pkey" }),
+	uniqueIndex("research_group_one_active_owner_idx").on(table.groupId).where(sql`${table.role} = 'owner' and ${table.revokedAt} is null`),
+	index("research_group_members_active_member_idx").on(table.memberId, table.groupId).where(sql`${table.revokedAt} is null`),
+	index("research_group_members_member_fk_idx").on(table.memberId),
+	index("research_group_members_succession_idx").on(table.groupId, table.role, table.joinedAt, table.memberId).where(sql`${table.revokedAt} is null`),
+	check("research_group_members_owner_active_check", sql`${table.role} <> 'owner' or ${table.revokedAt} is null`),
+	pgPolicy("research_group_members_self_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`${table.memberId} = (select auth.jwt() ->> 'sub') and ${table.revokedAt} is null and (select private.research_groups_reads_enabled())` }),
 ]);
 
 export const playlists = pgTable("playlists", {
