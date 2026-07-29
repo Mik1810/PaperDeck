@@ -65,9 +65,30 @@
 - Updated GitHub issue #107 with the Development evidence and left it open for
   the separate Production approval gate.
 
-## Pending Production gate
+## Shared database Production preflight
 
-- Keep the implementation unmerged until a separate Production decision.
-- Production first needs the two #95 migrations and the #107 wrapper migration,
-  in order, followed by privilege and disabled-flag verification before the
-  webhook code can be deployed.
+- Supabase account discovery found one PaperDeck project, the same project used
+  for the Development validation and recorded during credential recovery as the
+  Vercel Production pooler target.
+- The shared database contains existing application profiles and collaboration
+  identities, confirming it is not an isolated disposable Development store.
+- All three #95/#107 migrations were already registered, so no migration was
+  re-applied and no DDL or application data was changed during this preflight.
+- Verified zero research groups and memberships, disabled read/write switches,
+  RLS on both group tables, `SECURITY INVOKER`, a fixed search path, and
+  `service_role`-only execution for the Clerk deletion wrapper.
+- Re-ran Supabase security and performance advisors. No #107-specific finding
+  was reported; existing project-wide findings remain separate work.
+- The local Vercel CLI was unavailable, so the current Production environment
+  value could not be re-read live. Repository recovery evidence and the
+  single-project Supabase topology support the shared-database conclusion
+  without exposing any environment value.
+
+## Pending Production application gate
+
+- Keep the implementation unmerged until a separate Production deployment
+  decision.
+- The database prerequisite is satisfied. The remaining gate is to merge and
+  deploy the webhook code, verify that unsigned requests are rejected, inspect
+  deployment/runtime health, and close issue #107 only after the post-deploy
+  checks pass.

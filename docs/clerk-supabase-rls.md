@@ -158,10 +158,11 @@ and then deletes the collaboration identity in the same transaction. Duplicate
 delivery is a successful no-op; any RPC or transport error returns a generic
 `500` so Clerk retries. The route does not delete the Clerk account or revoke
 sessions because the event is emitted only after Clerk has already deleted the
-user. The migration and locally signed synthetic webhook gate passed in
-Development with exact fixture cleanup, disabled group switches, and
-service-role-only execution. Production remains a separate approval gate, and
-the route change must not reach it before all prerequisite migrations.
+user. The migration and locally signed synthetic webhook gate passed on the
+shared PaperDeck Supabase project with exact fixture cleanup, disabled group
+switches, and service-role-only execution. The Production application
+deployment remains a separate approval gate; its database prerequisite is
+already satisfied.
 
 ## Files
 

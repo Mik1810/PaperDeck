@@ -131,11 +131,13 @@ playlists, notes, ranking signals, sessions, or tokens.
 The foundation is versioned in
 `supabase/migrations/20260729105307_add_private_research_groups.sql`, followed
 by the RLS optimization migration. Both were validated against an isolated
-PostgreSQL 17 cluster and applied to Supabase Development with read/write
-switches disabled. The #107 lifecycle wrapper is also applied to Development:
-the locally signed synthetic webhook gate passed, exact fixture cleanup was
-verified, both switches remain disabled, and only `service_role` can execute
-the wrapper. Production remains unchanged.
+PostgreSQL 17 cluster and applied during Development validation to the shared
+PaperDeck Supabase project with read/write switches disabled. This project is
+also used by Vercel Production; there is no separate Production database. The
+#107 lifecycle wrapper is applied there: the locally signed synthetic webhook
+gate passed, exact fixture cleanup was verified, both switches remain disabled,
+and only `service_role` can execute the wrapper. The Production application
+remains unchanged until its separately approved deployment.
 
 Development verification includes the nine-case synthetic PostgreSQL suite, a
 real Clerk A/B JWT smoke, and the synthetic account-deletion webhook gate. The
