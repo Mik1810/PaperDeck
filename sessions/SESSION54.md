@@ -30,4 +30,8 @@
   `application/json` for the new response-format enum, so zero summaries were
   written.
 - Corrected the REST value to `APPLICATION_JSON`, as required by the Gemini
-  Generate Content API. The corrected probe is pending.
+  Generate Content API.
+- Published follow-up commit `ff7e907` and repeated the live probe on the same
+  three still-null targets. The workflow succeeded: 3 papers checked, 3
+  summaries generated and written, 0 failures, and 0 existing summaries
+  skipped.
