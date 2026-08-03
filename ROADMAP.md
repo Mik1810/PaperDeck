@@ -1060,8 +1060,9 @@ destinatario e cancellati dopo 90 giorni da un job a batch.
 Il primo rilascio non dipende da Realtime: refetch e polling preservano la
 correttezza dopo offline/reconnect. Il segnale privato Realtime e le preferenze
 `all`/`important_only`/`muted` appartengono alla UI #98; attivita' e aggregazione
-dei paper condivisi appartengono alla #99. La migrazione non e' ancora applicata
-al progetto Supabase condiviso.
+dei paper condivisi appartengono alla #99. La migrazione e' applicata al progetto
+Supabase condiviso; la retention schedulata resta disabilitata finche'
+`NOTIFICATION_RETENTION_ENABLED` non viene attivata dopo il dry run.
 
 ## Domande aperte
 

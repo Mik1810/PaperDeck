@@ -31,7 +31,9 @@ This project follows Semantic Versioning.
   server-only recipient-scoped repository; and count-only daily batched deletion
   after the fixed 90-day retention window. Realtime delivery and shared-paper
   aggregation remain deferred. Both incremental and standalone-schema local
-  PostgreSQL validation pass; the migration is not yet applied remotely.
+  PostgreSQL validation pass. The migration is applied to the shared Supabase
+  project with zero backfilled rows; structural checks and advisors passed, while
+  scheduled retention remains disabled pending its separate dry-run gate.
 
 - Added and deployed the #96 research-group invitation and membership lifecycle:
   service-role-only transactional RPCs enforce owner/admin/member hierarchy,

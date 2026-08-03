@@ -71,8 +71,8 @@
   cleanup.
 - The temporary container and its synthetic-only volume were deleted after the
   checks; port `54322` is free again.
-- The remote migration, retention workflow, and Realtime behavior remain
-  intentionally unexecuted pending review and explicit rollout approval.
+- The retention workflow and Realtime behavior remain intentionally unexecuted
+  pending their separate gates.
 
 ## Publishing
 
@@ -86,3 +86,26 @@
 - Confirmed `NOTIFICATION_RETENTION_ENABLED` is absent from repository
   variables, so scheduled cleanup remains disabled after merge until explicitly
   enabled.
+
+## Shared-database rollout
+
+- Squash-merged PR #115 to `main` as `0df8a69` after App CI and Vercel passed.
+- Ran read-only preflight against the healthy PaperDeck project in `eu-west-3`:
+  the five prerequisite migrations were recorded and all #97 objects were
+  absent.
+- Used a filtered temporary migration view because 17 older local files predate
+  the remote migration history. The final dry run proposed only
+  `20260803204843_add_durable_notifications.sql`; `--include-all` was never used.
+- Applied migration `20260803204843`. The CLI reported a local Docker `EIO`
+  after the remote commit, so it was not retried; migration history and object
+  inspection confirmed one successful application.
+- Remote read-only checks confirmed zero notification rows, RLS enabled, two
+  policies, ten validated constraints, three enabled triggers, authenticated
+  `SELECT`, update grants only on `read_at`/`archived_at`, and no authenticated
+  execution of the private enqueue/purge helpers.
+- Supabase security advisors reported no notification-specific finding.
+  Performance advisors reported only expected unused notification indexes while
+  the table is empty; unrelated pre-existing findings were left unchanged.
+- Removed the temporary rollout configuration and confirmed the retention
+  repository variable remains absent. No Clerk session or remote fixture was
+  created.
