@@ -9,23 +9,22 @@ This project follows Semantic Versioning.
 ### Changed
 
 - Split the live Clerk/Supabase smoke into a non-mutating profile-isolation
-  release gate and an explicit Development-only group lifecycle test, with
-  Development/Production key guards, masked evidence, and mandatory temporary-session
-  revocation.
+  check and an explicit group lifecycle test, both restricted to Clerk
+  Development test identities, with masked evidence and mandatory
+  temporary-session revocation.
+- Removed automated Clerk Production sign-in and session testing. The live RLS
+  harness now rejects Production targets, `sk_live_` keys, and ordinary user
+  addresses.
 - Split recommendation evaluation into an explicitly perfect synthetic sanity check and a harder blocking baseline with graded relevance, overlapping profiles, noisy semantic scores, feedback, seen papers, conflicting rank signals, worst-profile floors, and zero seen-paper leakage.
 - Migrated Clerk authorization from deprecated path matching in `src/proxy.ts` to resource-level guards on every privileged page, Route Handler, and Server Action while retaining Clerk request context, authorized-party validation, and cache policy.
 - Classified authenticated and personalized routes under an explicit private/no-store browser and CDN policy while leaving PWA static assets cacheable.
 - Made exact-email collaboration discovery opt-in for new and existing identities, with explicit Settings consent and regression coverage for the undiscoverable default.
 - Approved the private research-group charter, choosing exact-email discovery opt-in and defining roles, retention, account closure, threat controls, release stops, and research-user validation.
-- Clarified the Clerk/Supabase authorization boundary: Development isolation is
-  proven by deterministic and live A/B tests, while Production verification is
-  the collaboration release gate and Preview remains a normal deployment check.
+- Clarified the Clerk/Supabase authorization boundary: deterministic and live
+  A/B isolation tests use dedicated Clerk Development identities only.
 
 ### Added
 
-- Added a secret-safe Production Clerk RLS browser smoke that resolves two
-  approved masked identities, holds credentials only in memory, verifies
-  profile isolation, and revokes its temporary sessions.
 - Added and deployed the #96 research-group invitation and membership lifecycle:
   service-role-only transactional RPCs enforce owner/admin/member hierarchy,
   exact-email opt-in and invitation policy, friendship/block checks, seven-day

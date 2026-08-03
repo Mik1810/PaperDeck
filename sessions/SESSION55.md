@@ -63,29 +63,11 @@
 - No Production identity, session, or database row was created, modified, or
   deleted.
 
-## Production smoke wrapper
+## Superseded Production experiment
 
-- Added `npm run test:integration:clerk-production` so the approved Production
-  key and two masked user selectors can remain in `.env.local` rather than in a
-  long shell command.
-- The first implementation delegated to the Development live harness, but
-  Clerk Production rejected its Backend API `createSession` call before any
-  session, token, or Supabase request was created.
-- Replaced that incompatible path with Clerk's Production-supported Playwright
-  flow. It resolves each selector to exactly one user, signs both identities
-  into isolated ephemeral browser contexts with one-time tokens, keeps email
-  addresses and JWTs in memory only, verifies profile isolation, and revokes
-  every session created after the per-user baseline.
-- The first browser-wrapper execution stopped during read-only identity
-  resolution and created no session. A redacted retry passed against Production
-  for `user_3...bOGf` and `user_3...Gm0a`: each actor saw only its own profile,
-  the cross-owner update returned no rows, and both temporary sessions were
-  revoked (`2/2`). No persistent database mutation was made.
-
-## Validation
-
-- `npm run lint`
-- `npm run typecheck`
-- `node --import tsx --test tests/unit/clerk-supabase-live-support.test.ts`
-- `npm run test:integration:clerk-production`
-- `git diff --check`
+- A later Production browser experiment created and revoked two temporary
+  sessions and made no persistent database mutation. Its evidence was
+  invalidated after one selected identity was found not to be a dedicated test
+  account.
+- Session 56 removes that path and restricts every automated Clerk/Supabase
+  identity test to dedicated Development users.

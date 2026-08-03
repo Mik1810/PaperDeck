@@ -6,21 +6,16 @@ import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import postgres, { type Sql } from "postgres";
 import {
-  hasInjectedRlsTargetEnvironment,
   maskIdentifier,
   maskSupabaseTarget,
   resolveClerkRlsSmokeConfig,
   shouldRunClerkRlsSmoke,
   validateClerkEnvironment,
-  validateTargetEnvironmentInjection,
   validateTestIdentityKind,
 } from "./clerk-supabase-live-support";
 
 const targetEnvironmentWasDeclared = Boolean(
   process.env.PAPERDECK_RLS_TARGET_ENVIRONMENT,
-);
-const targetEnvironmentWasInjected = hasInjectedRlsTargetEnvironment(
-  process.env,
 );
 loadEnvConfig(process.cwd());
 
@@ -77,7 +72,7 @@ function authenticatedClient(token: string) {
   });
 }
 
-run("two real Clerk sessions are isolated by Supabase RLS", async () => {
+run("two Clerk Development test sessions are isolated by Supabase RLS", async () => {
   assert.ok(clerkSecretKey);
   assert.ok(supabaseUrl);
   assert.ok(supabaseAnonKey);
@@ -85,12 +80,8 @@ run("two real Clerk sessions are isolated by Supabase RLS", async () => {
   assert.ok(emailB, "PAPERDECK_RLS_USER_B_EMAIL is required in .env.local");
   assert.notEqual(emailA, emailB, "The two test emails must be different");
   const config = resolveClerkRlsSmokeConfig(process.env);
-  validateTargetEnvironmentInjection(
-    targetEnvironmentWasInjected,
-    config.environment,
-  );
-  validateClerkEnvironment(clerkSecretKey, config.environment);
-  validateTestIdentityKind([emailA, emailB], config.environment);
+  validateClerkEnvironment(clerkSecretKey);
+  validateTestIdentityKind([emailA, emailB]);
   if (config.scope === "group-lifecycle") {
     assert.ok(
       databaseUrl,

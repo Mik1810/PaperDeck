@@ -13,9 +13,9 @@ The RLS policies in `supabase/schema.sql` use `auth.jwt() ->> 'sub'` as the
 owner identifier. Clerk Development and Supabase Third-Party Auth are connected,
 and the policies are verified both by deterministic A/B/anonymous database tests
 and by a live two-session Clerk Development smoke through the Supabase anonymous
-client. Production remains the pre-release gate tracked in GitHub issue #104;
-passing Development does not imply that Production has passed. Preview follows
-the normal deployment checks and is not a separate RLS gate.
+client. All automated identity and session testing is restricted to Clerk
+Development with dedicated `+clerk_test` users. PaperDeck does not automate
+sign-in or session creation against Clerk Production.
 
 ## Setup
 
@@ -106,9 +106,8 @@ RLS integration suite seeds two temporary profiles, assumes the database
 cannot select, update, delete, or insert data as user B. The test skips when no
 database is configured and always removes its temporary rows.
 
-This deterministic database test does not replace a Production smoke with real
-Clerk sessions. GitHub issue #104 gates collaboration until Production verifies
-that Supabase accepts its Clerk session tokens and enforces isolation.
+This deterministic database test complements the Clerk Development live smoke.
+Neither test authenticates against Clerk Production.
 
 ### Live A/B Clerk smoke
 
@@ -133,45 +132,11 @@ the other actor and RLS must reduce it to zero affected rows. Its final JSON
 evidence contains only the declared environment, masked actor and Supabase
 identifiers, session create/revoke counts, and the completion timestamp.
 
-Declare Production explicitly when recording release evidence:
-
-```bash
-npm run test:integration:clerk-production
-```
-
-The Production wrapper reads four gitignored local values from `.env.local`:
-
-```env
-PAPERDECK_PRODUCTION_CLERK_SECRET_KEY=sk_live_...
-PAPERDECK_PRODUCTION_CLERK_PUBLISHABLE_KEY=pk_live_...
-PAPERDECK_RLS_PRODUCTION_USER_A_MASK=user_...masked
-PAPERDECK_RLS_PRODUCTION_USER_B_MASK=user_...masked
-```
-
-It resolves each masked identifier to exactly one Clerk user and keeps both
-email addresses in process memory only. Clerk's Playwright helper signs each
-identity into a separate ephemeral browser context using a short-lived,
-single-use sign-in token; no password or browser storage state is required. The
-wrapper obtains both JWTs in memory, checks profile visibility and cross-owner
-update denial through Supabase RLS, then revokes every session created after its
-per-user baseline. It never prints a full identifier, email, token, password,
-or key.
-
-`development` requires a Clerk Development `sk_test_` key and official
-`+clerk_test` identities. `production` requires an explicitly injected
-`sk_live_` key and refuses test-mode identities. Never create or select
-Production smoke identities without explicit approval. PaperDeck currently
-shares one Supabase project across local development and Production, so the
-masked Supabase target in both passing reports must agree.
-
-For Production, the Clerk secret, Supabase URL, and Supabase publishable key must
-already exist in the process environment before Next.js loads `.env.local`.
-This prevents a release smoke from silently falling back to Development
-credentials. A locally relabeled Development run is rejected.
-
-Preview is not a separate RLS release gate. It follows the normal deployment
-checks and may use Clerk Development credentials, but collaboration remains
-blocked solely on the dated Production isolation smoke tracked in issue #104.
+The live harness accepts only a Clerk Development `sk_test_` key and official
+`+clerk_test` identities. It rejects `production` as a target and rejects every
+`sk_live_` key or ordinary email address. Production verification is limited to
+non-automated deployment health checks; it must never impersonate or create a
+session for an existing Production user.
 
 The private-group lifecycle proof is intentionally separate:
 
@@ -179,7 +144,7 @@ The private-group lifecycle proof is intentionally separate:
 npm run test:integration:clerk-groups
 ```
 
-That command is hard-restricted to Development. It temporarily enables the
+That command is also hard-restricted to Development. It temporarily enables the
 shared research-group switches and creates a synthetic group, then restores the
 original switches, removes the group, and revokes only its temporary sessions.
 Do not use it as the Production release smoke.
