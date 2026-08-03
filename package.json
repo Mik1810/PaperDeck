@@ -30,6 +30,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
     "test:integration:clerk": "node --import tsx --test tests/integration/clerk-supabase-live.test.ts",
+    "test:integration:clerk-production": "tsx scripts/run-production-clerk-rls-smoke.ts",
     "test:integration:clerk-groups": "PAPERDECK_RLS_TARGET_ENVIRONMENT=development PAPERDECK_RLS_SMOKE_SCOPE=group-lifecycle node --import tsx --test tests/integration/clerk-supabase-live.test.ts",
     "test:integration:clerk-deletion": "node --conditions react-server --import tsx --test tests/integration/clerk-user-deletion-webhook-live.test.ts",
     "test:integration:group-invitations": "node --conditions react-server --import tsx --test tests/integration/research-group-invitations.test.ts",

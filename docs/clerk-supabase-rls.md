@@ -136,8 +136,26 @@ identifiers, session create/revoke counts, and the completion timestamp.
 Declare Production explicitly when recording release evidence:
 
 ```bash
-PAPERDECK_RLS_TARGET_ENVIRONMENT=production npm run test:integration:clerk
+npm run test:integration:clerk-production
 ```
+
+The Production wrapper reads four gitignored local values from `.env.local`:
+
+```env
+PAPERDECK_PRODUCTION_CLERK_SECRET_KEY=sk_live_...
+PAPERDECK_PRODUCTION_CLERK_PUBLISHABLE_KEY=pk_live_...
+PAPERDECK_RLS_PRODUCTION_USER_A_MASK=user_...masked
+PAPERDECK_RLS_PRODUCTION_USER_B_MASK=user_...masked
+```
+
+It resolves each masked identifier to exactly one Clerk user and keeps both
+email addresses in process memory only. Clerk's Playwright helper signs each
+identity into a separate ephemeral browser context using a short-lived,
+single-use sign-in token; no password or browser storage state is required. The
+wrapper obtains both JWTs in memory, checks profile visibility and cross-owner
+update denial through Supabase RLS, then revokes every session created after its
+per-user baseline. It never prints a full identifier, email, token, password,
+or key.
 
 `development` requires a Clerk Development `sk_test_` key and official
 `+clerk_test` identities. `production` requires an explicitly injected

@@ -23,6 +23,9 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Added a secret-safe Production Clerk RLS browser smoke that resolves two
+  approved masked identities, holds credentials only in memory, verifies
+  profile isolation, and revokes its temporary sessions.
 - Added and deployed the #96 research-group invitation and membership lifecycle:
   service-role-only transactional RPCs enforce owner/admin/member hierarchy,
   exact-email opt-in and invitation policy, friendship/block checks, seven-day
