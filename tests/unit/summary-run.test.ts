@@ -12,7 +12,7 @@ test("Gemini requests use native structured output with minimal thinking", () =>
 
   assert.equal(config.maxOutputTokens, 2400);
   assert.deepEqual(config.thinkingConfig, { thinkingLevel: "minimal" });
-  assert.equal(config.responseFormat.text.mimeType, "application/json");
+  assert.equal(config.responseFormat.text.mimeType, "APPLICATION_JSON");
   assert.deepEqual(config.responseFormat.text.schema.required, [
     "why_it_matters",
     "main_contribution",

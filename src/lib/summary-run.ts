@@ -33,7 +33,7 @@ export function geminiGenerationConfig(maxOutputTokens: number) {
     thinkingConfig: { thinkingLevel: "minimal" },
     responseFormat: {
       text: {
-        mimeType: "application/json",
+        mimeType: "APPLICATION_JSON",
         schema: TRIAGE_SUMMARY_JSON_SCHEMA,
       },
     },

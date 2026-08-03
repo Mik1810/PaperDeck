@@ -25,5 +25,9 @@
 - TypeScript typecheck: passed.
 - Production build: passed.
 - `git diff --check`: passed.
-- The corrected workflow has not yet been published or run. No summary was
-  written by the failed three-paper probe.
+- Published commit `286a32a` to `agent/fix-scheduled-summaries` and ran a
+  three-paper live probe. The REST endpoint rejected lowercase
+  `application/json` for the new response-format enum, so zero summaries were
+  written.
+- Corrected the REST value to `APPLICATION_JSON`, as required by the Gemini
+  Generate Content API. The corrected probe is pending.
