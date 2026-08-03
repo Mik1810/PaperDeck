@@ -33,3 +33,14 @@
 - Confirmed `NOTIFICATION_RETENTION_ENABLED` remains absent. Scheduled deletion
   is still disabled and requires separate explicit approval.
 - No notification row was deleted or otherwise modified by the dry run.
+
+## Scheduled-retention activation
+
+- Received explicit approval to enable the scheduled cleanup after the
+  successful count-only dry run.
+- Set the GitHub repository variable
+  `NOTIFICATION_RETENTION_ENABLED=true` and verified it is present.
+- Confirmed activation did not immediately dispatch a workflow; the only run at
+  activation time remained the completed dry run `30858186085`.
+- Did not manually run write mode. The daily schedule will invoke the bounded
+  database cleanup only for rows whose fixed 90-day expiry has elapsed.
