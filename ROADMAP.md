@@ -104,7 +104,12 @@ Aggiornato al 2026-07-29:
 - Clerk JWT + Supabase RLS: configurato.
   - `createClerkAuthenticatedClient()` per query Supabase con JWT Clerk + anon key.
   - Isolamento verificato con test deterministici A/B/anonimo e smoke Clerk Development A/B.
-  - Preview e Production richiedono uno smoke separato prima di abilitare la collaborazione (#104).
+  - Lo smoke live predefinito e' ora un gate profilo non mutante con guardie
+    esplicite Development/Production, report mascherato e revoca
+    obbligatoria delle sessioni; il lifecycle gruppi mutante resta confinato a
+    Development.
+  - Production richiede ancora un risultato live prima di abilitare la
+    collaborazione; Preview resta un normale controllo di deployment (#104).
 - Gruppi di ricerca privati: fondazione #95 e chiusura account #107 applicate
   al progetto Supabase condiviso con kill switch disattivati; lifecycle degli
   inviti e delle membership #96 verificato su PostgreSQL isolato e sul database

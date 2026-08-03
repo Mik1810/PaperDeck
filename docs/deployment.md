@@ -63,11 +63,10 @@ The bypass is ignored in production because it only activates when `NODE_ENV !==
 
 ## Vercel Environment Variables
 
-Production and Preview should have these values configured in Vercel:
+Production and Preview should have these values configured in Vercel, with
+Clerk credentials scoped differently per environment:
 
 ```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_replace_me
-CLERK_SECRET_KEY=sk_live_...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
@@ -81,6 +80,12 @@ SUPABASE_SERVICE_ROLE_KEY=replace_me
 DATABASE_MAX_CONNECTIONS=1
 LOG_LEVEL=info
 ```
+
+- Vercel Production uses the Clerk Production pair (`pk_live_...` / `sk_live_...`).
+- Vercel Preview deployments on a Vercel-provided `*.vercel.app` host use the
+  Clerk Development pair (`pk_test_...` / `sk_test_...`).
+- Scope `CLERK_AUTHORIZED_PARTIES` to the intended origins. Do not copy the
+  Production-only custom-domain value blindly into Preview.
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
 Keep `DATABASE_MAX_CONNECTIONS=1` unless the Supabase pool size is increased; Vercel serverless instances multiply database clients.
