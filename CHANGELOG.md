@@ -33,7 +33,8 @@ This project follows Semantic Versioning.
   aggregation remain deferred. Both incremental and standalone-schema local
   PostgreSQL validation pass. The migration is applied to the shared Supabase
   project with zero backfilled rows; structural checks and advisors passed, while
-  scheduled retention remains disabled pending its separate dry-run gate.
+  the manual retention dry-run passed with zero expired rows. Scheduled retention
+  remains disabled pending explicit approval.
 
 - Added and deployed the #96 research-group invitation and membership lifecycle:
   service-role-only transactional RPCs enforce owner/admin/member hierarchy,
