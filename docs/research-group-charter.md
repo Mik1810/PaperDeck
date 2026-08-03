@@ -6,8 +6,9 @@ Implementation status: #95, #107, and #96 are deployed to the shared PaperDeck
 Supabase project with both database-backed switches disabled. The invitation
 and membership lifecycle passed synthetic cross-role, cleanup, privilege, and
 advisor checks; no pilot UI is enabled yet. The durable notification foundation
-for #97 is applied to the shared project with an empty initial inbox; scheduled
-retention and notification UI remain disabled.
+for #97 is applied to the shared project with an empty initial inbox and approved
+scheduled retention. The #98 notification UI and its in-app invitation-response
+RPC are implemented locally but are not deployed.
 
 ## Product boundary
 
@@ -134,3 +135,10 @@ broader beta. Record only consented, minimized notes. Evaluation questions:
 
 The interview plan is approved by this charter; completing the interviews is a
 pilot input, not permission to bypass any security gate.
+
+The local in-app response path does not expose or reconstruct the invitation
+token. A server-only RPC locks an invitation only when the authenticated actor is
+its intended recipient, then delegates to the existing lifecycle using the
+stored digest. The same expiry, policy, block, kill-switch, single-use, and
+cleanup checks remain authoritative; direct authenticated clients have no
+execute grant.

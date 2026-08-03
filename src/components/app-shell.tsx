@@ -7,6 +7,7 @@ import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { BookOpenCheck, Settings } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 import { AppNavLink } from "@/components/app-nav-link";
+import { NotificationCenter } from "@/components/notification-center";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 
 type AppShellProps = {
@@ -78,6 +79,7 @@ export function AppShell({
           </nav>
 
           <div className="flex items-center gap-2">
+            <NotificationCenter />
             <AppNavLink
               href="/settings"
               aria-label="Settings"

@@ -40,6 +40,18 @@ test.describe("authenticated response cache policy", () => {
     expectPrivateNoStoreHeaders(response.headers());
   });
 
+  test("keeps notification HTML and API responses private no-store", async ({
+    request,
+  }) => {
+    const [htmlResponse, apiResponse] = await Promise.all([
+      request.get("/notifications", { maxRedirects: 0 }),
+      request.get("/api/notifications?limit=1", { maxRedirects: 0 }),
+    ]);
+
+    expectPrivateNoStoreHeaders(htmlResponse.headers());
+    expectPrivateNoStoreHeaders(apiResponse.headers());
+  });
+
   test("does not force private caching onto explicit public assets", async ({
     request,
   }) => {

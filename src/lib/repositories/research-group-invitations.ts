@@ -121,6 +121,29 @@ export async function respondResearchGroupInvitation(
 }
 
 /** @user-scoped */
+export async function respondResearchGroupInvitationInApp(
+  actorOwnerId: string,
+  invitationId: string,
+  accept: boolean,
+) {
+  requireOwnerId(actorOwnerId, "respondResearchGroupInvitationInApp");
+  const rows = await runInvitationMutation(() =>
+    db.execute<{ status: string }>(sql`
+      select respond_research_group_invitation_in_app(
+        ${actorOwnerId},
+        ${invitationId}::uuid,
+        ${accept}
+      ) as status
+    `),
+  );
+  const status = rows[0]?.status;
+  if (status !== "accepted" && status !== "declined") {
+    throw new ResearchGroupUnavailableError();
+  }
+  return status;
+}
+
+/** @user-scoped */
 export async function cancelResearchGroupInvitation(
   actorOwnerId: string,
   invitationId: string,

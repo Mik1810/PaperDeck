@@ -98,6 +98,22 @@ async function respond(
   return row.status;
 }
 
+async function respondInApp(
+  actorId: string,
+  invitationId: string,
+  accept: boolean,
+  executor: Sql | TransactionSql = sql!,
+) {
+  const [row] = await executor<{ status: string }[]>`
+    select respond_research_group_invitation_in_app(
+      ${actorId},
+      ${invitationId}::uuid,
+      ${accept}
+    ) as status
+  `;
+  return row.status;
+}
+
 async function cleanupFixtures() {
   assert.ok(sql);
   await sql`
@@ -259,6 +275,36 @@ run("accepts once, clears token material, and serializes duplicate delivery", as
   assert.equal(memberships[0].count, 1);
 });
 
+run("responds in app only as the recipient and consumes token material", async () => {
+  assert.ok(sql);
+  const groupId = await createGroup();
+  const invitationId = await createInvitation(ownerA, groupId, ownerC, "in-app");
+
+  await assert.rejects(
+    respondInApp(ownerB, invitationId, true),
+    /invitation_unavailable/,
+  );
+  assert.equal(await respondInApp(ownerC, invitationId, true), "accepted");
+  assert.equal(await respondInApp(ownerC, invitationId, true), "accepted");
+
+  const [invitation, membership] = await Promise.all([
+    sql<{ status: string; token_digest: string | null }[]>`
+      select status, token_digest
+      from research_group_invitations
+      where id = ${invitationId}::uuid
+    `,
+    sql<{ count: number }[]>`
+      select count(*)::integer as count
+      from research_group_members
+      where group_id = ${groupId}::uuid
+        and member_id = ${ownerC}
+        and revoked_at is null
+    `,
+  ]);
+  assert.deepEqual([...invitation], [{ status: "accepted", token_digest: null }]);
+  assert.equal(membership[0].count, 1);
+});
+
 run("rejects tampered, expired, blocked-after-create, and stale-policy acceptance", async () => {
   assert.ok(sql);
   const groupId = await createGroup();
@@ -411,6 +457,8 @@ run("revokes pending invitations during account deletion and keeps APIs service-
   const privileges = await sql<{
     service_role_execute: boolean;
     authenticated_execute: boolean;
+    in_app_service_role_execute: boolean;
+    in_app_authenticated_execute: boolean;
     authenticated_table_select: boolean;
   }[]>`
     select
@@ -424,6 +472,16 @@ run("revokes pending invitations during account deletion and keeps APIs service-
         'create_research_group_invitation(text,uuid,uuid,text)',
         'execute'
       ) as authenticated_execute,
+      has_function_privilege(
+        'service_role',
+        'respond_research_group_invitation_in_app(text,uuid,boolean)',
+        'execute'
+      ) as in_app_service_role_execute,
+      has_function_privilege(
+        'authenticated',
+        'respond_research_group_invitation_in_app(text,uuid,boolean)',
+        'execute'
+      ) as in_app_authenticated_execute,
       has_table_privilege(
         'authenticated',
         'research_group_invitations',
@@ -433,6 +491,8 @@ run("revokes pending invitations during account deletion and keeps APIs service-
   assert.deepEqual([...privileges], [{
     service_role_execute: true,
     authenticated_execute: false,
+    in_app_service_role_execute: true,
+    in_app_authenticated_execute: false,
     authenticated_table_select: false,
   }]);
 });

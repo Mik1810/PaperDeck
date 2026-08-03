@@ -25,6 +25,13 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Added the local #98 notification center: authenticated header bell with `99+`
+  badge, latest-20 desktop popover/mobile bottom sheet, reconnect/focus polling,
+  important-event toasts, inline request actions, and a private paginated history
+  page with category/read filters and archive controls. A service-role-only RPC
+  lets the authenticated invitation recipient respond in app while consuming the
+  existing single-use digest; its migration remains local pending an isolated
+  database gate and separately approved shared rollout.
 - Added the local #97 durable-notification foundation: atomic idempotent database
   events for friendship, invitation, membership, role, and ownership changes;
   recipient-only RLS and acknowledgement grants; source-linked cleanup; a
