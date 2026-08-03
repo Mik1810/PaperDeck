@@ -34,7 +34,7 @@ This project follows Semantic Versioning.
   PostgreSQL validation pass. The migration is applied to the shared Supabase
   project with zero backfilled rows; structural checks and advisors passed, while
   the manual retention dry-run passed with zero expired rows. Scheduled retention
-  remains disabled pending explicit approval.
+  is enabled after explicit approval and remains bounded to expired rows.
 
 - Added and deployed the #96 research-group invitation and membership lifecycle:
   service-role-only transactional RPCs enforce owner/admin/member hierarchy,
