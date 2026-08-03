@@ -8,12 +8,18 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Split the live Clerk/Supabase smoke into a non-mutating profile-isolation
+  release gate and an explicit Development-only group lifecycle test, with
+  Development/Production key guards, masked evidence, and mandatory temporary-session
+  revocation.
 - Split recommendation evaluation into an explicitly perfect synthetic sanity check and a harder blocking baseline with graded relevance, overlapping profiles, noisy semantic scores, feedback, seen papers, conflicting rank signals, worst-profile floors, and zero seen-paper leakage.
 - Migrated Clerk authorization from deprecated path matching in `src/proxy.ts` to resource-level guards on every privileged page, Route Handler, and Server Action while retaining Clerk request context, authorized-party validation, and cache policy.
 - Classified authenticated and personalized routes under an explicit private/no-store browser and CDN policy while leaving PWA static assets cacheable.
 - Made exact-email collaboration discovery opt-in for new and existing identities, with explicit Settings consent and regression coverage for the undiscoverable default.
 - Approved the private research-group charter, choosing exact-email discovery opt-in and defining roles, retention, account closure, threat controls, release stops, and research-user validation.
-- Clarified the Clerk/Supabase authorization boundary: Development isolation is proven by deterministic and live A/B tests, while Preview/Production verification and authenticated-route cache/logout hardening are separate release gates.
+- Clarified the Clerk/Supabase authorization boundary: Development isolation is
+  proven by deterministic and live A/B tests, while Production verification is
+  the collaboration release gate and Preview remains a normal deployment check.
 
 ### Added
 

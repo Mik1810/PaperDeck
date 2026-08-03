@@ -13,9 +13,9 @@ The RLS policies in `supabase/schema.sql` use `auth.jwt() ->> 'sub'` as the
 owner identifier. Clerk Development and Supabase Third-Party Auth are connected,
 and the policies are verified both by deterministic A/B/anonymous database tests
 and by a live two-session Clerk Development smoke through the Supabase anonymous
-client. Preview and Production remain a separate pre-release gate tracked in
-GitHub issue #104; passing Development does not imply that either deployed
-environment has passed.
+client. Production remains the pre-release gate tracked in GitHub issue #104;
+passing Development does not imply that Production has passed. Preview follows
+the normal deployment checks and is not a separate RLS gate.
 
 ## Setup
 
@@ -106,10 +106,9 @@ RLS integration suite seeds two temporary profiles, assumes the database
 cannot select, update, delete, or insert data as user B. The test skips when no
 database is configured and always removes its temporary rows.
 
-This deterministic database test does not replace a deployment smoke with real
-Clerk sessions. GitHub issue #104 gates collaboration separately in Preview and
-Production until each target verifies that Supabase accepts its Clerk session
-tokens and enforces isolation.
+This deterministic database test does not replace a Production smoke with real
+Clerk sessions. GitHub issue #104 gates collaboration until Production verifies
+that Supabase accepts its Clerk session tokens and enforces isolation.
 
 ### Live A/B Clerk smoke
 
@@ -127,10 +126,45 @@ client, and always revokes the sessions afterward. It never prints tokens or
 needs passwords. The two email identifiers are required local configuration and
 are not stored in the repository.
 
-The Development smoke verifies that both tokens contain `role=authenticated`, A and B can
-each see only their own profile, and A cannot update B. It performs no persistent
-data mutation. Preview and Production execution, identity selection, and redacted
-evidence are intentionally deferred to the explicit approval gate in issue #104.
+The default `profile-isolation` smoke verifies that both tokens contain
+`role=authenticated`, A and B can each see only their own profile, and A cannot
+update B. It performs no database mutation: the only update attempted targets
+the other actor and RLS must reduce it to zero affected rows. Its final JSON
+evidence contains only the declared environment, masked actor and Supabase
+identifiers, session create/revoke counts, and the completion timestamp.
+
+Declare Production explicitly when recording release evidence:
+
+```bash
+PAPERDECK_RLS_TARGET_ENVIRONMENT=production npm run test:integration:clerk
+```
+
+`development` requires a Clerk Development `sk_test_` key and official
+`+clerk_test` identities. `production` requires an explicitly injected
+`sk_live_` key and refuses test-mode identities. Never create or select
+Production smoke identities without explicit approval. PaperDeck currently
+shares one Supabase project across local development and Production, so the
+masked Supabase target in both passing reports must agree.
+
+For Production, the Clerk secret, Supabase URL, and Supabase publishable key must
+already exist in the process environment before Next.js loads `.env.local`.
+This prevents a release smoke from silently falling back to Development
+credentials. A locally relabeled Development run is rejected.
+
+Preview is not a separate RLS release gate. It follows the normal deployment
+checks and may use Clerk Development credentials, but collaboration remains
+blocked solely on the dated Production isolation smoke tracked in issue #104.
+
+The private-group lifecycle proof is intentionally separate:
+
+```bash
+npm run test:integration:clerk-groups
+```
+
+That command is hard-restricted to Development. It temporarily enables the
+shared research-group switches and creates a synthetic group, then restores the
+original switches, removes the group, and revokes only its temporary sessions.
+Do not use it as the Production release smoke.
 
 ### Collaboration identity webhook
 
