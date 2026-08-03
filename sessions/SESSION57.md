@@ -73,3 +73,16 @@
   checks; port `54322` is free again.
 - The remote migration, retention workflow, and Realtime behavior remain
   intentionally unexecuted pending review and explicit rollout approval.
+
+## Publishing
+
+- Published `agent/durable-notifications` with separate snapshot-repair and
+  notification-feature commits.
+- Opened draft PR #115 against `main`; CI was allowed to start but was not
+  awaited.
+- Renamed and narrowed issue #97 to durable notification events. Its body now
+  records Realtime as a #98 optimization, shared-paper aggregation as #99, and
+  the still-pending shared-database rollout gate.
+- Confirmed `NOTIFICATION_RETENTION_ENABLED` is absent from repository
+  variables, so scheduled cleanup remains disabled after merge until explicitly
+  enabled.
