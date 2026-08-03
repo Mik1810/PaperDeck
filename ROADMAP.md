@@ -1049,6 +1049,20 @@ La prima parte del piano social usa un profilo collaborativo minimale: nome pubb
 
 Le amicizie sono reciproche soltanto dopo accettazione. Il lifecycle supporta invio, richiesta incrociata con accettazione automatica, rifiuto con cooldown di 30 giorni, cancellazione, unfriend, block e unblock. Il blocco rimuove le relazioni attive e nasconde la discovery in entrambe le direzioni; amicizie e richieste non scrivono segnali di ranking.
 
+## Fondazione notifiche durevoli
+
+La #97 introduce localmente notifiche recipient-owned per richieste/accettazioni
+di amicizia, inviti/accettazioni di gruppo e cambiamenti di membership, ruolo e
+ownership. Gli eventi sono puntatori tipizzati alle righe autorevoli, vengono
+creati atomicamente tramite trigger, sono deduplicati, leggibili soltanto dal
+destinatario e cancellati dopo 90 giorni da un job a batch.
+
+Il primo rilascio non dipende da Realtime: refetch e polling preservano la
+correttezza dopo offline/reconnect. Il segnale privato Realtime e le preferenze
+`all`/`important_only`/`muted` appartengono alla UI #98; attivita' e aggregazione
+dei paper condivisi appartengono alla #99. La migrazione non e' ancora applicata
+al progetto Supabase condiviso.
+
 ## Domande aperte
 
 1. Verificare in produzione il backfill MiniLM e monitorare `feed_timing` per eventuali fallback dovuti a profili o paper non ancora re-embedded.

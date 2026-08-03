@@ -38,6 +38,10 @@ Current implementation:
 - `research_groups` and `research_group_members` form a separate private
   collaboration domain. Their repository uses one centralized owner/admin/member
   permission evaluator before returning data or mutating rows.
+- `notifications` stores recipient-owned durable event pointers. Domain triggers
+  create them in the same transaction as friendship, invitation, and membership
+  changes; `src/lib/repositories/notifications.ts` exposes only recipient-scoped
+  reads and acknowledgements.
 
 The service-role key remains server-only and must never be imported into client components.
 
@@ -145,6 +149,47 @@ live tests temporarily exercise owner, outsider, member, revoked, succession,
 owner-only deletion, unrelated membership removal, and duplicate-delivery
 behavior, then verify zero temporary rows and restore both runtime switches to
 disabled.
+
+### Durable Notifications
+
+`notifications` is an inbox of typed event pointers, not a message log. Each row
+has one recipient, an optional actor, an idempotency key, read/archive timestamps,
+and a source reference to a friend request, group invitation, or group. It never
+stores an email, Clerk identifier for presentation, invitation token, rendered
+message, or free-form payload. Source rows remain authoritative.
+
+The initial event set covers received and accepted friend requests, received and
+accepted group invitations, member joins, membership endings, role changes, and
+ownership transfers. Blocks, unblocks, unfriend, declines, and shared-paper
+activity do not create notifications in this slice. Shared-paper burst
+aggregation belongs to #99.
+
+PostgreSQL `AFTER` triggers call a private idempotent insert helper, so a domain
+mutation and its notification commit or roll back together. The recipient and
+dedupe key are unique. Deleting the authoritative request, invitation, or group
+also deletes its derived notifications; deleting only the actor preserves the
+event with a generic actor projection.
+
+RLS permits authenticated users to select only their own rows. Direct clients
+may update only `read_at` and `archived_at`; inserts, deletes, recipient changes,
+type changes, and source changes remain unavailable. Server repositories still
+apply an explicit recipient predicate as defense in depth.
+
+Rows expire after 90 days. Normal inbox reads exclude expired rows, and the
+daily `Prune expired notifications` workflow calls the private bounded cleanup
+function until the current backlog is drained or its safety limit is reached.
+Scheduled runs remain disabled unless the repository variable
+`NOTIFICATION_RETENTION_ENABLED` is exactly `true`; manual dry runs remain
+available for the rollout gate. The workflow reports counts only. Realtime
+broadcast is deliberately deferred:
+the first release uses durable refetch/poll behavior, and a later private-channel
+signal may prompt clients to refetch the same RLS-authorized rows.
+
+The migration and workflow are locally validated release candidates and have not
+been applied to the shared Supabase project. Validation covered both the
+incremental baseline-plus-migration path and the standalone schema snapshot on
+an isolated Supabase PostgreSQL 17.6 container; all five notification tests and
+`supabase db lint` passed with zero synthetic rows remaining.
 
 ### Worker Tables
 

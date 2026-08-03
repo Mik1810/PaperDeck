@@ -5,7 +5,8 @@ Status: approved on 2026-07-18 for the initial invite-only pilot.
 Implementation status: #95, #107, and #96 are deployed to the shared PaperDeck
 Supabase project with both database-backed switches disabled. The invitation
 and membership lifecycle passed synthetic cross-role, cleanup, privilege, and
-advisor checks; no pilot UI is enabled yet.
+advisor checks; no pilot UI is enabled yet. The durable notification foundation
+for #97 is implemented locally but is not yet applied to the shared project.
 
 ## Product boundary
 
