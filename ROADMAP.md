@@ -97,7 +97,8 @@ Aggiornato al 2026-07-29:
 - Gate stabilita' raccomandazioni: App CI mantiene un sanity check sintetico separato da una baseline discriminante con rilevanza graduata, profili sovrapposti, feedback, paper gia' visti e segnali in conflitto; blocca regressioni medie e del profilo peggiore su NDCG/recall, exposure coverage, sovrapposizione e seen-paper leakage. Un workflow separato riporta il p95 del reranker senza renderlo inizialmente bloccante.
 - Onboarding interessi: wizard full-screen scuro e guidato, senza navigazione libera tra step, con controlli separati a destra su desktop.
 - LLM triage summary: implementato.
-  - Worker `scripts/generate-summaries.ts` con Jina AI Reader + GitHub Models.
+  - Worker `scripts/generate-summaries.ts` con Jina AI Reader + Gemini; il
+    workflow schedulato usa `gemini-3.5-flash` con output JSON strutturato.
   - Summary JSONB in `papers.triage_summary` con 4 sezioni strutturate.
   - Visualizzati nella pagina paper detail sotto l'abstract.
 - Clerk JWT + Supabase RLS: configurato.

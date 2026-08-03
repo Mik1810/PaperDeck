@@ -15,8 +15,8 @@ PaperDeck is a Next.js application backed by Clerk, Supabase Postgres, pgvector,
 | Batch workers | GitHub Actions, local scripts | arXiv ingestion, metadata enrichment, embeddings, summaries |
 | Embedding model | `sentence-transformers/all-MiniLM-L6-v2` | 384-dimensional paper/topic vectors |
 | Historical benchmark models | `BAAI/bge-small-en-v1.5`, `intfloat/e5-small-v2` | Offline retrieval quality comparison |
-| Summary model | GitHub Models `openai/gpt-4o-mini` | Structured paper triage summaries |
-| Summary fallbacks | Cloudflare Workers AI, Gemini | Optional fallback providers |
+| Summary model | Gemini `gemini-3.5-flash` | Structured paper triage summaries |
+| Summary fallbacks | Cloudflare Workers AI, OpenAI | Optional fallback providers |
 | Full-text reader | Jina AI Reader | Optional source text extraction for summary generation |
 | Tests/guardrails | ESLint, TypeScript, Playwright, service-role audit | Static and smoke validation |
 
@@ -35,9 +35,9 @@ flowchart TB
   ghActions["GitHub Actions Workers"]
   ingestion["Ingestion + Enrichment<br/>arXiv, Semantic Scholar, OpenAlex, Unpaywall"]
   embeddings["Embedding Workers<br/>sentence-transformers/all-MiniLM-L6-v2"]
-  summaries["Summary Worker<br/>GitHub Models openai/gpt-4o-mini"]
-  gpt4oMini["GitHub Models<br/>openai/gpt-4o-mini"]
-  fallbackModels["Fallback LLMs<br/>Cloudflare Workers AI / Gemini"]
+  summaries["Summary Worker<br/>Gemini gemini-3.5-flash"]
+  geminiFlash["Gemini<br/>gemini-3.5-flash"]
+  fallbackModels["Fallback LLMs<br/>Cloudflare Workers AI / OpenAI"]
   jina["Jina AI Reader<br/>optional paper text"]
 
   user -->|"request /feed, /library, /papers"| vercel
@@ -59,8 +59,8 @@ flowchart TB
   embeddings -->|"paper vectors, topic vectors"| supabase
   ghActions --> summaries
   summaries --> jina
-  summaries --> gpt4oMini
-  gpt4oMini -->|"structured JSON"| summaries
+  summaries --> geminiFlash
+  geminiFlash -->|"structured JSON"| summaries
   fallbackModels -. optional structured JSON .-> summaries
   summaries -->|"triage_summary JSON"| supabase
 ```
@@ -135,8 +135,8 @@ flowchart LR
 
   subgraph Models
     minilm["all-MiniLM-L6-v2<br/>384-d embeddings"]
-    gpt4oMini["GitHub Models<br/>openai/gpt-4o-mini"]
-    fallbackModels["Fallbacks<br/>Cloudflare Workers AI / Gemini"]
+    geminiFlash["Gemini<br/>gemini-3.5-flash"]
+    fallbackModels["Fallbacks<br/>Cloudflare Workers AI / OpenAI"]
   end
 
   db["Supabase Postgres + pgvector"]
@@ -151,9 +151,9 @@ flowchart LR
   embedPapers --> minilm --> db
   db --> summarize
   summarize --> jina
-  summarize --> gpt4oMini
+  summarize --> geminiFlash
   summarize -. optional .-> fallbackModels
-  gpt4oMini --> summarize
+  geminiFlash --> summarize
   fallbackModels -. optional .-> summarize
   summarize --> db
 ```
