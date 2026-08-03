@@ -2,23 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import {
+  geminiGenerationConfig,
+  parseSummaryJson,
   resolveGitHubModelsToken,
   summaryRunShouldFail,
+  TRIAGE_SUMMARY_JSON_SCHEMA,
 } from "../src/lib/summary-run";
-
-function extractJson(text: string) {
-  const trimmed = text.trim();
-  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
-  const content = fenceMatch ? fenceMatch[1].trim() : trimmed;
-  const start = content.indexOf("{");
-  const end = content.lastIndexOf("}");
-
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error("No JSON object found in response");
-  }
-
-  return content.slice(start, end + 1);
-}
 
 type LlmProvider = "cloudflare" | "gemini" | "github" | "openai";
 type LlmMessage = { role: "system" | "user"; content: string };
@@ -60,7 +49,7 @@ type TriageSummary = {
 
 const CURSOR_KEY = "triage_summary_enrich";
 const DEFAULT_CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash";
-const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const DEFAULT_GITHUB_MODEL = "openai/gpt-4o-mini";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 const SYSTEM_PROMPT = `You are a research paper summarizer for CS researchers. Given paper text that may contain PDF artifacts, garbled symbols, or LaTeX fragments, ignore formatting noise and extract the semantic meaning. Do not merely paraphrase the abstract. Build a concise synthesis by combining evidence from the method, results, and conclusion when available. Surface concrete details absent from the abstract, but support every factual claim with the supplied text and do not invent implications or results. Copy model, dataset, benchmark, method, and system names exactly as written. Distinguish precisely what the authors propose, implement, adapt, apply, evaluate, and merely discuss. When reporting a comparison, name both the evaluated system and its baseline in the same sentence.
@@ -74,35 +63,6 @@ Produce a JSON object with exactly these four fields:
 Write in English. Output ONLY the JSON object, no other text.`;
 
 const JINA_BASE = "https://r.jina.ai";
-const TRIAGE_SUMMARY_JSON_SCHEMA = {
-  type: "object",
-  properties: {
-    why_it_matters: {
-      type: "string",
-      description: "Why this paper matters and what gap it addresses.",
-    },
-    main_contribution: {
-      type: "string",
-      description: "The paper's concrete method, finding, artifact, or result.",
-    },
-    prerequisites: {
-      type: "string",
-      description: "Background concepts a reader should know first.",
-    },
-    read_if_you_care_about: {
-      type: "string",
-      description: "The specific reader profile, subfield, or application area.",
-    },
-  },
-  required: [
-    "why_it_matters",
-    "main_contribution",
-    "prerequisites",
-    "read_if_you_care_about",
-  ],
-  additionalProperties: false,
-} as const;
-
 function loadLocalEnv() {
   const envPath = path.join(process.cwd(), ".env.local");
 
@@ -184,7 +144,7 @@ function parseArgs(): SummaryConfig {
     maxOutputTokens: Number(
       argValue("max-output-tokens") ??
         process.env.LLM_MAX_OUTPUT_TOKENS ??
-        1600,
+        2400,
     ),
     retries: Number(process.env.LLM_RETRIES ?? 5),
   };
@@ -442,11 +402,7 @@ async function callGemini(
         body: JSON.stringify({
           ...systemInstruction,
           contents: [{ parts: [{ text: userMsg?.content ?? "" }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: maxTokens,
-            responseMimeType: "application/json",
-          },
+          generationConfig: geminiGenerationConfig(maxTokens),
         }),
       },
     );
@@ -455,9 +411,27 @@ async function callGemini(
       const data = (await response.json()) as {
         candidates?: Array<{
           content?: { parts?: Array<{ text?: string }> };
+          finishReason?: string;
         }>;
+        usageMetadata?: {
+          candidatesTokenCount?: number;
+          thoughtsTokenCount?: number;
+        };
       };
-      return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      const candidate = data.candidates?.[0];
+      const text = candidate?.content?.parts?.[0]?.text ?? "";
+
+      try {
+        parseSummaryJson(text, "gemini");
+      } catch {
+        const outputTokens = data.usageMetadata?.candidatesTokenCount ?? 0;
+        const thinkingTokens = data.usageMetadata?.thoughtsTokenCount ?? 0;
+        throw new Error(
+          `Gemini returned invalid structured output (finishReason=${candidate?.finishReason ?? "unknown"}, outputTokens=${outputTokens}, thinkingTokens=${thinkingTokens})`,
+        );
+      }
+
+      return text;
     }
 
     if ((response.status === 429 || response.status === 503) && attempt < retries) {
@@ -853,16 +827,7 @@ async function callLlm(
 }
 
 function parseTriageSummary(raw: string, provider: LlmProvider) {
-  try {
-    return JSON.parse(raw) as TriageSummary;
-  } catch {
-    try {
-      return JSON.parse(extractJson(raw)) as TriageSummary;
-    } catch {
-      console.error(`  JSON parse failed, raw: ${raw.slice(0, 200)}`);
-      throw new Error(`${provider} did not return valid JSON`);
-    }
-  }
+  return parseSummaryJson(raw, provider) as TriageSummary;
 }
 
 async function summarizeChunk(

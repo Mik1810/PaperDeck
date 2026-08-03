@@ -60,6 +60,10 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Replaced the retired GitHub Models default in scheduled summary generation
+  with stable Gemini 3.5 Flash, using native schema-constrained JSON, minimal
+  thinking, a larger output budget, and diagnostics that never log malformed
+  model output.
 - Stopped the first service worker installation from being announced as a new app version while preserving the refresh prompt for genuine updates.
 - Prevented semantic candidate starvation by raising the IVFFlat RPC probe count from one to ten, regenerating nearly exhausted cached batches, and filling short post-filter semantic decks from the deduplicated catalog with candidate provenance persisted across cache reads.
 - Kept current favorites and Read later items out of the active deck even when their historical interaction rows are absent, and advanced the local deck before opening a paper so browser Back does not restore an already-opened sequence.
