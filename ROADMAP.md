@@ -1062,8 +1062,9 @@ correttezza dopo offline/reconnect. La #98 aggiunge localmente campanella, menu
 responsive, cronologia e azioni inline senza dipendere da Realtime. Gli inviti
 di gruppo possono essere risolti in-app tramite una RPC server-only che autorizza
 il destinatario autenticato e consuma comunque il digest monouso; la migration
-resta locale fino al gate database. Il segnale privato Realtime resta
-un'ottimizzazione futura. Le preferenze `all`/`important_only`/`muted`, insieme
+ha superato il gate PostgreSQL isolato e resta locale fino a un rollout
+separatamente approvato. Il segnale privato Realtime resta un'ottimizzazione
+futura. Le preferenze `all`/`important_only`/`muted`, insieme
 alle attivita' e all'aggregazione dei paper condivisi, appartengono alla #99,
 quando esisteranno eventi non critici da silenziare. La migration #97 e'
 applicata al Supabase condiviso e la retention schedulata e' attiva dopo il dry

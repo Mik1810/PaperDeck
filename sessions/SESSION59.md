@@ -52,12 +52,21 @@
 - `npm run build`
 - `npm run test:e2e` (the 76-test desktop/mobile matrix completed with no
   failures; authentication-only smoke cases remained skipped by configuration)
+- `npm run test:integration:group-invitations` against an ephemeral Supabase
+  PostgreSQL 17.6 container (`7/7` passed), including the new recipient-only
+  in-app response, idempotency, digest consumption, and service-role-only grant.
+- `supabase db lint --schema public,private` against the same isolated database
+  found no schema errors. Post-run checks found zero synthetic profiles,
+  identities, groups, memberships, or invitations and confirmed `SECURITY
+  INVOKER`, the fixed search path, and no `anon`/`authenticated` execute grant.
 - Playwright read-only verification at `1440x1000` and `390x844`: page and menu
   rendered without console/error overlays; desktop popover and mobile bottom
   sheet stayed inside their viewports; Escape closed the dialog and restored
   focus to the bell.
 - The browser used local dev-auth and performed notification reads only. It did
   not invoke Accept, Decline, Archive, or acknowledgement actions.
-- Docker returned an immediate local I/O error, so the new migration integration
-  case is prepared but has not yet run against an isolated PostgreSQL instance.
-  The shared Supabase project was not used for migration or synthetic fixtures.
+- The WSL `/usr/bin/docker` wrapper still returns an immediate I/O error, but
+  Docker Desktop's WSL-exposed client was healthy. The test therefore used a
+  named ephemeral container directly on local port `54322`; the container and
+  its temporary database were removed afterward and the port is free. The
+  shared Supabase project was not used for migration or synthetic fixtures.
