@@ -185,11 +185,14 @@ broadcast is deliberately deferred:
 the first release uses durable refetch/poll behavior, and a later private-channel
 signal may prompt clients to refetch the same RLS-authorized rows.
 
-The migration and workflow are locally validated release candidates and have not
-been applied to the shared Supabase project. Validation covered both the
-incremental baseline-plus-migration path and the standalone schema snapshot on
-an isolated Supabase PostgreSQL 17.6 container; all five notification tests and
-`supabase db lint` passed with zero synthetic rows remaining.
+The migration is applied to the shared Supabase project. Validation covered both
+the incremental baseline-plus-migration path and the standalone schema snapshot
+on an isolated Supabase PostgreSQL 17.6 container; all five notification tests
+and `supabase db lint` passed with zero synthetic rows remaining. Remote
+verification confirmed an empty table, RLS, two policies, ten validated
+constraints, three enabled triggers, acknowledgement-only update grants, and no
+authenticated access to private helpers. The scheduled workflow remains disabled
+until its repository variable is enabled after a separate dry run.
 
 ### Worker Tables
 
