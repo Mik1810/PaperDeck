@@ -238,7 +238,12 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 - `research_groups`: nome, descrizione plain text, stato `active`/`archived`, successore selezionato, `revision`, timestamp e lifecycle;
 - `research_group_members`: gruppo, membro, ruolo, join e revoca; un solo owner attivo e indici per ACL e successione;
 - `private.research_group_runtime_settings`: kill switch separati per letture e scritture, entrambi disattivati di default;
-- `research_group_invites`, `research_group_items` e `research_group_activity` restano nelle issue successive. I token invito raw non entreranno mai nel database, nei log o nelle analytics.
+- #96 aggiunge `research_group_invitations` e RPC transazionali per creazione,
+  risposta, annullamento, revoca, ruoli, rimozione e uscita; migrazioni e test
+  sintetici sono verificati sul database condiviso, con kill switch disattivati.
+- `research_group_items` e `research_group_activity` restano nelle issue
+  successive. I token invito raw non entrano mai nel database, nei log o nelle
+  analytics.
 
 **API e autorizzazione:**
 

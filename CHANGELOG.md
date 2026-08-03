@@ -17,6 +17,13 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Added and deployed the #96 research-group invitation and membership lifecycle:
+  service-role-only transactional RPCs enforce owner/admin/member hierarchy,
+  exact-email opt-in and invitation policy, friendship/block checks, seven-day
+  single-use digest-only tokens, acceptance/cancellation/revocation, role
+  changes, removal/leave, and account-deletion cleanup. The shared Supabase
+  rollout passed synthetic lifecycle, cleanup, privilege, and advisor checks
+  with both group kill switches left disabled.
 - Added the #107 Clerk account-deletion lifecycle: a service-role-only
   atomic RPC performs research-group succession before collaboration identity
   cleanup, with signed-webhook, retry, idempotency, concurrency, privilege, and

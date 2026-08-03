@@ -48,6 +48,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Discovery collaborativa: ricerca account tramite email esatta disattivata di default e attivabile esplicitamente; amicizie reciproche con cooldown di 30 giorni dopo un rifiuto e nessun social graph pubblico.
 - Ownership gruppi: successore scelto dall'owner, altrimenti admin attivo piu' anziano, poi membro attivo piu' anziano; gruppo eliminato solo se non esistono altri membri.
 - Fondazione gruppi: dominio `research_groups` separato dalle playlist private, membership come unica fonte dell'owner, ACL centralizzata e kill switch database-backed per letture/scritture.
+- Inviti gruppi: token casuale a uso singolo con scadenza di sette giorni, solo digest nel database, accettazione esplicita e controlli transazionali su ruolo, opt-in, policy, amicizia e blocchi; #96 applicata e verificata sul Supabase condiviso, con funzionalita' ancora disabilitata dai kill switch.
 - Chiusura account Clerk: il webhook verificato usa una sola RPC service-role transazionale per completare successione/rimozione membership prima di eliminare l'identita' collaborativa; migrazione, gate sintetico e deployment Production sono verificati sul progetto Supabase condiviso.
 - Notifiche collaborative: inbox durevole in-app con badge `99+`, menu degli ultimi 20 eventi, azioni inline e futura cronologia completa; eventi realtime accelerano la UI ma non sostituiscono Postgres.
 - Discussione nei gruppi: possibile chat interattiva collegata ai paper, da progettare separatamente prima di qualsiasi implementazione.
@@ -57,7 +58,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 
 ## Stato implementazione
 
-Aggiornato al 2026-07-18:
+Aggiornato al 2026-07-29:
 
 - Repository, scaffold Next.js, UI skeleton e Clerk auth: completati.
 - Supabase schema iniziale con pgvector, RLS preparata e tabelle MVP: applicato.
@@ -103,6 +104,10 @@ Aggiornato al 2026-07-18:
   - `createClerkAuthenticatedClient()` per query Supabase con JWT Clerk + anon key.
   - Isolamento verificato con test deterministici A/B/anonimo e smoke Clerk Development A/B.
   - Preview e Production richiedono uno smoke separato prima di abilitare la collaborazione (#104).
+- Gruppi di ricerca privati: fondazione #95 e chiusura account #107 applicate
+  al progetto Supabase condiviso con kill switch disattivati; lifecycle degli
+  inviti e delle membership #96 verificato su PostgreSQL isolato e sul database
+  condiviso con fixture sintetiche completamente rimosse.
 - KaTeX: rendering LaTeX in abstract e summary su detail page e feed card (scelto dopo aver scartato MathJax per via della dimensione bundle e complessita' CDN).
 - Sicurezza: audit service-role completato, checklist rotazione secret documentata.
 - Test: suite Playwright smoke con 5 test dev-auth.

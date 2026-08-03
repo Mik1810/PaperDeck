@@ -2,11 +2,10 @@
 
 Status: approved on 2026-07-18 for the initial invite-only pilot.
 
-Implementation status: the local #95 foundation defines `research_groups`,
-`research_group_members`, centralized ACL checks, private database-backed
-read/write switches, and deterministic account-closure succession. The
-migration defaults both switches to disabled and is applied to Development.
-Production remains unchanged.
+Implementation status: #95, #107, and #96 are deployed to the shared PaperDeck
+Supabase project with both database-backed switches disabled. The invitation
+and membership lifecycle passed synthetic cross-role, cleanup, privilege, and
+advisor checks; no pilot UI is enabled yet.
 
 ## Product boundary
 
@@ -27,8 +26,7 @@ email address and returns a minimal collaboration profile, never the address,
 Clerk ID, private profile fallback, interests, or history. Missing and
 undiscoverable profiles return an equivalent result.
 
-This is the approved target policy. The schema-default change and safe migration
-of existing collaboration identities are implementation work tracked in #93.
+This is the approved and implemented target policy from #93.
 
 The email lookup uses a server-side HMAC, is rate-limited, and must not be logged.
 The default invitation policy remains `friends_only`.
@@ -76,10 +74,10 @@ Shared papers remain with a surviving group. Any retained provenance is detached
 from the closed account and displayed generically as `Former member`. No private
 profile, email, Clerk identifier, or ranking data survives through that label.
 
-The #95 database routine currently owns only the research-group part of this
-sequence. Wiring it into the Clerk deletion webhook and implementing complete
-PaperDeck account erasure remain explicit release work; neither is implied by
-the schema migration.
+The deployed #107 webhook RPC performs research-group succession and
+collaboration-identity cleanup atomically. The local #96 migration extends that
+same transaction to revoke pending invitations before identity removal. Complete
+PaperDeck private-data erasure remains separate release work.
 
 ## Operational ownership
 
