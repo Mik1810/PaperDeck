@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, researchGroupInvitations, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
+import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, researchGroupInvitations, notifications, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
 
 export const playlistsRelations = relations(playlists, ({one, many}) => ({
 	profile: one(profiles, {
@@ -37,6 +37,8 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	researchGroupMemberships: many(researchGroupMembers),
 	researchGroupInvitationsSent: many(researchGroupInvitations, { relationName: "researchGroupInvitations_inviter" }),
 	researchGroupInvitationsReceived: many(researchGroupInvitations, { relationName: "researchGroupInvitations_recipient" }),
+	notificationsReceived: many(notifications, { relationName: "notifications_recipient" }),
+	notificationActions: many(notifications, { relationName: "notifications_actor" }),
 	selectedSuccessorForGroups: many(researchGroups),
 	playlists: many(playlists),
 	recommendationImpressions: many(recommendationImpressions),
@@ -72,6 +74,7 @@ export const researchGroupsRelations = relations(researchGroups, ({one, many}) =
 	}),
 	memberships: many(researchGroupMembers),
 	invitations: many(researchGroupInvitations),
+	notifications: many(notifications),
 }));
 
 export const researchGroupMembersRelations = relations(researchGroupMembers, ({one}) => ({
@@ -99,6 +102,31 @@ export const researchGroupInvitationsRelations = relations(researchGroupInvitati
 		fields: [researchGroupInvitations.recipientId],
 		references: [profiles.ownerId],
 		relationName: "researchGroupInvitations_recipient"
+	}),
+}));
+
+export const notificationsRelations = relations(notifications, ({one}) => ({
+	recipient: one(profiles, {
+		fields: [notifications.recipientId],
+		references: [profiles.ownerId],
+		relationName: "notifications_recipient"
+	}),
+	actor: one(profiles, {
+		fields: [notifications.actorId],
+		references: [profiles.ownerId],
+		relationName: "notifications_actor"
+	}),
+	friendRequest: one(friendRequests, {
+		fields: [notifications.friendRequestId],
+		references: [friendRequests.id]
+	}),
+	groupInvitation: one(researchGroupInvitations, {
+		fields: [notifications.groupInvitationId],
+		references: [researchGroupInvitations.id]
+	}),
+	group: one(researchGroups, {
+		fields: [notifications.groupId],
+		references: [researchGroups.id]
 	}),
 }));
 

@@ -172,12 +172,20 @@ Un member puo' copiare un paper nella **propria** libreria con un'azione esplici
 | --- | --- | --- |
 | Share | nessuno | tutto client-side, nessuna analytics persistita |
 | Follow privati | `topic_subscriptions` | `(owner_id, topic_id)` come chiave; non riusare `user_interests` |
-| Collaboration | `collaboration_identities`, `research_groups`, `research_group_members`, `research_group_invites`, `research_group_items`, `research_group_activity` | UUID pubblico, discovery HMAC, ACL, ruoli, token hashati, revision e audit minimale |
+| Collaboration | `collaboration_identities`, `research_groups`, `research_group_members`, `research_group_invitations`, `notifications`, `research_group_items`, `research_group_activity` | UUID pubblico, discovery HMAC, ACL, ruoli, token hashati, notifiche recipient-owned, revision e audit minimale |
 | Discussione | `research_group_comments`, `content_reports`, `user_blocks` | plain text, limiti, stati di moderazione |
 | Pubblico | `public_profiles`, `public_collection_publications`, `privacy_consents` | consenso/versione, handle e pubblicazione selettiva |
 | Operativita' | `moderation_cases`, `moderation_actions`, `security_audit_events`, `export_jobs`, `deletion_jobs` | lifecycle, audit, export e delete verificabili |
 
 Ogni tabella richiede migration versionata, aggiornamento di `supabase/schema.sql`, schema Drizzle/relazioni, repository `server-only`, tag `@user-scoped` o `@admin`, indici, policy RLS, documentazione database e test di isolamento.
+
+La prima tranche della #97 rende durevoli le notifiche di amicizia, invito e
+membership con retention di 90 giorni. Le righe sorgente restano autorevoli e i
+trigger inseriscono l'evento nella stessa transazione. Realtime non e' un
+requisito di correttezza: il client deve sempre poter rifare il fetch dopo una
+disconnessione. Il segnale privato Realtime viene valutato separatamente come
+ottimizzazione della #98; attivita' paper e aggregazione dei burst restano nella
+#99.
 
 ## 5. Roadmap dalla A alla Z
 

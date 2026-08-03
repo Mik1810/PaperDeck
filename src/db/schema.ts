@@ -9,6 +9,7 @@ export const friendRequestStatus = pgEnum("friend_request_status", ['pending', '
 export const researchGroupRole = pgEnum("research_group_role", ['owner', 'admin', 'member'])
 export const researchGroupState = pgEnum("research_group_state", ['active', 'archived'])
 export const researchGroupInvitationStatus = pgEnum("research_group_invitation_status", ['pending', 'accepted', 'declined', 'cancelled', 'revoked', 'expired'])
+export const notificationType = pgEnum("notification_type", ['friend_request_received', 'friendship_accepted', 'group_invitation_received', 'group_invitation_accepted', 'group_member_joined', 'group_membership_ended', 'group_role_changed', 'group_ownership_transferred'])
 
 
 export const profiles = pgTable("profiles", {
@@ -177,6 +178,40 @@ export const researchGroupInvitations = pgTable("research_group_invitations", {
 	check("research_group_invitations_lifecycle_check", sql`(${table.status} = 'pending' and ${table.tokenDigest} is not null and ${table.resolvedAt} is null) or (${table.status} <> 'pending' and ${table.tokenDigest} is null and ${table.resolvedAt} is not null)`),
 	check("research_group_invitations_digest_check", sql`${table.tokenDigest} is null or ${table.tokenDigest} ~ '^[0-9a-f]{64}$'`),
 	pgPolicy("research_group_invitations_recipient_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`${table.recipientId} = ((select auth.jwt()) ->> 'sub') and (select private.research_groups_reads_enabled())` }),
+]);
+
+export const notifications = pgTable("notifications", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	recipientId: text("recipient_id").notNull(),
+	actorId: text("actor_id"),
+	type: notificationType().notNull(),
+	dedupeKey: text("dedupe_key").notNull(),
+	friendRequestId: uuid("friend_request_id"),
+	groupInvitationId: uuid("group_invitation_id"),
+	groupId: uuid("group_id"),
+	readAt: timestamp("read_at", { withTimezone: true, mode: 'string' }),
+	archivedAt: timestamp("archived_at", { withTimezone: true, mode: 'string' }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }).default(sql`now() + interval '90 days'`).notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.recipientId], foreignColumns: [profiles.ownerId], name: "notifications_recipient_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.actorId], foreignColumns: [profiles.ownerId], name: "notifications_actor_id_fkey" }).onDelete("set null"),
+	foreignKey({ columns: [table.friendRequestId], foreignColumns: [friendRequests.id], name: "notifications_friend_request_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.groupInvitationId], foreignColumns: [researchGroupInvitations.id], name: "notifications_group_invitation_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.groupId], foreignColumns: [researchGroups.id], name: "notifications_group_id_fkey" }).onDelete("cascade"),
+	unique("notifications_recipient_dedupe_key").on(table.recipientId, table.dedupeKey),
+	index("notifications_recipient_created_idx").on(table.recipientId, table.createdAt.desc(), table.id.desc()),
+	index("notifications_recipient_unread_idx").on(table.recipientId, table.createdAt.desc(), table.id.desc()).where(sql`${table.readAt} is null and ${table.archivedAt} is null`),
+	index("notifications_actor_idx").on(table.actorId).where(sql`${table.actorId} is not null`),
+	index("notifications_friend_request_idx").on(table.friendRequestId).where(sql`${table.friendRequestId} is not null`),
+	index("notifications_group_invitation_idx").on(table.groupInvitationId).where(sql`${table.groupInvitationId} is not null`),
+	index("notifications_group_idx").on(table.groupId).where(sql`${table.groupId} is not null`),
+	index("notifications_expiry_idx").on(table.expiresAt),
+	check("notifications_dedupe_key_check", sql`char_length(${table.dedupeKey}) between 1 and 240`),
+	check("notifications_expiry_check", sql`${table.expiresAt} > ${table.createdAt}`),
+	check("notifications_source_check", sql`(${table.type} in ('friend_request_received', 'friendship_accepted') and ${table.friendRequestId} is not null and ${table.groupInvitationId} is null and ${table.groupId} is null) or (${table.type} in ('group_invitation_received', 'group_invitation_accepted') and ${table.friendRequestId} is null and ${table.groupInvitationId} is not null and ${table.groupId} is not null) or (${table.type} in ('group_member_joined', 'group_membership_ended', 'group_role_changed', 'group_ownership_transferred') and ${table.friendRequestId} is null and ${table.groupInvitationId} is null and ${table.groupId} is not null)`),
+	pgPolicy("notifications_recipient_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`${table.recipientId} = ((select auth.jwt()) ->> 'sub')` }),
+	pgPolicy("notifications_recipient_update", { as: "permissive", for: "update", to: ["authenticated"], using: sql`${table.recipientId} = ((select auth.jwt()) ->> 'sub')`, withCheck: sql`${table.recipientId} = ((select auth.jwt()) ->> 'sub')` }),
 ]);
 
 export const playlists = pgTable("playlists", {
