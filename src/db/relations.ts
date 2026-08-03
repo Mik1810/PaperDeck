@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
+import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, researchGroupInvitations, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
 
 export const playlistsRelations = relations(playlists, ({one, many}) => ({
 	profile: one(profiles, {
@@ -35,6 +35,8 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	blocksCreated: many(userBlocks, { relationName: "userBlocks_blocker" }),
 	blocksReceived: many(userBlocks, { relationName: "userBlocks_blocked" }),
 	researchGroupMemberships: many(researchGroupMembers),
+	researchGroupInvitationsSent: many(researchGroupInvitations, { relationName: "researchGroupInvitations_inviter" }),
+	researchGroupInvitationsReceived: many(researchGroupInvitations, { relationName: "researchGroupInvitations_recipient" }),
 	selectedSuccessorForGroups: many(researchGroups),
 	playlists: many(playlists),
 	recommendationImpressions: many(recommendationImpressions),
@@ -69,6 +71,7 @@ export const researchGroupsRelations = relations(researchGroups, ({one, many}) =
 		references: [profiles.ownerId]
 	}),
 	memberships: many(researchGroupMembers),
+	invitations: many(researchGroupInvitations),
 }));
 
 export const researchGroupMembersRelations = relations(researchGroupMembers, ({one}) => ({
@@ -79,6 +82,23 @@ export const researchGroupMembersRelations = relations(researchGroupMembers, ({o
 	profile: one(profiles, {
 		fields: [researchGroupMembers.memberId],
 		references: [profiles.ownerId]
+	}),
+}));
+
+export const researchGroupInvitationsRelations = relations(researchGroupInvitations, ({one}) => ({
+	group: one(researchGroups, {
+		fields: [researchGroupInvitations.groupId],
+		references: [researchGroups.id]
+	}),
+	inviter: one(profiles, {
+		fields: [researchGroupInvitations.inviterId],
+		references: [profiles.ownerId],
+		relationName: "researchGroupInvitations_inviter"
+	}),
+	recipient: one(profiles, {
+		fields: [researchGroupInvitations.recipientId],
+		references: [profiles.ownerId],
+		relationName: "researchGroupInvitations_recipient"
 	}),
 }));
 

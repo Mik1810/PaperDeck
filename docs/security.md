@@ -51,6 +51,21 @@ owner identifiers, email addresses, hashes, payloads, tokens, or secrets.
 
 The live Clerk cache smoke is intentionally separate from default App CI. It uses only Clerk Development users configured through local environment variables, never logs their email addresses, stores no passwords or tokens, disables Playwright screenshots/traces/video, and performs exact server-only cleanup of its random playlist marker. Pre-existing Clerk sessions are snapshotted and excluded from cleanup.
 
+## Research-Group Invitation Tokens
+
+Research-group invitations use 32 random bytes encoded as URL-safe text. The raw
+token is returned to server code only when the invitation is created and must
+travel in a `no-store` flow with `Referrer-Policy: no-referrer`. Do not persist
+or log the raw token.
+
+Postgres stores only its SHA-256 digest. Invitations expire after seven days,
+are single-use, clear digest material on every terminal transition, and can be
+cancelled by the inviter or revoked by a current owner/admin. Creation and
+acceptance recheck exact-email discovery opt-in, the recipient's invitation
+policy, active friendship where required, bidirectional blocks, group state,
+role, membership, and the database read/write switches. The table and lifecycle
+functions are denied to browser roles; server repositories use the service role.
+
 ## Emergency Rotation Checklist
 
 Use this when a secret may have leaked.

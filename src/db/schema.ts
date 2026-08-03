@@ -8,6 +8,7 @@ export const groupInvitePolicy = pgEnum("group_invite_policy", ['nobody', 'frien
 export const friendRequestStatus = pgEnum("friend_request_status", ['pending', 'accepted', 'declined', 'cancelled'])
 export const researchGroupRole = pgEnum("research_group_role", ['owner', 'admin', 'member'])
 export const researchGroupState = pgEnum("research_group_state", ['active', 'archived'])
+export const researchGroupInvitationStatus = pgEnum("research_group_invitation_status", ['pending', 'accepted', 'declined', 'cancelled', 'revoked', 'expired'])
 
 
 export const profiles = pgTable("profiles", {
@@ -150,6 +151,32 @@ export const researchGroupMembers = pgTable("research_group_members", {
 	index("research_group_members_succession_idx").on(table.groupId, table.role, table.joinedAt, table.memberId).where(sql`${table.revokedAt} is null`),
 	check("research_group_members_owner_active_check", sql`${table.role} <> 'owner' or ${table.revokedAt} is null`),
 	pgPolicy("research_group_members_self_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`${table.memberId} = (select auth.jwt() ->> 'sub') and ${table.revokedAt} is null and (select private.research_groups_reads_enabled())` }),
+]);
+
+export const researchGroupInvitations = pgTable("research_group_invitations", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	groupId: uuid("group_id").notNull(),
+	inviterId: text("inviter_id").notNull(),
+	recipientId: text("recipient_id").notNull(),
+	tokenDigest: text("token_digest"),
+	status: researchGroupInvitationStatus().default('pending').notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }).default(sql`now() + interval '7 days'`).notNull(),
+	resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: 'string' }),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.groupId], foreignColumns: [researchGroups.id], name: "research_group_invitations_group_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.inviterId], foreignColumns: [profiles.ownerId], name: "research_group_invitations_inviter_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.recipientId], foreignColumns: [profiles.ownerId], name: "research_group_invitations_recipient_id_fkey" }).onDelete("cascade"),
+	uniqueIndex("research_group_invitations_one_pending_recipient_idx").on(table.groupId, table.recipientId).where(sql`${table.status} = 'pending'`),
+	index("research_group_invitations_recipient_status_idx").on(table.recipientId, table.status, table.createdAt.desc()),
+	index("research_group_invitations_group_status_idx").on(table.groupId, table.status, table.createdAt.desc()),
+	index("research_group_invitations_inviter_idx").on(table.inviterId),
+	check("research_group_invitations_distinct_users_check", sql`${table.inviterId} <> ${table.recipientId}`),
+	check("research_group_invitations_expiry_check", sql`${table.expiresAt} > ${table.createdAt}`),
+	check("research_group_invitations_lifecycle_check", sql`(${table.status} = 'pending' and ${table.tokenDigest} is not null and ${table.resolvedAt} is null) or (${table.status} <> 'pending' and ${table.tokenDigest} is null and ${table.resolvedAt} is not null)`),
+	check("research_group_invitations_digest_check", sql`${table.tokenDigest} is null or ${table.tokenDigest} ~ '^[0-9a-f]{64}$'`),
+	pgPolicy("research_group_invitations_recipient_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`${table.recipientId} = ((select auth.jwt()) ->> 'sub') and (select private.research_groups_reads_enabled())` }),
 ]);
 
 export const playlists = pgTable("playlists", {
