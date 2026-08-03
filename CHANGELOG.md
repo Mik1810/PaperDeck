@@ -78,6 +78,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made manual notification-retention dispatches count-only by default, while
+  preserving real deletion for explicitly approved runs and the separately
+  gated daily schedule.
 - Restored the standalone `supabase/schema.sql` research-group lifecycle that
   had drifted behind its deployed migrations and Drizzle model, then verified
   the repaired snapshot from an empty Supabase PostgreSQL 17.6 database.

@@ -6,7 +6,7 @@ on:
       dry_run:
         description: "Count expired notifications without deleting"
         required: false
-        default: false
+        default: true
         type: boolean
   schedule:
     - cron: "23 5 * * *"
