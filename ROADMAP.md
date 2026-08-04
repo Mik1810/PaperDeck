@@ -30,7 +30,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - UX principale: social-like, con feed/deck swipe-style.
 - Onboarding interessi: wizard guidato separato dalla shell autenticata, minimale e scuro, con preferenze dominanti e controlli in una rail piu' stretta.
 - Feed deck: una card singola full-screen.
-- Swipe right apre la scheda dettaglio del paper.
+- Swipe right salva il paper in Read later.
 - Preferiti e swipe sono segnali diversi: cuore per preferiti, segnalibro per playlist.
 - Abstract nella card: preview ellipsata, espandibile stile descrizione post social, con scroll verticale nella card.
 - Search MVP: tab autenticata per cercare nel catalogo CS locale per titolo, autore, topic e identificativi, senza diventare una ricerca universale tipo reference manager.
@@ -479,7 +479,7 @@ Ogni card paper deve includere:
 
 Interazioni:
 
-- Swipe right: apre la scheda dettaglio del paper.
+- Swipe right: salva in Read later.
 - Swipe left: non interessante per questo paper specifico.
 - Tap: dettaglio paper.
 - Cuore: aggiunge/rimuove dai preferiti.
@@ -610,7 +610,7 @@ Segnali impliciti:
 
 Per MVP e' meglio partire con segnali espliciti. I segnali impliciti possono essere aggiunti dopo, con attenzione alla privacy.
 
-Decisione: l'apertura dettaglio tramite swipe right conta come segnale positivo leggero, inferiore a preferito e salvataggio in playlist.
+Decisione: l'apertura dettaglio tramite il pulsante Open conta come segnale positivo leggero, inferiore a preferito e salvataggio in playlist.
 
 Stato attuale:
 
@@ -1041,7 +1041,7 @@ La direzione scelta e' social-like: l'esperienza primaria deve essere rapida, vi
 Decisione proposta:
 
 - MVP: deck swipe-style con card singola full-screen.
-- Swipe right apre il dettaglio, non equivale a preferito.
+- Swipe right salva in Read later, non equivale a preferito.
 - Cuore e segnalibro sono azioni esplicite separate.
 - Aggiungere lista/filtro per gestione e recupero paper.
 

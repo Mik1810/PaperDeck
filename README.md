@@ -10,7 +10,7 @@ PaperDeck is a mobile-first paper triage deck for computer science researchers: 
 
 ## Project Status
 
-PaperDeck is currently at `0.1.4`: an early MVP foundation with production auth, Supabase-backed user data, multi-category arXiv ingestion with historical backfill, enrichment from Semantic Scholar/OpenAlex/Unpaywall, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently at `0.1.5`: an early MVP foundation with production auth, Supabase-backed user data, multi-category arXiv ingestion with historical backfill, enrichment from Semantic Scholar/OpenAlex/Unpaywall, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
 
 ## MVP Scope
 
@@ -23,7 +23,7 @@ PaperDeck focuses on three things: fast discovery, quick triage, and a shortlist
 - Catalog search for PaperDeck's local CS paper collection.
 - Mobile-first full-screen paper deck with swipe interactions.
 - Abstract preview with expandable text and inline LaTeX rendering.
-- Swipe left to dismiss a paper, swipe right to open the paper detail view.
+- Swipe left to dismiss a paper, swipe right to save to Read later.
 - Heart button for favorites.
 - Bookmark button to add/remove papers from private playlists.
 - Detail actions for `Already read` and `Not interested` signals.
@@ -118,13 +118,7 @@ The initial database plan lives in [docs/database.md](./docs/database.md). The S
 
 The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data through trusted server code. RLS policies are included for the future Clerk JWT integration path.
 
-Current server-side persistence covers profiles, onboarding interests, favorites, the default `Read later` playlist, playlist items, paper interactions, and a seeded starter catalog. The feed ranking is computed server-side in `src/lib/ranking/feed-ranking.ts`.
-
-Seed the starter catalog explicitly:
-
-```bash
-npm run seed:catalog
-```
+Current server-side persistence covers profiles, onboarding interests, favorites, the default `Read later` playlist, playlist items, paper interactions, and a seeded starter catalog. The feed ranking is computed server-side in `src/lib/ranking/feed-ranking.ts`. Catalog papers are ingested through arXiv and enrichment workers; see the Ingestion section below.
 
 ## Ingestion
 
@@ -178,38 +172,45 @@ Protected routes require Clerk production keys on public deployments. Developmen
 
 ```text
 .
-|-- .env.example
-|-- AGENT.md
-|-- CHANGELOG.md
-|-- docs/
-|   |-- architecture.md
-|   |-- database.md
-|   |-- embeddings.md
-|   |-- ingestion.md
-|   |-- deployment.md
-|   `-- security.md
-|-- README.md
-|-- ROADMAP.md
-|-- package.json
-|-- scripts/
-|   |-- embedding_common.py
-|   |-- embed_papers.py
-|   |-- embed_topics.py
-|   `-- ingest-arxiv.ts
-|-- src/
-|   |-- app/
-|   |-- components/
-|   |-- lib/
-|   |-- proxy.ts
-|   `-- types/
-|-- sessions/
-|   |-- SESSION1.md
-|   `-- SESSION2.md
-|-- supabase/
-|   |-- migrations/
-|   `-- schema.sql
-`-- logo/
-    `-- paperdeck-logo.svg
+├── .env.example
+├── AGENTS.md
+├── CHANGELOG.md
+├── README.md
+├── ROADMAP.md
+├── package.json
+├── docs/
+│   ├── architecture.md
+│   ├── clerk-supabase-rls.md
+│   ├── database.md
+│   ├── deployment.md
+│   ├── embeddings.md
+│   ├── ingestion.md
+│   ├── mobile-swipe-diagnosis.md
+│   ├── pwa.md
+│   ├── recommendation-stability.md
+│   ├── research-group-charter.md
+│   ├── security.md
+│   ├── social-interactions-plan.md
+│   └── summaries.md
+├── logo/
+│   └── paperdeck-logo.svg
+├── scripts/
+│   ├── embedding_common.py
+│   ├── embed_papers.py
+│   ├── embed_topics.py
+│   └── ingest-arxiv.ts
+├── sessions/
+│   ├── SESSION1.md
+│   └── ...
+├── src/
+│   ├── app/
+│   ├── components/
+│   ├── lib/
+│   ├── proxy.ts
+│   └── types/
+└── supabase/
+    ├── migrations/
+    └── schema.sql
 ```
 
 ## Logo
