@@ -45,7 +45,6 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Supabase region: preferire `eu-central-2` Zurich se disponibile, fallback `eu-central-1` Frankfurt.
 - Paper classici: massimo indicativo 10-15% del feed.
 - Digest: solo in-app nella prima versione.
-- Note personali: post-MVP.
 - Collaborazione post-MVP: piccoli gruppi di ricerca privati, ciascuno con una sola lista condivisa di paper; solo owner/admin invitano membri e ogni invito richiede accettazione.
 - Discovery collaborativa: ricerca account tramite email esatta disattivata di default e attivabile esplicitamente; amicizie reciproche con cooldown di 30 giorni dopo un rifiuto e nessun social graph pubblico.
 - Ownership gruppi: successore scelto dall'owner, altrimenti admin attivo piu' anziano, poi membro attivo piu' anziano; gruppo eliminato solo se non esistono altri membri.
@@ -125,6 +124,7 @@ Aggiornato al 2026-08-04:
   la vista predefinita e viene renderizzata per prima. Le altre raccolte sono
   normalizzate e precaricate privatamente in background; selezione e modifica
   restano locali e aggiornano l'URL senza una navigazione server.
+- Note personali: box note private nella pagina detail paper, con log cronologico (`paper_notes`).
 
 ## Prossimi passi
 
@@ -407,22 +407,7 @@ Futuro:
 
 - Playlist condivisibili.
 - Export BibTeX/RIS.
-- Note personali.
 - Tag personali.
-
-Per "note personali" si intende un campo privato per annotazioni libere su un paper, ad esempio:
-
-- perche' e' utile;
-- quale risultato contiene;
-- relazione con un proprio progetto;
-- dubbi o cose da approfondire;
-- mini-riassunto personale.
-
-Non e' indispensabile nell'MVP se l'obiettivo principale e' discovery + ranking.
-
-Decisione: note personali post-MVP.
-
-Stato: implementato. La pagina di dettaglio paper include note private: si scrivono in un box che si svuota dopo il salvataggio e vengono mostrate come log cronologico con data e ora (`paper_notes`, più note per paper, opzionalmente collegate a una playlist), visibili solo all'utente.
 
 ### Digest
 
@@ -466,7 +451,7 @@ Stato attuale:
 - I topic selezionati hanno peso principale.
 - I feedback positivi su paper gia' aperti, preferiti o salvati aumentano il peso dei topic correlati.
 - `dismiss`, `not_interested`, `read`, `already_read` e `open_detail` rimuovono il paper dal deck attivo, cosi' il feed avanza dopo l'apertura dettaglio.
-- Embeddings e pgvector non sono ancora usati nel ranking live.
+- Retrieval semantico via pgvector e profilo utente attivi; i batch feed salvati in `recommendations` evitano reranking completo a ogni refresh.
 
 ### Ranking MVP
 
@@ -562,7 +547,6 @@ La scelta architetturale e' free-first: Vercel per la webapp e le API leggere, S
 - Chat/RAG su full text open access.
 - Import libreria utente da BibTeX.
 - Export BibTeX/RIS.
-- Note personali.
 - Tag personali.
 - Playlist condivisibili.
 - Follow di autori, venue o keyword.
