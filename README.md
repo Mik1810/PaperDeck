@@ -39,6 +39,15 @@ PaperDeck focuses on three things: fast discovery, quick triage, and a shortlist
 - Full reference manager replacement.
 - Public or social reading lists.
 
+## Product principles
+
+PaperDeck is a **daily CS triage deck**, not a generalist research suite. Every feature must answer: *"Does this help a CS researcher discover, skim, and shortlist relevant papers in under 3 minutes?"*
+
+- **Vertical focus:** CS only for MVP.
+- **Free-first:** every component works within free tiers (Vercel, Supabase, GitHub Actions). Paid services require prior approval.
+- **Privacy-first:** user reading behavior stays private. No public profiles or social surfaces.
+- **Content respect:** never import or republish full text unless the license clearly allows it. Always preserve LaTeX/math in abstracts.
+
 ## Planned Data Sources
 
 The MVP starts with arXiv and expands with additional metadata sources:
@@ -79,27 +88,7 @@ coverage, and repetition gate; latency is reported separately as documented in
 
 ## Local Environment
 
-Create `.env.local` from `.env.example` and fill in the Clerk and Supabase keys:
-
-```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_replace_me
-CLERK_SECRET_KEY=sk_test_replace_me
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/feed
-NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
-CLERK_AUTHORIZED_PARTIES=http://localhost:3000,https://paperdeck.example.com
-NEXT_PUBLIC_PAPERDECK_DEV_AUTH=false
-PAPERDECK_DEV_OWNER_ID=local-dev-user
-
-NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
-SUPABASE_SERVICE_ROLE_KEY=replace_me
-```
-
-`.env.local` is intentionally ignored by Git.
-
-Use Clerk development keys (`pk_test_...` / `sk_test_...`) for local authentication testing. For UI latency debugging without Clerk, set `NEXT_PUBLIC_PAPERDECK_DEV_AUTH=true`; this bypass only works outside production.
+Copy `.env.example` to `.env.local` and fill in Clerk and Supabase keys. Set `NEXT_PUBLIC_PAPERDECK_DEV_AUTH=true` to bypass Clerk auth for local UI work (development only).
 
 ## Testing
 
