@@ -80,7 +80,7 @@ export function PaperCard({
   const visibleErrorMessage = dismissErrorMessage ?? mutationErrorMessage;
 
   return (
-    <article className={`${PAPER_CARD_HEIGHT_CLASS_NAME} flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] md:max-w-2xl lg:max-w-none lg:rounded-xl`}>
+    <article className={`${PAPER_CARD_HEIGHT_CLASS_NAME} flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] md:max-w-2xl lg:max-w-none lg:rounded-xl`} style={{ touchAction: "pan-y" }}>
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
         <div>
           <p className="text-xs font-black uppercase tracking-normal text-teal-600">
@@ -96,7 +96,7 @@ export function PaperCard({
 
       <MutationAlert className="mx-5 mt-4" message={visibleErrorMessage} />
 
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto px-5 py-4" style={{ touchAction: "pan-y" }}>
         <div className="mb-3 flex flex-wrap gap-2">
           {paper.topics.map((topic) => (
             <span
