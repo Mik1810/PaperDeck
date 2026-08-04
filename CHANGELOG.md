@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored the `requireUuid` helper in `src/app/actions.ts` that was dropped
+  while resolving the `main` merge on `agent/notification-center`, fixing the
+  notification-center TypeScript build failure.
+
 ### Changed
 
 - Replaced direct bookmark-to-`Read later` buttons on feed, digest, and paper
