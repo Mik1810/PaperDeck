@@ -129,7 +129,6 @@ Aggiornato al 2026-08-04:
 ## Prossimi passi
 
 - Monitorare `feed_timing` dopo il preload iniziale e il riuso del batch live; valutare un rinnovo batch/background worker per sessioni lunghe.
-- Rivedere strategia storage summary JSONB prima di scalare oltre 10K paper (rivisto in Session 8 — decision document in `docs/summaries.md`).
 
 ## Principio sui contenuti
 
@@ -558,7 +557,3 @@ La scelta architetturale e' free-first: Vercel per la webapp e le API leggere, S
 ## Migrazione RLS completata (ex domanda aperta)
 
 La configurazione Clerk JWT + Supabase RLS e' stata completata (vedi `docs/clerk-supabase-rls.md`). Resta da completare il passaggio 3: migrare le repository function user-scoped dal service role al clerk-authenticated client. Tracciato in issue #47.
-
-## Domande aperte
-
-1. Verificare in produzione il backfill MiniLM e monitorare `feed_timing` per eventuali fallback dovuti a profili o paper non ancora re-embedded.
