@@ -92,6 +92,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made mobile deck gestures responsive to viewport width, disabled competing
+  drag momentum, and rendered the real next paper beneath the active card so
+  committed and consecutive swipes no longer expose a blank transition.
 - Made manual notification-retention dispatches count-only by default, while
   preserving real deletion for explicitly approved runs and the separately
   gated daily schedule.
