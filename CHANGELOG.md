@@ -8,6 +8,12 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Set `touch-action: pan-y` on the `PaperCard` internal scrollable container
+  and its `article` ancestor to prevent the browser from stealing horizontal
+  touch gestures for native vertical scrolling, fixing mobile deck swipe
+  immediately resetting to centre. The earlier `touch-action: pan-y` on the
+  outer `motion.div` was ineffective per the CSS touch-action algorithm because
+  the nearest scroll containers are inside the card, not outside it.
 - Restored the `requireUuid` helper in `src/app/actions.ts` that was dropped
   while resolving the `main` merge on `agent/notification-center`, fixing the
   notification-center TypeScript build failure.
