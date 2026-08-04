@@ -77,3 +77,14 @@
   frames, with the final Favorites editing state and URL already synchronized;
   it captured no navigation request, no horizontal overflow, no framework error
   overlay and zero WCAG 2 A/AA violations.
+
+## CI follow-up
+
+- The first PR run exposed one stale smoke-test assumption: the ignored-history
+  test still expected `Ignored` to render directly at `/library`, although the
+  agreed Library now renders `Read later` as its only default collection.
+- Updated the smoke flow to assert the default `Read later` view, await the
+  private background collection response, select `Ignored` through its Library
+  control, and only then verify the ignored-history contents. This preserves the
+  product behavior and tests the actual user path instead of restoring the old
+  duplicated overview.
