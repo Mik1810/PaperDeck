@@ -44,3 +44,44 @@ in `feed-deck.tsx` is kept as belt-and-suspenders.
 - `TMPDIR=/tmp npm run build` — passed
 
 No commits yet; awaiting real-device confirmation.
+
+Real-device test confirmed the fix works.
+
+## README and ROADMAP cleanup
+
+- README: bumped version to 0.1.5, corrected swipe right behaviour (save to
+  Read later, not open detail), extracted product principles from ROADMAP
+  (3-minute daily triage loop, free-first, privacy), removed redundant
+  `.env.local` variable listing, updated repository layout tree.
+- ROADMAP: cut from 1,091 to 559 lines (-49%). Removed completed Fasi di
+  sviluppo (0–8), detailed Fonti dati candidate (→ README summary), Gestione
+  LaTeX (→ README), Modello dati iniziale (→ docs/database.md), Componenti
+  principali (duplicate), expanded Architettura (→ docs/architecture.md),
+  Rischi e decisioni risolte, Fondazione identità/notifiche (implementation
+  detail). Fixed contradictions: note personali (implemented, not post-MVP),
+  embeddings active in ranking, swipe right behaviour.
+
+## Docs audit and fixes
+
+- `AGENTS.md`: updated `src/proxy.ts` description to reflect resource-level
+  guards (`requireOwnerId`/`requireUserContext`) as the authorization boundary.
+- `docs/deployment.md`: bumped verification date to 2026-08-04.
+- `docs/clerk-supabase-rls.md`: step 3 checkbox updated to reflect partial
+  migration progress; stale `@user-scoped`/`@admin` counts annotated.
+- `docs/social-interactions-plan.md`: status updated from "proposta" to
+  "fondazioni implementate, feature proposte ma non rilasciate".
+- `docs/database.md`: resolved contradictory paragraphs about RPC migration
+  deployment status by adding clarifying heading.
+- `docs/research-group-charter.md`: corrected in-app RPC deployment status
+  (deployed but guarded by database switches).
+- `docs/ingestion.md`: clarified Unpaywall OA URL count (21 initial vs 24
+  after subsequent enrichment in ROADMAP).
+- `docs/mobile-swipe-diagnosis.md`: technical analysis of the touch-action
+  conflict written and committed.
+
+## Validation
+
+- `npm run typecheck` — passed
+- `npm run lint` — passed
+- `npm run test:unit` — 114/114 passed
+- `TMPDIR=/tmp npm run build` — passed
