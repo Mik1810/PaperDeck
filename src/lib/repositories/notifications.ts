@@ -1,12 +1,24 @@
 import "server-only";
 
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   collaborationIdentities,
+  friendRequests,
   notifications,
   profiles,
+  researchGroupInvitations,
   researchGroups,
 } from "@/db/schema";
 import { requireOwnerId } from "@/lib/repositories/owner-guard";
@@ -22,6 +34,9 @@ export type NotificationCursor = {
   id: string;
 };
 
+export type NotificationCategory = "all" | "requests" | "groups";
+export type NotificationReadState = "all" | "unread" | "read";
+
 export type NotificationSummary = {
   id: string;
   type: typeof notifications.$inferSelect.type;
@@ -31,7 +46,16 @@ export type NotificationSummary = {
     imageUrl: string | null;
   } | null;
   friendRequestId: string | null;
+  friendRequestStatus: "pending" | "accepted" | "declined" | "cancelled" | null;
   groupInvitationId: string | null;
+  groupInvitationStatus:
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "cancelled"
+    | "revoked"
+    | "expired"
+    | null;
   group: {
     id: string;
     name: string;
@@ -56,7 +80,12 @@ function normalizeLimit(limit: number | undefined) {
 /** @user-scoped */
 export async function listNotifications(
   ownerId: string,
-  options: { limit?: number; before?: NotificationCursor } = {},
+  options: {
+    limit?: number;
+    before?: NotificationCursor;
+    category?: NotificationCategory;
+    readState?: NotificationReadState;
+  } = {},
 ): Promise<NotificationSummary[]> {
   requireOwnerId(ownerId, "listNotifications");
   const limit = normalizeLimit(options.limit);
@@ -78,7 +107,9 @@ export async function listNotifications(
       actorDisplayName: actorProfiles.displayName,
       actorImageUrl: actorProfiles.imageUrl,
       friendRequestId: notifications.friendRequestId,
+      friendRequestStatus: friendRequests.status,
       groupInvitationId: notifications.groupInvitationId,
+      groupInvitationStatus: researchGroupInvitations.status,
       groupId: researchGroups.id,
       groupName: researchGroups.name,
       readAt: notifications.readAt,
@@ -91,12 +122,37 @@ export async function listNotifications(
       actorIdentities,
       eq(actorIdentities.ownerId, notifications.actorId),
     )
+    .leftJoin(friendRequests, eq(friendRequests.id, notifications.friendRequestId))
+    .leftJoin(
+      researchGroupInvitations,
+      eq(researchGroupInvitations.id, notifications.groupInvitationId),
+    )
     .leftJoin(researchGroups, eq(researchGroups.id, notifications.groupId))
     .where(
       and(
         eq(notifications.recipientId, ownerId),
         isNull(notifications.archivedAt),
         sql`${notifications.expiresAt} > now()`,
+        options.category === "requests"
+          ? inArray(notifications.type, [
+              "friend_request_received",
+              "friendship_accepted",
+            ])
+          : options.category === "groups"
+            ? inArray(notifications.type, [
+                "group_invitation_received",
+                "group_invitation_accepted",
+                "group_member_joined",
+                "group_membership_ended",
+                "group_role_changed",
+                "group_ownership_transferred",
+              ])
+            : undefined,
+        options.readState === "unread"
+          ? isNull(notifications.readAt)
+          : options.readState === "read"
+            ? isNotNull(notifications.readAt)
+            : undefined,
         cursorCondition,
       ),
     )
@@ -114,7 +170,9 @@ export async function listNotifications(
         }
       : null,
     friendRequestId: row.friendRequestId,
+    friendRequestStatus: row.friendRequestStatus,
     groupInvitationId: row.groupInvitationId,
+    groupInvitationStatus: row.groupInvitationStatus,
     group:
       row.groupId && row.groupName
         ? {

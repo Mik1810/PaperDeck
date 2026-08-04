@@ -92,6 +92,11 @@ test.describe("PWA cache policy", () => {
       waitUntil: "domcontentloaded",
     });
 
+    const notificationCacheCheck = `/notifications?nav-cache-check=${Date.now()}`;
+    await page.goto(notificationCacheCheck, {
+      waitUntil: "domcontentloaded",
+    });
+
     await page.goto(`/offline.html?cache-inspection=${Date.now()}`, {
       waitUntil: "domcontentloaded",
     });
@@ -123,6 +128,7 @@ test.describe("PWA cache policy", () => {
     expect(cachedUrls).toContain("/offline.html");
     expect(cachedUrls).not.toContain("/feed");
     expect(cachedUrls).not.toContain(navigationCacheCheck);
+    expect(cachedUrls).not.toContain(notificationCacheCheck);
     expect(cachedUrls).not.toContain(rscCacheCheck);
 
     await context.setOffline(true);

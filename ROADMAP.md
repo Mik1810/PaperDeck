@@ -1074,11 +1074,17 @@ creati atomicamente tramite trigger, sono deduplicati, leggibili soltanto dal
 destinatario e cancellati dopo 90 giorni da un job a batch.
 
 Il primo rilascio non dipende da Realtime: refetch e polling preservano la
-correttezza dopo offline/reconnect. Il segnale privato Realtime e le preferenze
-`all`/`important_only`/`muted` appartengono alla UI #98; attivita' e aggregazione
-dei paper condivisi appartengono alla #99. La migrazione e' applicata al progetto
-Supabase condiviso; la retention schedulata resta disabilitata finche'
-`NOTIFICATION_RETENTION_ENABLED` non viene attivata dopo il dry run.
+correttezza dopo offline/reconnect. La #98 aggiunge localmente campanella, menu
+responsive, cronologia e azioni inline senza dipendere da Realtime. Gli inviti
+di gruppo possono essere risolti in-app tramite una RPC server-only che autorizza
+il destinatario autenticato e consuma comunque il digest monouso; la migration
+ha superato il gate PostgreSQL isolato e resta locale fino a un rollout
+separatamente approvato. Il segnale privato Realtime resta un'ottimizzazione
+futura. Le preferenze `all`/`important_only`/`muted`, insieme
+alle attivita' e all'aggregazione dei paper condivisi, appartengono alla #99,
+quando esisteranno eventi non critici da silenziare. La migration #97 e'
+applicata al Supabase condiviso e la retention schedulata e' attiva dopo il dry
+run approvato.
 
 ## Domande aperte
 

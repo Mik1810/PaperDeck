@@ -185,14 +185,27 @@ broadcast is deliberately deferred:
 the first release uses durable refetch/poll behavior, and a later private-channel
 signal may prompt clients to refetch the same RLS-authorized rows.
 
+The approved count-only gate found zero expired rows, after which
+`NOTIFICATION_RETENTION_ENABLED=true` enabled the bounded daily schedule. Manual
+dispatches default to dry-run mode.
+
+The local #98 UI reads through an authenticated, explicit-owner server route and
+updates only read/archive acknowledgement fields through Server Actions. Friend
+and group invitation actions revalidate the authoritative source lifecycle. For
+group invitations, `respond_research_group_invitation_in_app` locks the intended
+recipient's pending invitation and delegates to the existing token-aware
+function with the stored digest. It is executable only by `service_role`, never
+returns the digest, and clears the digest through the existing single-use
+lifecycle. This RPC migration is not yet applied to the shared project.
+
 The migration is applied to the shared Supabase project. Validation covered both
 the incremental baseline-plus-migration path and the standalone schema snapshot
 on an isolated Supabase PostgreSQL 17.6 container; all five notification tests
 and `supabase db lint` passed with zero synthetic rows remaining. Remote
 verification confirmed an empty table, RLS, two policies, ten validated
 constraints, three enabled triggers, acknowledgement-only update grants, and no
-authenticated access to private helpers. The scheduled workflow remains disabled
-until its repository variable is enabled after a separate dry run.
+authenticated access to private helpers. The scheduled workflow is enabled after
+its separate approved dry run.
 
 ### Worker Tables
 

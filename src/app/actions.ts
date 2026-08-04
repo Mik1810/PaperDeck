@@ -46,6 +46,12 @@ import {
   savePublicDisplayName,
   syncCollaborationIdentity,
 } from "@/lib/repositories/collaboration";
+import {
+  archiveNotification,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/lib/repositories/notifications";
+import { respondResearchGroupInvitationInApp } from "@/lib/repositories/research-group-invitations";
 
 type OnboardingPersonalizationSource = "save" | "skip";
 
@@ -65,6 +71,13 @@ function requirePaperId(formData: FormData) {
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function requireUuid(value: string, label: string) {
+  if (!uuidPattern.test(value)) {
+    throw new Error(`Invalid ${label}`);
+  }
+  return value;
+}
 
 function isPlaylistSaveContext(value: string): value is PlaylistSaveContext {
   return value === "feed" || value === "digest" || value === "paper_detail";
@@ -322,6 +335,91 @@ export async function respondFriendRequestAction(
   revalidatePath("/search");
   revalidatePath("/settings");
   return { ok: true, relationshipStatus: accept ? "friends" : "none" };
+}
+
+export type NotificationActionResult = {
+  ok: boolean;
+  message?: string;
+  affectedCount?: number;
+};
+
+function revalidateNotificationViews() {
+  revalidatePath("/notifications");
+}
+
+export async function markNotificationReadAction(
+  notificationId: string,
+): Promise<NotificationActionResult> {
+  const ownerId = await requireOwnerId();
+  const result = await markNotificationRead(
+    ownerId,
+    requireUuid(notificationId, "notification id"),
+  );
+  revalidateNotificationViews();
+  return result
+    ? { ok: true, affectedCount: 1 }
+    : { ok: false, message: "This notification is no longer available." };
+}
+
+export async function markAllNotificationsReadAction(): Promise<NotificationActionResult> {
+  const ownerId = await requireOwnerId();
+  const affectedCount = await markAllNotificationsRead(ownerId);
+  revalidateNotificationViews();
+  return { ok: true, affectedCount };
+}
+
+export async function archiveNotificationAction(
+  notificationId: string,
+): Promise<NotificationActionResult> {
+  const ownerId = await requireOwnerId();
+  const result = await archiveNotification(
+    ownerId,
+    requireUuid(notificationId, "notification id"),
+  );
+  revalidateNotificationViews();
+  return result
+    ? { ok: true, affectedCount: 1 }
+    : { ok: false, message: "This notification is no longer available." };
+}
+
+export async function respondNotificationFriendRequestAction(
+  notificationId: string,
+  requestId: string,
+  accept: boolean,
+): Promise<NotificationActionResult> {
+  requireUuid(notificationId, "notification id");
+  requireUuid(requestId, "friend request id");
+  const result = await respondFriendRequestAction(requestId, accept);
+  if (!result.ok) {
+    return { ok: false, message: result.message };
+  }
+
+  const ownerId = await requireOwnerId();
+  await markNotificationRead(ownerId, notificationId);
+  revalidateNotificationViews();
+  return { ok: true, affectedCount: 1 };
+}
+
+export async function respondNotificationGroupInvitationAction(
+  notificationId: string,
+  invitationId: string,
+  accept: boolean,
+): Promise<NotificationActionResult> {
+  const ownerId = await requireOwnerId();
+  requireUuid(notificationId, "notification id");
+  requireUuid(invitationId, "group invitation id");
+  try {
+    await respondResearchGroupInvitationInApp(ownerId, invitationId, accept);
+  } catch {
+    return {
+      ok: false,
+      message: "This group invitation is no longer available.",
+    };
+  }
+
+  await markNotificationRead(ownerId, notificationId);
+  revalidateNotificationViews();
+  return { ok: true, affectedCount: 1 };
 }
 
 export async function cancelFriendRequestAction(
