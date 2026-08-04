@@ -5,8 +5,8 @@ import { useState } from "react";
 import { MathContent } from "@/components/math-content";
 import { MutationAlert } from "@/components/mutation-alert";
 import { PaperSourceBadge } from "@/components/paper-source-badge";
+import { PlaylistPicker } from "@/components/playlist-picker";
 import {
-  Bookmark,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -35,6 +35,7 @@ type PaperCardProps = {
     recommendationImpressionId?: string,
   ) => void | Promise<void>;
   onOpen?: (paperId: string) => void;
+  onPlaylistSaveComplete?: (paperId: string) => void;
 };
 
 export function PaperCard({
@@ -44,6 +45,7 @@ export function PaperCard({
   isSaved = false,
   onDismissSubmit,
   onOpen,
+  onPlaylistSaveComplete,
 }: PaperCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
@@ -196,30 +198,17 @@ export function PaperCard({
             strokeWidth={2.5}
           />
         </button>
-        <button
-          aria-label={optimisticSaved ? "Saved to Read later" : "Save to Read later"}
-          className={`grid h-12 w-full place-items-center rounded-lg border ${
-            optimisticSaved
-              ? "border-teal-300 bg-teal-50 text-teal-600"
-              : "border-teal-200 bg-white text-teal-600"
-          } hover:border-teal-300 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50`}
-          disabled={isMutationPending}
-          onClick={() => {
-            const previousSaved = optimisticSaved;
-            setOptimisticSaved(!previousSaved);
-            void commitDeckMutation("read_later", () =>
-              setOptimisticSaved(previousSaved),
-            );
+        <PlaylistPicker
+          context="feed"
+          initialSaved={optimisticSaved}
+          onSaveComplete={() => {
+            setOptimisticSaved(true);
+            onPlaylistSaveComplete?.(paper.id);
           }}
-          type="button"
-        >
-          <Bookmark
-            aria-hidden="true"
-            fill={optimisticSaved ? "currentColor" : "none"}
-            size={19}
-            strokeWidth={2.5}
-          />
-        </button>
+          paperId={paper.id}
+          recommendationImpressionId={paper.recommendationImpressionId}
+          variant="icon"
+        />
       </div>
 
       <a

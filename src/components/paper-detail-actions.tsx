@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Bookmark, CheckCircle2, ExternalLink, Heart, X } from "lucide-react";
+import { CheckCircle2, ExternalLink, Heart, X } from "lucide-react";
 import { MutationAlert } from "@/components/mutation-alert";
+import { PlaylistPicker } from "@/components/playlist-picker";
 import {
   deckMutationErrorMessage,
   type DeckMutationAction,
@@ -25,7 +26,6 @@ export function PaperDetailActions({
   paperUrl,
 }: PaperDetailActionsProps) {
   const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
-  const [optimisticSaved, setOptimisticSaved] = useState(isSaved);
   const [mutationErrorMessage, setMutationErrorMessage] = useState<
     string | null
   >(null);
@@ -80,31 +80,11 @@ export function PaperDetailActions({
           {optimisticFavorite ? "Favorited" : "Favorite"}
         </button>
 
-        <button
-          aria-pressed={optimisticSaved}
-          className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-black ${
-            optimisticSaved
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-emerald-200 bg-white text-emerald-700"
-          } hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50`}
-          disabled={isMutationPending}
-          onClick={() => {
-            const previousSaved = optimisticSaved;
-            setOptimisticSaved(!previousSaved);
-            void commitDeckMutation("read_later", () =>
-              setOptimisticSaved(previousSaved),
-            );
-          }}
-          type="button"
-        >
-          <Bookmark
-            aria-hidden="true"
-            fill={optimisticSaved ? "currentColor" : "none"}
-            size={18}
-            strokeWidth={2.5}
-          />
-          {optimisticSaved ? "Saved" : "Read later"}
-        </button>
+        <PlaylistPicker
+          context="paper_detail"
+          initialSaved={isSaved}
+          paperId={paperId}
+        />
 
         <form action={feedbackActionPath} method="post">
           <input name="action" type="hidden" value="already_read" />

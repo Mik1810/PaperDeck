@@ -11,12 +11,17 @@ import {
   toggleReadLater,
   toggleFavorite,
   createPlaylist,
+  createPlaylistWithPaper,
   renamePlaylist,
   deletePlaylist,
   addToPlaylist,
   removeFromPlaylist,
   reorderPlaylistItems,
   getDefaultOnboardingTopicIds,
+  resolveRecommendationImpressionId,
+  setPaperPlaylistMembership,
+  type PaperPlaylistOption,
+  type PlaylistSaveContext,
   clearFeedRecommendations,
   preloadInitialFeedRecommendations,
   getRankedFeedPapers,
@@ -25,6 +30,7 @@ import {
   PAPER_NOTE_MAX_LENGTH,
 } from "@/lib/repositories/user-data";
 import {
+  refreshUserProfileEmbedding,
   writeTopicSelectionProfileEmbedding,
 } from "@/lib/repositories/user-profile-embeddings";
 import { logger } from "@/lib/logging/logger";
@@ -55,6 +61,13 @@ function requireFormId(formData: FormData, field: string) {
 
 function requirePaperId(formData: FormData) {
   return requireFormId(formData, "paperId");
+}
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isPlaylistSaveContext(value: string): value is PlaylistSaveContext {
+  return value === "feed" || value === "digest" || value === "paper_detail";
 }
 
 function sourcePathFrom(formData: FormData, fallback: string) {
@@ -394,6 +407,130 @@ export async function toggleReadLaterAction(formData: FormData) {
   await toggleReadLater(ownerId, paperId);
 
   revalidatePath(sourcePathFrom(formData, "/feed"));
+}
+
+type PlaylistPickerMutationInput = {
+  context: PlaylistSaveContext;
+  paperId: string;
+  recommendationImpressionId?: string;
+};
+
+export type PlaylistPickerActionResult = {
+  ok: boolean;
+  created?: boolean;
+  option?: PaperPlaylistOption;
+  message?: string;
+};
+
+function validatePlaylistPickerInput(input: PlaylistPickerMutationInput) {
+  if (!uuidPattern.test(input.paperId) || !isPlaylistSaveContext(input.context)) {
+    throw new Error("Invalid playlist request");
+  }
+  if (
+    input.recommendationImpressionId &&
+    !uuidPattern.test(input.recommendationImpressionId)
+  ) {
+    throw new Error("Invalid playlist request");
+  }
+}
+
+function revalidatePlaylistPickerPaths(
+  paperId: string,
+  context: PlaylistSaveContext,
+) {
+  revalidatePath("/library");
+  revalidatePath(
+    context === "feed"
+      ? "/feed"
+      : context === "digest"
+        ? "/digest"
+        : `/papers/${paperId}`,
+  );
+}
+
+function schedulePlaylistProfileRefresh(ownerId: string) {
+  after(async () => {
+    try {
+      await refreshUserProfileEmbedding(ownerId);
+    } catch (error) {
+      logger.error("playlist_profile_refresh_failed", { ownerId, error });
+    }
+  });
+}
+
+export async function setPaperPlaylistMembershipAction(
+  input: PlaylistPickerMutationInput & {
+    playlistId: string;
+    selected: boolean;
+  },
+): Promise<PlaylistPickerActionResult> {
+  const ownerId = await requireOwnerId();
+
+  try {
+    validatePlaylistPickerInput(input);
+    if (!uuidPattern.test(input.playlistId)) {
+      throw new Error("Invalid playlist request");
+    }
+    const recommendationImpressionId =
+      input.context === "feed"
+        ? await resolveRecommendationImpressionId(
+            ownerId,
+            input.paperId,
+            input.recommendationImpressionId ?? null,
+          )
+        : null;
+    const result = await setPaperPlaylistMembership(
+      ownerId,
+      input.paperId,
+      input.playlistId,
+      input.selected,
+      input.context,
+      { recommendationImpressionId },
+    );
+    revalidatePlaylistPickerPaths(input.paperId, input.context);
+    if (result.created) schedulePlaylistProfileRefresh(ownerId);
+    return { ok: true, created: result.created };
+  } catch {
+    return {
+      ok: false,
+      message: "This playlist could not be updated.",
+    };
+  }
+}
+
+export async function createPlaylistWithPaperAction(
+  input: PlaylistPickerMutationInput & { name: string },
+): Promise<PlaylistPickerActionResult> {
+  const ownerId = await requireOwnerId();
+
+  try {
+    validatePlaylistPickerInput(input);
+    const name = input.name.trim().slice(0, 80);
+    if (!name) throw new Error("Playlist name is required");
+    const recommendationImpressionId =
+      input.context === "feed"
+        ? await resolveRecommendationImpressionId(
+            ownerId,
+            input.paperId,
+            input.recommendationImpressionId ?? null,
+          )
+        : null;
+    const option = await createPlaylistWithPaper(
+      ownerId,
+      input.paperId,
+      name,
+      input.context,
+      { recommendationImpressionId },
+    );
+    revalidatePlaylistPickerPaths(input.paperId, input.context);
+    schedulePlaylistProfileRefresh(ownerId);
+    return { ok: true, created: true, option };
+  } catch {
+    return {
+      ok: false,
+      message: "This playlist could not be created.",
+    };
+  }
 }
 
 export async function verifyClerkRlsAction() {

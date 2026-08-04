@@ -172,6 +172,10 @@ export function FeedDeck({
     setPaperDismissed(paperId, true);
   }, [setPaperDismissed]);
 
+  const handlePlaylistSaveComplete = useCallback((paperId: string) => {
+    setPaperDismissed(paperId, true);
+  }, [setPaperDismissed]);
+
   const handleDismissSubmit = useCallback(async function (
     paperId: string,
     recommendationImpressionId?: string,
@@ -295,6 +299,7 @@ export function FeedDeck({
                 }
                 onDismissSubmit={handleDismissSubmit}
                 onOpen={handleOpen}
+                onPlaylistSaveComplete={handlePlaylistSaveComplete}
                 paper={visibleActivePaper}
               />
             </motion.div>

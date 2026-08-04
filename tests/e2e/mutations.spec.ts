@@ -211,6 +211,9 @@ test.describe("playlist authorization", () => {
   });
 
   let createdPlaylistId: string | null = null;
+  let pickerPlaylistId: string | null = null;
+  let pickerPaperId: string | null = null;
+  let pickerPaperTitle: string | null = null;
 
   test("creates a private playlist via server action", async ({ page }) => {
     test.skip(!devAuthEnabled, "Requires dev auth.");
@@ -275,6 +278,225 @@ test.describe("playlist authorization", () => {
       `;
       expect(stillExists.length).toBe(1);
     });
+  });
+
+  test("creates and saves through the owner-scoped playlist picker", async ({
+    page,
+  }) => {
+    test.skip(!devAuthEnabled, "Requires dev auth.");
+    test.skip(!hasDb, "Requires DATABASE_URL.");
+
+    const paper = await withDb(async (sql) => {
+      const paperId = await getSeedPaperId(sql);
+      const [row] = await sql<{ id: string; title: string }[]>`
+        select id, title from papers where id = ${paperId}::uuid
+      `;
+      await sql`
+        insert into profiles (owner_id, onboarding_completed_at)
+        values (${otherOwnerId}, now())
+        on conflict (owner_id) do update set onboarding_completed_at = now()
+      `;
+      await sql`
+        insert into playlists (owner_id, name, is_default)
+        values
+          (${devOwnerId}, 'Read later', true),
+          (${otherOwnerId}, 'Other private playlist', false)
+        on conflict (owner_id, name) do nothing
+      `;
+      return row;
+    });
+    pickerPaperId = paper.id;
+    pickerPaperTitle = paper.title;
+
+    await page.goto(`/papers/${paper.id}`);
+    await page.getByRole("button", { name: "Save to playlist" }).click();
+    const dialog = page.getByRole("dialog", { name: "Save to playlists" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("Read later", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Other private playlist")).toHaveCount(0);
+
+    await dialog.getByRole("button", { name: "Create new playlist" }).click();
+    await dialog.getByLabel("New playlist name").fill("Picker Playlist");
+    await dialog.getByRole("button", { name: "Create and save" }).click();
+    await expect(
+      dialog.getByRole("checkbox", { name: /Picker Playlist/ }),
+    ).toBeChecked();
+    const readLaterCheckbox = dialog.getByRole("checkbox", {
+      name: /Read later/,
+    });
+    await readLaterCheckbox.check();
+    await expect(readLaterCheckbox).toBeChecked();
+    await expect(readLaterCheckbox).toBeEnabled();
+
+    const created = await withDb(async (sql) => {
+      const rows = await sql<{ id: string }[]>`
+        select p.id
+        from playlists p
+        join playlist_items pi on pi.playlist_id = p.id
+        where p.owner_id = ${devOwnerId}
+          and p.name = 'Picker Playlist'
+          and pi.paper_id = ${paper.id}::uuid
+      `;
+      const interactions = await sql<{ count: number }[]>`
+        select count(*)::integer as count
+        from user_paper_interactions
+        where owner_id = ${devOwnerId}
+          and paper_id = ${paper.id}::uuid
+          and action = 'save_to_playlist'
+      `;
+      const memberships = await sql<{ count: number }[]>`
+        select count(*)::integer as count
+        from playlist_items pi
+        join playlists p on p.id = pi.playlist_id
+        where p.owner_id = ${devOwnerId}
+          and pi.paper_id = ${paper.id}::uuid
+      `;
+      expect(memberships[0].count).toBe(2);
+      expect(interactions[0].count).toBe(1);
+      return rows[0] ?? null;
+    });
+    expect(created).not.toBeNull();
+    pickerPlaylistId = created!.id;
+
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test("uses explicit playlist editing and opens the whole paper row", async ({
+    page,
+  }) => {
+    test.skip(!devAuthEnabled, "Requires dev auth.");
+    test.skip(!hasDb, "Requires DATABASE_URL.");
+    test.skip(
+      !pickerPlaylistId || !pickerPaperId || !pickerPaperTitle,
+      "Picker setup is required.",
+    );
+
+    await withDb(async (sql) => {
+      await sql`
+        insert into favorites (owner_id, paper_id)
+        values (${devOwnerId}, ${pickerPaperId}::uuid)
+        on conflict (owner_id, paper_id) do nothing
+      `;
+    });
+
+    await page.goto("/library");
+    await expect(page).toHaveURL(/\/library$/);
+    await expect(
+      page.getByRole("heading", { name: "Read later", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Edit Read later" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("My playlists", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: `Open ${pickerPaperTitle}` })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/papers/${pickerPaperId}$`));
+    const backgroundReload = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/library/collections") && response.ok(),
+    );
+    await page.goBack();
+    await backgroundReload;
+
+    await page.getByRole("button", { name: "Edit Read later" }).click();
+    await expect(page.getByText("Editing", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Drag to reorder" }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/library$/);
+    await page
+      .getByRole("button", { name: "Stop editing Read later" })
+      .click();
+    await expect(page.getByText("Editing", { exact: true })).toHaveCount(0);
+    await expect(page).toHaveURL(/\/library$/);
+
+    await page.getByRole("button", { name: "Edit Read later" }).click();
+    let libraryNavigationRequests = 0;
+    const countLibraryNavigation = (request: { url(): string }) => {
+      if (request.url().includes("/library?view=favorites")) {
+        libraryNavigationRequests += 1;
+      }
+    };
+    page.on("request", countLibraryNavigation);
+    await page.evaluate(() => {
+      const browserWindow = window as typeof window & {
+        __paperdeckLibraryTransition?: {
+          observer: MutationObserver;
+          states: Array<{ editing: boolean; heading: string }>;
+        };
+      };
+      const states: Array<{ editing: boolean; heading: string }> = [];
+      const record = () => {
+        states.push({
+          editing: Boolean(
+            document.querySelector(
+              'button[aria-label="Stop editing Favorites"]',
+            ),
+          ),
+          heading:
+            document.querySelector("#library-collection-title")?.textContent ??
+            "",
+        });
+      };
+      const observer = new MutationObserver(record);
+      observer.observe(document.body, { childList: true, subtree: true });
+      browserWindow.__paperdeckLibraryTransition = { observer, states };
+    });
+    await page.getByRole("button", { name: "Edit Favorites" }).click();
+    await expect(page).toHaveURL(/\/library\?view=favorites$/);
+    await expect(
+      page.getByRole("heading", { name: "Favorites", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Stop editing Favorites" }),
+    ).toBeVisible();
+    const transitionStates = await page.evaluate(() => {
+      const browserWindow = window as typeof window & {
+        __paperdeckLibraryTransition?: {
+          observer: MutationObserver;
+          states: Array<{ editing: boolean; heading: string }>;
+        };
+      };
+      const transition = browserWindow.__paperdeckLibraryTransition;
+      transition?.observer.disconnect();
+      delete browserWindow.__paperdeckLibraryTransition;
+      return transition?.states ?? [];
+    });
+    page.off("request", countLibraryNavigation);
+    expect(libraryNavigationRequests).toBe(0);
+    expect(
+      transitionStates
+        .filter((state) => state.heading === "Favorites")
+        .every((state) => state.editing),
+    ).toBe(true);
+    await page
+      .getByRole("button", { name: "Stop editing Favorites" })
+      .click();
+    await expect(
+      page.getByRole("link", { name: `Open ${pickerPaperTitle}` }),
+    ).toBeVisible();
+
+    await page
+      .getByRole("button", { name: "Edit Picker Playlist" })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`/library\\?playlist=${pickerPlaylistId}$`),
+    );
+    await expect(page.getByText("Editing", { exact: true })).toBeVisible();
+    await page
+      .getByRole("button", { name: "Stop editing Picker Playlist" })
+      .click();
+    await expect(page.getByText("Editing", { exact: true })).toHaveCount(0);
+    await expect(page).toHaveURL(
+      new RegExp(`/library\\?playlist=${pickerPlaylistId}$`),
+    );
+
+    await page.locator(`a[href="/papers/${pickerPaperId}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/papers/${pickerPaperId}$`));
   });
 });
 
