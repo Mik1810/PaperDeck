@@ -13,8 +13,13 @@ type PaperListItemProps = {
 
 export function PaperListItem({ paper, action, meta }: PaperListItemProps) {
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-      <div className="flex items-start justify-between gap-4">
+    <article className="relative rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md md:p-5">
+      <Link
+        href={`/papers/${paper.id}`}
+        aria-label={`Open ${paper.title}`}
+        className="absolute inset-0 z-[1] rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+      />
+      <div className="pointer-events-none relative z-[2] flex items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <PaperSourceBadge source={paper.source} />
@@ -35,13 +40,14 @@ export function PaperListItem({ paper, action, meta }: PaperListItemProps) {
         <Link
           href={paper.url}
           target="_blank"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 active:scale-[0.98]"
+          rel="noreferrer noopener"
+          className="pointer-events-auto relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 active:scale-[0.98]"
         >
           <ExternalLink aria-label="Open paper" size={17} strokeWidth={2.4} />
         </Link>
       </div>
-      {action ? <div className="mt-4">{action}</div> : null}
-      <div className="mt-4 flex flex-wrap gap-2">
+      {action ? <div className="relative z-10 mt-4">{action}</div> : null}
+      <div className="pointer-events-none relative z-[2] mt-4 flex flex-wrap gap-2">
         {paper.topics.slice(0, 3).map((topic) => (
           <span
             key={topic.id}

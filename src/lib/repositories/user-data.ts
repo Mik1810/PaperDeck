@@ -85,11 +85,14 @@ type IgnoredInteractionAction = (typeof ignoredInteractionActions)[number];
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export type IgnoredPaperHistoryItem = {
-  paper: Paper;
-  ignoredAt: string;
-  action: IgnoredInteractionAction;
+export type PaperPlaylistOption = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  selected: boolean;
 };
+
+export type PlaylistSaveContext = "feed" | "digest" | "paper_detail";
 
 async function measureAsync<T>(
   timings: Record<string, number>,
@@ -943,10 +946,16 @@ export async function getDigestPageData(ownerId: string) {
   };
 }
 
-async function getIgnoredPaperHistory(
+type IgnoredPaperHistoryRow = {
+  paperId: string;
+  ignoredAt: string;
+  action: IgnoredInteractionAction;
+};
+
+async function getIgnoredPaperHistoryRows(
   ownerId: string,
   limit = 50,
-): Promise<IgnoredPaperHistoryItem[]> {
+): Promise<IgnoredPaperHistoryRow[]> {
   const rows = await db
     .select({
       paperId: userPaperInteractions.paperId,
@@ -983,31 +992,15 @@ async function getIgnoredPaperHistory(
     }
   }
 
-  const paperIds = [...latestByPaperId.keys()];
-  const papers = await getPapersByIds(paperIds);
-  const papersById = new Map(papers.map((paper) => [paper.id, paper]));
-
-  return paperIds
-    .map((paperId) => {
-      const paper = papersById.get(paperId);
-      const ignored = latestByPaperId.get(paperId);
-
-      if (!paper || !ignored) {
-        return null;
-      }
-
-      return {
-        paper,
-        ignoredAt: ignored.ignoredAt,
-        action: ignored.action,
-      };
-    })
-    .filter((item): item is IgnoredPaperHistoryItem => item !== null);
+  return [...latestByPaperId].map(([paperId, ignored]) => ({
+    paperId,
+    ignoredAt: ignored.ignoredAt,
+    action: ignored.action,
+  }));
 }
 
-/** @user-scoped */
-export async function getLibraryPageData(ownerId: string) {
-  const playlistRows = await db
+async function getLibraryCollectionSnapshot(ownerId: string) {
+  const playlistRowsPromise = db
     .select({
       id: playlists.id,
       name: playlists.name,
@@ -1017,33 +1010,17 @@ export async function getLibraryPageData(ownerId: string) {
     .where(eq(playlists.ownerId, ownerId))
     .orderBy(playlists.createdAt);
 
-  const favoriteRows = await db
+  const favoriteRowsPromise = db
     .select({ paperId: favorites.paperId })
     .from(favorites)
     .where(eq(favorites.ownerId, ownerId))
     .orderBy(desc(favorites.createdAt));
 
-  const readLaterPlaylist = playlistRows.find(
-    (p) => p.name === "Read later",
-  );
-
-  let readLaterIds: string[] = [];
-
-  if (readLaterPlaylist) {
-    const items = await db
-      .select({ paperId: playlistItems.paperId })
-      .from(playlistItems)
-      .where(eq(playlistItems.playlistId, readLaterPlaylist.id))
-      .orderBy(desc(playlistItems.addedAt));
-    readLaterIds = items.map((r) => r.paperId);
-  }
-
-  const favoriteIds = favoriteRows.map((r) => r.paperId);
-
-  const [favoritePapers, readLaterPapers, ignoredPapers] = await Promise.all([
-    getPapersByIds(favoriteIds),
-    getPapersByIds(readLaterIds),
-    getIgnoredPaperHistory(ownerId),
+  const ignoredRowsPromise = getIgnoredPaperHistoryRows(ownerId);
+  const [playlistRows, favoriteRows, ignoredRows] = await Promise.all([
+    playlistRowsPromise,
+    favoriteRowsPromise,
+    ignoredRowsPromise,
   ]);
 
   const playlistIds = playlistRows.map((playlist) => playlist.id);
@@ -1080,12 +1057,63 @@ export async function getLibraryPageData(ownerId: string) {
     isDefault: playlist.isDefault ?? false,
   }));
 
+  const readLaterPlaylist = playlistSummaries.find(
+    (playlist) => playlist.isDefault,
+  );
+
   return {
     playlists: playlistSummaries,
-    favoritePapers,
+    favoritePaperIds: favoriteRows.map((row) => row.paperId),
+    ignoredRows,
+    readLaterPaperIds: readLaterPlaylist?.paperIds ?? [],
+  };
+}
+
+export type LibraryBackgroundData = {
+  favoritePaperIds: string[];
+  ignoredItems: Array<{
+    action: IgnoredInteractionAction;
+    ignoredAt: string;
+    paperId: string;
+  }>;
+  papers: Paper[];
+};
+
+/** @user-scoped */
+export async function getLibraryInitialData(ownerId: string) {
+  const snapshot = await getLibraryCollectionSnapshot(ownerId);
+  const readLaterPapers = await getPapersByIds(snapshot.readLaterPaperIds);
+
+  return {
+    favoriteCount: snapshot.favoritePaperIds.length,
+    ignoredCount: snapshot.ignoredRows.length,
+    playlists: snapshot.playlists,
     readLaterPapers,
-    ignoredPapers,
-    readLaterCount: readLaterIds.length,
+    readLaterCount: snapshot.readLaterPaperIds.length,
+  };
+}
+
+/** @user-scoped */
+export async function getLibraryBackgroundData(
+  ownerId: string,
+): Promise<LibraryBackgroundData> {
+  const snapshot = await getLibraryCollectionSnapshot(ownerId);
+  const readLaterIds = new Set(snapshot.readLaterPaperIds);
+  const backgroundPaperIds = new Set<string>(snapshot.favoritePaperIds);
+
+  for (const item of snapshot.ignoredRows) {
+    backgroundPaperIds.add(item.paperId);
+  }
+  for (const playlist of snapshot.playlists) {
+    if (playlist.isDefault) continue;
+    for (const paperId of playlist.paperIds) backgroundPaperIds.add(paperId);
+  }
+  for (const paperId of readLaterIds) backgroundPaperIds.delete(paperId);
+
+  return {
+    favoritePaperIds: snapshot.favoritePaperIds,
+    ignoredItems: snapshot.ignoredRows,
+    papers: await getPapersByIds([...backgroundPaperIds]),
   };
 }
 
@@ -1149,7 +1177,7 @@ export async function getPaperDetailData(ownerId: string, paperId: string) {
 }
 
 async function getPaperDetailState(ownerId: string, paperId: string) {
-  const [favRow, rlPlaylist] = await Promise.all([
+  const [favRow, rlPlaylist, savedRow] = await Promise.all([
     db
       .select({ paperId: favorites.paperId })
       .from(favorites)
@@ -1170,6 +1198,17 @@ async function getPaperDetailState(ownerId: string, paperId: string) {
         ),
       )
       .limit(1),
+    db
+      .select({ paperId: playlistItems.paperId })
+      .from(playlistItems)
+      .innerJoin(playlists, eq(playlists.id, playlistItems.playlistId))
+      .where(
+        and(
+          eq(playlists.ownerId, ownerId),
+          eq(playlistItems.paperId, paperId),
+        ),
+      )
+      .limit(1),
   ]);
 
   const playlistId = rlPlaylist[0]?.id;
@@ -1177,31 +1216,19 @@ async function getPaperDetailState(ownerId: string, paperId: string) {
   if (!playlistId) {
     return {
       isFavorite: favRow.length > 0,
-      isSaved: false,
+      isSaved: savedRow.length > 0,
       readLaterCount: 0,
     };
   }
 
-  const [readLaterItem, readLaterCount] = await Promise.all([
-    db
-      .select({ paperId: playlistItems.paperId })
-      .from(playlistItems)
-      .where(
-        and(
-          eq(playlistItems.playlistId, playlistId),
-          eq(playlistItems.paperId, paperId),
-        ),
-      )
-      .limit(1),
-    db
-      .select({ count: sql<number>`count(*)` })
-      .from(playlistItems)
-      .where(eq(playlistItems.playlistId, playlistId)),
-  ]);
+  const readLaterCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(playlistItems)
+    .where(eq(playlistItems.playlistId, playlistId));
 
   return {
     isFavorite: favRow.length > 0,
-    isSaved: readLaterItem.length > 0,
+    isSaved: savedRow.length > 0,
     readLaterCount: Number(readLaterCount[0]?.count ?? 0),
   };
 }
@@ -1355,6 +1382,179 @@ export async function toggleReadLater(
         eq(playlistItems.paperId, paperId),
       ),
     );
+}
+
+/** @user-scoped */
+export async function getPaperPlaylistOptions(
+  ownerId: string,
+  paperId: string,
+): Promise<PaperPlaylistOption[]> {
+  const rows = await db
+    .select({
+      id: playlists.id,
+      name: playlists.name,
+      isDefault: playlists.isDefault,
+      selectedPaperId: playlistItems.paperId,
+    })
+    .from(playlists)
+    .leftJoin(
+      playlistItems,
+      and(
+        eq(playlistItems.playlistId, playlists.id),
+        eq(playlistItems.paperId, paperId),
+      ),
+    )
+    .where(eq(playlists.ownerId, ownerId))
+    .orderBy(desc(playlists.isDefault), playlists.createdAt);
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    isDefault: row.isDefault,
+    selected: row.selectedPaperId !== null,
+  }));
+}
+
+/** @user-scoped */
+export async function setPaperPlaylistMembership(
+  ownerId: string,
+  paperId: string,
+  playlistId: string,
+  selected: boolean,
+  context: PlaylistSaveContext,
+  options: InteractionRecordOptions = {},
+) {
+  return db.transaction(async (tx) => {
+    const ownedPlaylist = await tx
+      .select({ id: playlists.id })
+      .from(playlists)
+      .where(
+        and(eq(playlists.id, playlistId), eq(playlists.ownerId, ownerId)),
+      )
+      .limit(1)
+      .for("update");
+
+    if (!ownedPlaylist.length) {
+      throw new Error("Playlist is unavailable");
+    }
+
+    if (!selected) {
+      await tx
+        .delete(playlistItems)
+        .where(
+          and(
+            eq(playlistItems.playlistId, playlistId),
+            eq(playlistItems.paperId, paperId),
+          ),
+        );
+      return { created: false, selected: false };
+    }
+
+    const maxRows = await tx
+      .select({ position: playlistItems.position })
+      .from(playlistItems)
+      .where(eq(playlistItems.playlistId, playlistId))
+      .orderBy(desc(playlistItems.position))
+      .limit(1);
+    const [created] = await tx
+      .insert(playlistItems)
+      .values({
+        playlistId,
+        paperId,
+        position: (maxRows[0]?.position ?? -1) + 1,
+      })
+      .onConflictDoNothing({
+        target: [playlistItems.playlistId, playlistItems.paperId],
+      })
+      .returning({ paperId: playlistItems.paperId });
+
+    if (created) {
+      await tx
+        .select({ ownerId: profiles.ownerId })
+        .from(profiles)
+        .where(eq(profiles.ownerId, ownerId))
+        .limit(1)
+        .for("update");
+      const existingSave = await tx
+        .select({ id: userPaperInteractions.id })
+        .from(userPaperInteractions)
+        .where(
+          and(
+            eq(userPaperInteractions.ownerId, ownerId),
+            eq(userPaperInteractions.paperId, paperId),
+            eq(userPaperInteractions.action, "save_to_playlist"),
+          ),
+        )
+        .limit(1);
+      if (!existingSave.length) {
+        await tx.insert(userPaperInteractions).values({
+          ownerId,
+          paperId,
+          recommendationImpressionId:
+            options.recommendationImpressionId ?? null,
+          action: "save_to_playlist",
+          context,
+        });
+      }
+    }
+
+    return { created: Boolean(created), selected: true };
+  });
+}
+
+/** @user-scoped */
+export async function createPlaylistWithPaper(
+  ownerId: string,
+  paperId: string,
+  name: string,
+  context: PlaylistSaveContext,
+  options: InteractionRecordOptions = {},
+) {
+  return db.transaction(async (tx) => {
+    await tx
+      .select({ ownerId: profiles.ownerId })
+      .from(profiles)
+      .where(eq(profiles.ownerId, ownerId))
+      .limit(1)
+      .for("update");
+    const [playlist] = await tx
+      .insert(playlists)
+      .values({ ownerId, name, isDefault: false })
+      .returning({ id: playlists.id, name: playlists.name });
+
+    await tx.insert(playlistItems).values({
+      playlistId: playlist.id,
+      paperId,
+      position: 0,
+    });
+    const existingSave = await tx
+      .select({ id: userPaperInteractions.id })
+      .from(userPaperInteractions)
+      .where(
+        and(
+          eq(userPaperInteractions.ownerId, ownerId),
+          eq(userPaperInteractions.paperId, paperId),
+          eq(userPaperInteractions.action, "save_to_playlist"),
+        ),
+      )
+      .limit(1);
+    if (!existingSave.length) {
+      await tx.insert(userPaperInteractions).values({
+        ownerId,
+        paperId,
+        recommendationImpressionId: options.recommendationImpressionId ?? null,
+        action: "save_to_playlist",
+        context,
+      });
+    }
+
+    return {
+      id: playlist.id,
+      name: playlist.name,
+      isDefault: false,
+      selected: true,
+    } satisfies PaperPlaylistOption;
+  });
 }
 
 /** @user-scoped */

@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, BookmarkPlus, BookmarkX } from "lucide-react";
-import { toggleReadLaterAction } from "@/app/actions";
+import { ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { MathContent } from "@/components/math-content";
 import { PaperListItem } from "@/components/paper-list-item";
+import { PlaylistPicker } from "@/components/playlist-picker";
 import { requireOwnerId } from "@/lib/auth/session";
 import {
   getDigestPageData,
@@ -60,36 +60,12 @@ export default async function DigestPage() {
                       key={paper.id}
                       action={
                         <div className="flex flex-wrap gap-2">
-                          <form action={toggleReadLaterAction}>
-                            <input name="paperId" type="hidden" value={paper.id} />
-                            <input
-                              name="sourcePath"
-                              type="hidden"
-                              value="/digest"
-                            />
-                            <button
-                              className={
-                                isSaved
-                                  ? "inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-black text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 active:scale-[0.99]"
-                                  : "inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.99]"
-                              }
-                            >
-                              {isSaved ? (
-                                <BookmarkX
-                                  aria-hidden="true"
-                                  size={17}
-                                  strokeWidth={2.5}
-                                />
-                              ) : (
-                                <BookmarkPlus
-                                  aria-hidden="true"
-                                  size={17}
-                                  strokeWidth={2.5}
-                                />
-                              )}
-                              {isSaved ? "Saved" : "Read later"}
-                            </button>
-                          </form>
+                          <PlaylistPicker
+                            context="digest"
+                            initialSaved={isSaved}
+                            paperId={paper.id}
+                            variant="compact"
+                          />
                           <Link
                             className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.99]"
                             href={`/papers/${paper.id}`}

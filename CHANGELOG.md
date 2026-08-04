@@ -8,6 +8,19 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Replaced direct bookmark-to-`Read later` buttons on feed, digest, and paper
+  detail with an owner-scoped multi-playlist picker, while preserving swipe as
+  the quick `Read later` path and recording only one ranking save signal per
+  paper.
+- Unified `Read later`, Favorites, Ignored, and custom playlists as selectable
+  Library collections, with system collections separated from custom lists,
+  `Read later` selected by default, and transient pencil-driven edit mode kept
+  out of the URL. The default collection is server-rendered first while the
+  normalized remaining collections preload privately in the background, so
+  collection and edit changes no longer require dynamic route navigation.
+  Custom rename/delete actions remain in a separate menu, paper rows open their
+  internal detail, and the desktop detail card uses the available content
+  width.
 - Split the live Clerk/Supabase smoke into a non-mutating profile-isolation
   check and an explicit group lifecycle test, both restricted to Clerk
   Development test identities, with masked evidence and mandatory
