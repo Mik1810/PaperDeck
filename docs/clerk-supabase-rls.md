@@ -70,7 +70,7 @@ Server Action → auth().getToken()
 
 1. ✅ `createClerkAuthenticatedClient()` implemented
 2. ✅ `verifyClerkRlsAction` smoke test added
-3. 🔲 Transition user-scoped repository functions to clerk-authenticated client (see boundary below)
+3. ✅ Partial: `createClerkAuthenticatedClient()` used in some actions and repositories; remaining `@user-scoped` functions still on service role (tracked in #47)
 4. ✅ Service role kept for admin/ingestion/embedding workers — documented in per-function JSDoc tags
 
 ### Repository boundary (2026-07-06)
@@ -80,8 +80,8 @@ Run `npm run audit:service-role` to see the breakdown.
 
 | Scope | Count | Description | Current Client |
 |-------|-------|-------------|---------------|
-| `@user-scoped` | 32 | Reads/writes user-owned data (profile, favorites, interactions, playlists) | Drizzle `db` — owner checks in app code |
-| `@admin` | 11 | Shared catalog reads, ranking, embedding refreshes, topic taxonomy | Drizzle `db` |
+| `@user-scoped` | 32 (at 2026-07-06) | Reads/writes user-owned data (profile, favorites, interactions, playlists) | Drizzle `db` — owner checks in app code |
+| `@admin` | 11 (at 2026-07-06) | Shared catalog reads, ranking, embedding refreshes, topic taxonomy | Drizzle `db` |
 
 **Current state (MVP):** Both `@user-scoped` and `@admin` functions use the Drizzle direct connection via `DATABASE_URL`. Owner-id is validated in application code (`requireOwnerId()`). This is acceptable for MVP because:
 - Every user-scoped query includes `WHERE owner_id = ?` or equivalent

@@ -11,7 +11,7 @@ PaperDeck is a mobile-first academic paper discovery app for computer science. T
 - App language: user-facing product can start in English; planning conversation may be Italian.
 - Domain: computer science only for MVP.
 - Auth: Clerk with Google login.
-- Auth implementation: `@clerk/nextjs`, `ClerkProvider`, and `src/proxy.ts` route protection.
+- Auth implementation: `@clerk/nextjs`, `ClerkProvider`, `src/proxy.ts` for Clerk request context and cache policy, `requireOwnerId()`/`requireUserContext()` resource-level guards on every privileged page, Route Handler, and Server Action.
 - Database: Supabase Postgres with pgvector.
 - Database ownership: user-owned rows store Clerk user IDs in `owner_id text`.
 - Database access MVP: user-specific queries should go through server-side code until Clerk JWT and Supabase RLS are configured end to end.

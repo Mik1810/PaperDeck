@@ -355,7 +355,7 @@ Verified enrichment run:
 ```text
 Date: 2026-07-02
 Command: UNPAYWALL_EMAIL=... enrich:unpaywall --limit=100
-Result: 21 OA links found from 29 DOI-backed papers
+Result: 21 OA links found from 29 DOI-backed papers (initial run; ROADMAP notes 24 after subsequent enrichment)
 OA URLs stored in paper_external_ids (provider: unpaywall_oa)
 ```
 

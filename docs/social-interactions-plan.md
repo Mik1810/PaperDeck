@@ -1,7 +1,7 @@
 # Piano di sviluppo delle interazioni sociali
 
-**Stato:** proposta di sviluppo, non ancora una decisione di rilascio  
-**Ultimo aggiornamento:** 2026-07-15
+**Stato:** fondazioni implementate (identità, amicizie, gruppi, inviti, notifiche, chiusura account); feature sociali di prodotto (chat, lista condivisa, paper-activity) proposte ma non rilasciate  
+**Ultimo aggiornamento:** 2026-08-04
 **Origine:** [GitHub issue #37](https://github.com/Mik1810/PaperDeck/issues/37)
 
 Questo documento trasforma la #37 da promemoria post-MVP in un programma concreto. Non autorizza a rendere pubblici dati esistenti: feed, ranking, preferiti, playlist e note restano privati finché ogni fase non supera il proprio gate.

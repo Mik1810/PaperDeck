@@ -198,7 +198,9 @@ function with the stored digest. It is executable only by `service_role`, never
 returns the digest, and clears the digest through the existing single-use
 lifecycle. This RPC migration is not yet applied to the shared project.
 
-The migration is applied to the shared Supabase project. Validation covered both
+### Notification migration (applied)
+
+The notification migration is applied to the shared Supabase project. Validation covered both
 the incremental baseline-plus-migration path and the standalone schema snapshot
 on an isolated Supabase PostgreSQL 17.6 container; all five notification tests
 and `supabase db lint` passed with zero synthetic rows remaining. Remote

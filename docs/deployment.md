@@ -5,7 +5,7 @@
 - Public URL: <https://paperdeck.michaelpiccirilli.it/>
 - Vercel preview URL: <https://paper-deck-ecru.vercel.app/>
 - Platform: Vercel
-- Checked on: 2026-07-01
+- Checked on: 2026-08-04
 
 Smoke-test result:
 
