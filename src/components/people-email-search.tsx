@@ -73,7 +73,7 @@ export function PeopleEmailSearch() {
       <div>
         <h2 className="text-sm font-black text-slate-950">Find people</h2>
         <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-          Enter their complete email. We never display or store the address.
+          Enter the email.
         </p>
       </div>
       <form className="mt-3 flex flex-col gap-3 sm:flex-row" onSubmit={submit}>

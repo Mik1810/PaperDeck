@@ -35,7 +35,9 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Abstract nella card: preview ellipsata, espandibile stile descrizione post social, con scroll verticale nella card.
 - Search MVP: tab autenticata per cercare nel catalogo CS locale per titolo, autore, topic e identificativi, senza diventare una ricerca universale tipo reference manager.
 - Aprire il dettaglio e' un segnale positivo leggero per il ranking.
-- Segnalibro: salva prima in una playlist default tipo `Read later`.
+- Segnalibro: apre un picker multi-selezione per le playlist private, con
+  `Read later` in cima e creazione inline; lo swipe rapido continua a salvare
+  direttamente in `Read later`.
 - Preview abstract: circa 10 righe su mobile, adattiva su desktop.
 - Embeddings MVP: modello open-source locale, con `sentence-transformers/all-MiniLM-L6-v2` come default corrente dopo benchmark offline; BGE-small resta baseline storica.
 - Worker batch online MVP: GitHub Actions giornaliero e avviabile manualmente.
@@ -58,7 +60,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 
 ## Stato implementazione
 
-Aggiornato al 2026-07-29:
+Aggiornato al 2026-08-04:
 
 - Repository, scaffold Next.js, UI skeleton e Clerk auth: completati.
 - Supabase schema iniziale con pgvector, RLS preparata e tabelle MVP: applicato.
@@ -73,7 +75,8 @@ Aggiornato al 2026-07-29:
   - Search legge il catalogo Supabase e riusa le card lista esistenti.
   - Le azioni dismiss, open detail, favorite e save to playlist scrivono interazioni utente.
   - Il feed usa un primo ranking MVP con interessi selezionati, feedback recente e penalita' per paper gia' aperti/letti.
-  - `Read later` supporta aggiunta e rimozione da feed, dettaglio e library.
+  - Feed, digest e dettaglio permettono di scegliere una o piu' playlist
+    private o crearne una inline; lo swipe rapido salva in `Read later`.
   - Il dettaglio paper registra i segnali `already_read` e `not_interested`.
 - Ingestion arXiv MVP: completata e ampliata.
   - Script `scripts/ingest-arxiv.ts` con 10 categorie CS di default.
@@ -117,7 +120,11 @@ Aggiornato al 2026-07-29:
 - Sicurezza: audit service-role completato, checklist rotazione secret documentata.
 - Test: suite Playwright smoke con 5 test dev-auth.
 - Osservabilita': logger JSON strutturato con `feed_timing`, preload feed, personalizzazione onboarding ed errori API deck.
-- Library: storico `Ignored` per paper dismissati o marcati not interested.
+- Library: `Read later`, Favorites e storico `Ignored` sono raccolte di sistema
+  selezionabili, separate visivamente dalle playlist custom; `Read later` e'
+  la vista predefinita e viene renderizzata per prima. Le altre raccolte sono
+  normalizzate e precaricate privatamente in background; selezione e modifica
+  restano locali e aggiornano l'URL senza una navigazione server.
 
 ## Prossimi passi
 
@@ -476,7 +483,8 @@ Interazioni:
 - Swipe left: non interessante per questo paper specifico.
 - Tap: dettaglio paper.
 - Cuore: aggiunge/rimuove dai preferiti.
-- Segnalibro: salva nella playlist default `Read later`.
+- Segnalibro: apre il picker delle playlist private; lo swipe rapido salva
+  direttamente nella playlist default `Read later`.
 - Modifica topic: solo dalle impostazioni, non tramite swipe.
 
 La card full-screen puo' scrollare verticalmente quando l'abstract viene espanso. Di default deve mostrare solo una preview per mantenere il ritmo social-like del feed.
@@ -517,7 +525,8 @@ Pagina dettaglio:
 
 Stato attuale:
 
-- Preferito e `Read later` sono toggle persistenti.
+- Preferito e appartenenza alle playlist private sono persistenti; `Read later`
+  resta la destinazione rapida dello swipe.
 - `Already read` registra `already_read` e rimuove il paper dal deck attivo.
 - `Not interested` registra `not_interested`, rimuove il paper dal deck attivo e influenza negativamente i topic correlati nel ranking MVP.
 
@@ -539,7 +548,12 @@ Stato attuale:
 - Library collegata ai dati persistenti.
 - Preferiti, salvataggi e aperture dettaglio sono segnali usati dal ranking MVP.
 - Rimozione paper da `Read later`: implementata.
-- Creazione playlist custom e ordinamento manuale: da implementare.
+- Creazione playlist custom, selezione multipla, creazione inline e ordinamento
+  manuale: implementati.
+- Library a raccolta singola: `Read later`, Favorites, Ignored e playlist custom
+  condividono la stessa area contenuti; una linea separa le raccolte di sistema
+  dalle playlist custom. La matita attiva/disattiva localmente la gestione di
+  `Read later`, Favorites e playlist custom; Ignored resta in sola lettura.
 
 Futuro:
 
@@ -961,7 +975,9 @@ Output:
 - Aggiunta/rimozione paper.
 - Vista playlist.
 
-Stato attuale: lista preferiti, playlist default `Read later`, aggiunta/rimozione da `Read later` e vista library implementate; creazione playlist custom e ordinamento manuale da fare.
+Stato attuale: raccolte di sistema `Read later`, Favorites e Ignored, picker
+privato multi-selezione, playlist custom separate, creazione inline,
+aggiunta/rimozione, vista a raccolta singola e ordinamento manuale implementati.
 
 ### Fase 7: link esterni e accessibilita' articolo
 

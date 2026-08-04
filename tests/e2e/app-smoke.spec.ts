@@ -260,9 +260,19 @@ test.describe("dev-auth app smoke", () => {
 
     const papers = await seedIgnoredHistoryDevOwner();
 
+    const collectionsLoaded = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/library/collections") &&
+        response.status() === 200,
+    );
     const response = await page.goto("/library");
 
     expect(response?.status()).toBeLessThan(500);
+    await expect(
+      page.getByRole("heading", { exact: true, name: "Read later" }),
+    ).toBeVisible();
+    await collectionsLoaded;
+    await page.getByRole("button", { name: /^Ignored/ }).click();
     await expect(
       page.getByRole("heading", { exact: true, name: "Ignored" }),
     ).toBeVisible();

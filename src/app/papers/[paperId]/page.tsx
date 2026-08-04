@@ -66,7 +66,7 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
         </Link>
       }
     >
-      <article className="mx-auto w-full max-w-4xl rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-8 lg:px-12 lg:py-10">
+      <article className="w-full rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-8 lg:px-12 lg:py-10">
         <div className="flex flex-wrap gap-2">
           {paper.topics.map((topic) => (
             <span

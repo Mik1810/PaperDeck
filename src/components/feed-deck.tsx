@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { animate, useMotionValue, useTransform, motion, type MotionValue, type PanInfo } from "motion/react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+  type MotionValue,
+  type PanInfo,
+} from "motion/react";
 import { Bookmark, X } from "lucide-react";
 import { MathContent } from "@/components/math-content";
 import {
@@ -13,11 +21,11 @@ import {
   deckMutationErrorMessage,
   submitDeckAction,
 } from "@/lib/client/deck-mutations";
+import { resolveDeckSwipe } from "@/lib/client/deck-swipe";
 import type { FeedPaper } from "@/types/paper";
 
-const SWIPE_THRESHOLD = 100;
-const EXIT_VELOCITY = 500;
-const EXIT_DURATION = 0.3;
+const SWIPE_OVERLAY_DISTANCE = 72;
+const EXIT_DURATION = 0.22;
 const OPENED_FEED_PAPER_STORAGE_KEY = "paperdeck:opened-feed-paper";
 
 function SwipeOverlay({
@@ -30,11 +38,11 @@ function SwipeOverlay({
   const opacity = useTransform(dragX, (value: number) => {
     const relevant = direction === "left" ? Math.abs(Math.min(value, 0)) : Math.max(value, 0);
     if (relevant < 20) return 0;
-    return Math.min(relevant / SWIPE_THRESHOLD, 1);
+    return Math.min(relevant / SWIPE_OVERLAY_DISTANCE, 1);
   });
 
   const scale = useTransform(dragX, (value: number) => {
-    const raw = Math.min(Math.abs(value) / SWIPE_THRESHOLD, 1);
+    const raw = Math.min(Math.abs(value) / SWIPE_OVERLAY_DISTANCE, 1);
     return 0.8 + raw * 0.2;
   });
 
@@ -119,6 +127,7 @@ export function FeedDeck({
   const visibleNextPapers = visiblePapers.slice(1, 6);
 
   const exitingRef = useRef(false);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const prev = document.body.style.overflowX;
@@ -172,6 +181,10 @@ export function FeedDeck({
     setPaperDismissed(paperId, true);
   }, [setPaperDismissed]);
 
+  const handlePlaylistSaveComplete = useCallback((paperId: string) => {
+    setPaperDismissed(paperId, true);
+  }, [setPaperDismissed]);
+
   const handleDismissSubmit = useCallback(async function (
     paperId: string,
     recommendationImpressionId?: string,
@@ -216,21 +229,23 @@ export function FeedDeck({
   const rotate = useTransform(dragX, (value: number) => value * 0.05);
 
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
-    const offset = info.offset.x;
-    const velocity = info.velocity.x;
+    const direction = resolveDeckSwipe({
+      offsetX: info.offset.x,
+      offsetY: info.offset.y,
+      velocityX: info.velocity.x,
+      viewportWidth: window.innerWidth,
+    });
 
-    if (Math.abs(offset) >= SWIPE_THRESHOLD || Math.abs(velocity) >= EXIT_VELOCITY) {
+    if (direction) {
       if (exitingRef.current || !visibleActivePaper) return;
       exitingRef.current = true;
 
-      const direction: "left" | "right" = offset > 0 ? "right" : "left";
       const targetX = direction === "left" ? -window.innerWidth * 1.2 : window.innerWidth * 1.2;
 
       void animate(dragX, targetX, {
-        type: "spring",
-        stiffness: 300,
-        damping: 32,
-        duration: EXIT_DURATION,
+        type: "tween",
+        duration: prefersReducedMotion ? 0.01 : EXIT_DURATION,
+        ease: [0.32, 0.72, 0, 1],
       }).then(() => {
         if (direction === "right") {
           void handleReadLaterSubmit(
@@ -260,25 +275,55 @@ export function FeedDeck({
       <section className="md:pr-0">
         {visibleActivePaper ? (
           <div className={`relative [overflow-y:clip] ${PAPER_CARD_HEIGHT_CLASS_NAME}`}>
-            {visiblePapers.slice(1, 3).map((paper, index) => (
-              <div
-                key={paper.id}
-                className="pointer-events-none absolute inset-0 rounded-2xl border border-slate-200 bg-white shadow-sm"
-                style={{
-                  transform: `scale(${0.97 - index * 0.03}) translateY(${(index + 1) * 6}px)`,
-                  opacity: 1 - index * 0.35,
-                  zIndex: 0,
-                  transition: "opacity 300ms ease",
-                }}
-              />
-            ))}
+            {visiblePapers.slice(1, 3).map((paper, index) => {
+              const style = {
+                transform: `scale(${0.97 - index * 0.03}) translateY(${(index + 1) * 6}px)`,
+                opacity: 1 - index * 0.35,
+                zIndex: 0,
+                transition: "opacity 220ms ease, transform 220ms ease",
+              };
+
+              return index === 0 ? (
+                <div
+                  key={paper.id}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0"
+                  data-paper-id={paper.id}
+                  data-testid="next-deck-card"
+                  inert
+                  style={style}
+                >
+                  <PaperCard
+                    isFavorite={favoriteIds.has(paper.id)}
+                    isSaved={readLaterIds.has(paper.id)}
+                    paper={paper}
+                  />
+                </div>
+              ) : (
+                <div
+                  key={paper.id}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 rounded-2xl border border-slate-200 bg-white shadow-sm"
+                  inert
+                  style={style}
+                />
+              );
+            })}
 
             <motion.div
+              key={visibleActivePaper.id}
               className="relative z-10 select-none"
-              style={{ x: dragX, rotate }}
+              data-paper-id={visibleActivePaper.id}
+              data-testid="active-deck-card"
               drag="x"
-              dragElastic={1}
+              dragMomentum={false}
               onDragEnd={handleDragEnd}
+              style={{
+                rotate: prefersReducedMotion ? 0 : rotate,
+                touchAction: "pan-y",
+                x: dragX,
+              }}
+              whileDrag={prefersReducedMotion ? undefined : { scale: 1.01 }}
               whileTap={{ cursor: "grabbing" }}
             >
               <SwipeOverlay direction="left" dragX={dragX} />
@@ -295,6 +340,7 @@ export function FeedDeck({
                 }
                 onDismissSubmit={handleDismissSubmit}
                 onOpen={handleOpen}
+                onPlaylistSaveComplete={handlePlaylistSaveComplete}
                 paper={visibleActivePaper}
               />
             </motion.div>
