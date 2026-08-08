@@ -50,13 +50,14 @@ This project follows Semantic Versioning.
 
 ### Added
 
-- Added the local #98 notification center: authenticated header bell with `99+`
+- Added and deployed the #98 notification center: authenticated header bell with `99+`
   badge, latest-20 desktop popover/mobile bottom sheet, reconnect/focus polling,
   important-event toasts, inline request actions, and a private paginated history
   page with category/read filters and archive controls. A service-role-only RPC
   lets the authenticated invitation recipient respond in app while consuming the
-  existing single-use digest. Its seven-case isolated PostgreSQL gate passes;
-  the migration remains local pending a separately approved shared rollout.
+  existing single-use digest. Its seven-case isolated PostgreSQL gate passes,
+  and the service-role-only RPC is applied to the shared Supabase project with
+  both research-group runtime switches still disabled.
 - Added the local #97 durable-notification foundation: atomic idempotent database
   events for friendship, invitation, membership, role, and ownership changes;
   recipient-only RLS and acknowledgement grants; source-linked cleanup; a

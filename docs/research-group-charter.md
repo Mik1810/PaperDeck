@@ -7,9 +7,10 @@ Supabase project with both database-backed switches disabled. The invitation
 and membership lifecycle passed synthetic cross-role, cleanup, privilege, and
 advisor checks; no pilot UI is enabled yet. The durable notification foundation
 for #97 is applied to the shared project with an empty initial inbox and approved
-scheduled retention. The #98 notification UI is implemented locally but not yet
-released; its in-app `respond_research_group_invitation_in_app` RPC is deployed
-but guarded by database switches.
+scheduled retention. The #98 notification UI is released, and its in-app
+`respond_research_group_invitation_in_app` RPC is deployed with execution
+restricted to `service_role`. Group functionality remains guarded by both
+disabled database switches.
 
 ## Product boundary
 
