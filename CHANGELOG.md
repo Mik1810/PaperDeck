@@ -20,6 +20,11 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Added a conditional database hardening migration that removes unnecessary
+  direct `PUBLIC`, `anon`, and `authenticated` execution of Supabase's managed
+  `rls_auto_enable()` helper without replacing or disabling its event trigger.
+  A disposable PostgreSQL regression test verifies automatic RLS still works;
+  applying the migration to the shared project remains separately gated.
 - Replaced direct bookmark-to-`Read later` buttons on feed, digest, and paper
   detail with an owner-scoped multi-playlist picker, while preserving swipe as
   the quick `Read later` path and recording only one ranking save signal per
