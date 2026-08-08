@@ -60,6 +60,26 @@ export function presentNotification(
         title: "Group ownership transferred",
         detail: `You are now the owner of ${group}.`,
       };
+    case "group_papers_added": {
+      const count = notification.paperActivity?.eventCount ?? 1;
+      return {
+        title: count === 1 ? "Paper added to group" : "Papers added to group",
+        detail:
+          count === 1
+            ? `${actor} added a paper to ${group}.`
+            : `${actor} added ${count} papers to ${group}.`,
+      };
+    }
+    case "group_paper_removed": {
+      const paperTitle =
+        notification.paperActivity?.representativePaper?.title?.trim();
+      return {
+        title: "Your shared paper was removed",
+        detail: paperTitle
+          ? `${actor} removed “${paperTitle}” from ${group}.`
+          : `${actor} removed a paper you added to ${group}.`,
+      };
+    }
   }
 }
 
@@ -76,6 +96,7 @@ export function isImportantNotification(notification: NotificationSummary) {
   return ![
     "group_invitation_accepted",
     "group_member_joined",
+    "group_papers_added",
   ].includes(notification.type);
 }
 

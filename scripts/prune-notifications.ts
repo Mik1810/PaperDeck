@@ -41,15 +41,26 @@ async function main() {
 
   try {
     if (dryRun) {
-      const rows = await sql<{ count: number }[]>`
-        select count(*)::integer as count
-        from notifications
-        where expires_at <= now()
+      const rows = await sql<{
+        notification_count: number;
+        group_paper_activity_count: number;
+      }[]>`
+        select
+          (select count(*)::integer from notifications where expires_at <= now())
+            as notification_count,
+          (
+            select count(*)::integer
+            from research_group_paper_activity
+            where expires_at <= now()
+          ) as group_paper_activity_count
       `;
       console.log(JSON.stringify({
         mode: "dry-run",
         retentionDays: 90,
-        expiredCount: rows[0]?.count ?? 0,
+        expiredCount: rows[0]?.notification_count ?? 0,
+        expiredNotificationCount: rows[0]?.notification_count ?? 0,
+        expiredGroupPaperActivityCount:
+          rows[0]?.group_paper_activity_count ?? 0,
       }));
       return;
     }
@@ -66,13 +77,31 @@ async function main() {
       if (batchDeleted < batchSize) break;
     }
 
+    let activityBatches = 0;
+    let deletedGroupPaperActivityCount = 0;
+    while (activityBatches < maxBatches) {
+      const rows = await sql<{ count: number }[]>`
+        select private.purge_expired_group_paper_activity(${batchSize}) as count
+      `;
+      const batchDeleted = rows[0]?.count ?? 0;
+      activityBatches += 1;
+      deletedGroupPaperActivityCount += batchDeleted;
+      if (batchDeleted < batchSize) break;
+    }
+
     console.log(JSON.stringify({
       mode: "write",
       retentionDays: 90,
       batchSize,
       batches,
       deletedCount,
-      truncated: batches === maxBatches && deletedCount === batchSize * maxBatches,
+      deletedNotificationCount: deletedCount,
+      activityBatches,
+      deletedGroupPaperActivityCount,
+      truncated:
+        (batches === maxBatches && deletedCount === batchSize * maxBatches) ||
+        (activityBatches === maxBatches &&
+          deletedGroupPaperActivityCount === batchSize * maxBatches),
     }));
   } finally {
     await sql.end();

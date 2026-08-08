@@ -9,7 +9,9 @@ export const friendRequestStatus = pgEnum("friend_request_status", ['pending', '
 export const researchGroupRole = pgEnum("research_group_role", ['owner', 'admin', 'member'])
 export const researchGroupState = pgEnum("research_group_state", ['active', 'archived'])
 export const researchGroupInvitationStatus = pgEnum("research_group_invitation_status", ['pending', 'accepted', 'declined', 'cancelled', 'revoked', 'expired'])
-export const notificationType = pgEnum("notification_type", ['friend_request_received', 'friendship_accepted', 'group_invitation_received', 'group_invitation_accepted', 'group_member_joined', 'group_membership_ended', 'group_role_changed', 'group_ownership_transferred'])
+export const researchGroupPaperNotificationPreference = pgEnum("research_group_paper_notification_preference", ['all', 'important_only', 'muted'])
+export const researchGroupPaperActivityKind = pgEnum("research_group_paper_activity_kind", ['papers_added', 'paper_removed'])
+export const notificationType = pgEnum("notification_type", ['friend_request_received', 'friendship_accepted', 'group_invitation_received', 'group_invitation_accepted', 'group_member_joined', 'group_membership_ended', 'group_role_changed', 'group_ownership_transferred', 'group_papers_added', 'group_paper_removed'])
 
 
 export const profiles = pgTable("profiles", {
@@ -131,6 +133,7 @@ export const researchGroupMembers = pgTable("research_group_members", {
 	groupId: uuid("group_id").notNull(),
 	memberId: text("member_id").notNull(),
 	role: researchGroupRole().notNull(),
+	paperNotificationPreference: researchGroupPaperNotificationPreference("paper_notification_preference").default('all').notNull(),
 	joinedAt: timestamp("joined_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	revokedAt: timestamp("revoked_at", { withTimezone: true, mode: 'string' }),
@@ -189,6 +192,7 @@ export const notifications = pgTable("notifications", {
 	friendRequestId: uuid("friend_request_id"),
 	groupInvitationId: uuid("group_invitation_id"),
 	groupId: uuid("group_id"),
+	groupPaperActivityId: uuid("group_paper_activity_id"),
 	readAt: timestamp("read_at", { withTimezone: true, mode: 'string' }),
 	archivedAt: timestamp("archived_at", { withTimezone: true, mode: 'string' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -206,10 +210,11 @@ export const notifications = pgTable("notifications", {
 	index("notifications_friend_request_idx").on(table.friendRequestId).where(sql`${table.friendRequestId} is not null`),
 	index("notifications_group_invitation_idx").on(table.groupInvitationId).where(sql`${table.groupInvitationId} is not null`),
 	index("notifications_group_idx").on(table.groupId).where(sql`${table.groupId} is not null`),
+	index("notifications_group_paper_activity_idx").on(table.groupPaperActivityId).where(sql`${table.groupPaperActivityId} is not null`),
 	index("notifications_expiry_idx").on(table.expiresAt),
 	check("notifications_dedupe_key_check", sql`char_length(${table.dedupeKey}) between 1 and 240`),
 	check("notifications_expiry_check", sql`${table.expiresAt} > ${table.createdAt}`),
-	check("notifications_source_check", sql`(${table.type} in ('friend_request_received', 'friendship_accepted') and ${table.friendRequestId} is not null and ${table.groupInvitationId} is null and ${table.groupId} is null) or (${table.type} in ('group_invitation_received', 'group_invitation_accepted') and ${table.friendRequestId} is null and ${table.groupInvitationId} is not null and ${table.groupId} is not null) or (${table.type} in ('group_member_joined', 'group_membership_ended', 'group_role_changed', 'group_ownership_transferred') and ${table.friendRequestId} is null and ${table.groupInvitationId} is null and ${table.groupId} is not null)`),
+	check("notifications_source_check", sql`(${table.type} in ('friend_request_received', 'friendship_accepted') and ${table.friendRequestId} is not null and ${table.groupInvitationId} is null and ${table.groupId} is null and ${table.groupPaperActivityId} is null) or (${table.type} in ('group_invitation_received', 'group_invitation_accepted') and ${table.friendRequestId} is null and ${table.groupInvitationId} is not null and ${table.groupId} is not null and ${table.groupPaperActivityId} is null) or (${table.type} in ('group_member_joined', 'group_membership_ended', 'group_role_changed', 'group_ownership_transferred') and ${table.friendRequestId} is null and ${table.groupInvitationId} is null and ${table.groupId} is not null and ${table.groupPaperActivityId} is null) or (${table.type} in ('group_papers_added', 'group_paper_removed') and ${table.friendRequestId} is null and ${table.groupInvitationId} is null and ${table.groupId} is not null and ${table.groupPaperActivityId} is not null)`),
 	pgPolicy("notifications_recipient_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`${table.recipientId} = ((select auth.jwt()) ->> 'sub')` }),
 	pgPolicy("notifications_recipient_update", { as: "permissive", for: "update", to: ["authenticated"], using: sql`${table.recipientId} = ((select auth.jwt()) ->> 'sub')`, withCheck: sql`${table.recipientId} = ((select auth.jwt()) ->> 'sub')` }),
 ]);
@@ -412,6 +417,47 @@ export const papers = pgTable("papers", {
 	index("papers_source_idx").using("btree", table.source.asc().nullsLast().op("enum_ops")),
 	index("papers_year_idx").using("btree", table.year.desc().nullsFirst().op("int4_ops")),
 	pgPolicy("papers_read_authenticated", { as: "permissive", for: "select", to: ["public"], using: sql`((auth.jwt() ->> 'sub'::text) IS NOT NULL)` }),
+]);
+
+export const researchGroupPaperItems = pgTable("research_group_paper_items", {
+	groupId: uuid("group_id").notNull(),
+	paperId: uuid("paper_id").notNull(),
+	addedBy: text("added_by"),
+	addedAt: timestamp("added_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.groupId], foreignColumns: [researchGroups.id], name: "research_group_paper_items_group_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.paperId], foreignColumns: [papers.id], name: "research_group_paper_items_paper_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.addedBy], foreignColumns: [profiles.ownerId], name: "research_group_paper_items_added_by_fkey" }).onDelete("set null"),
+	primaryKey({ columns: [table.groupId, table.paperId], name: "research_group_paper_items_pkey" }),
+	index("research_group_paper_items_group_added_idx").on(table.groupId, table.addedAt.desc(), table.paperId),
+	index("research_group_paper_items_paper_idx").on(table.paperId),
+	index("research_group_paper_items_contributor_idx").on(table.addedBy).where(sql`${table.addedBy} is not null`),
+	pgPolicy("research_group_paper_items_member_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(select private.research_groups_reads_enabled()) and (select private.research_group_is_active_member(${table.groupId}))` }),
+]);
+
+export const researchGroupPaperActivity = pgTable("research_group_paper_activity", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	groupId: uuid("group_id").notNull(),
+	kind: researchGroupPaperActivityKind().notNull(),
+	actorId: text("actor_id"),
+	representativePaperId: uuid("representative_paper_id"),
+	eventCount: integer("event_count").default(1).notNull(),
+	bucketStartedAt: timestamp("bucket_started_at", { withTimezone: true, mode: 'string' }),
+	firstOccurredAt: timestamp("first_occurred_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	lastOccurredAt: timestamp("last_occurred_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }).default(sql`now() + interval '90 days'`).notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.groupId], foreignColumns: [researchGroups.id], name: "research_group_paper_activity_group_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.actorId], foreignColumns: [profiles.ownerId], name: "research_group_paper_activity_actor_id_fkey" }).onDelete("set null"),
+	foreignKey({ columns: [table.representativePaperId], foreignColumns: [papers.id], name: "research_group_paper_activity_representative_paper_id_fkey" }).onDelete("set null"),
+	unique("research_group_paper_activity_group_id_actor_id_kind_bucket_started_at_key").on(table.groupId, table.actorId, table.kind, table.bucketStartedAt),
+	index("research_group_paper_activity_group_created_idx").on(table.groupId, table.lastOccurredAt.desc(), table.id.desc()),
+	index("research_group_paper_activity_expiry_idx").on(table.expiresAt, table.id),
+	index("research_group_paper_activity_actor_idx").on(table.actorId).where(sql`${table.actorId} is not null`),
+	check("research_group_paper_activity_count_check", sql`${table.eventCount} > 0`),
+	check("research_group_paper_activity_time_check", sql`${table.firstOccurredAt} <= ${table.lastOccurredAt} and ${table.lastOccurredAt} < ${table.expiresAt}`),
+	check("research_group_paper_activity_kind_check", sql`(${table.kind} = 'papers_added' and ${table.bucketStartedAt} is not null) or (${table.kind} = 'paper_removed' and ${table.bucketStartedAt} is null and ${table.eventCount} = 1)`),
+	pgPolicy("research_group_paper_activity_member_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`${table.expiresAt} > now() and (select private.research_groups_reads_enabled()) and (select private.research_group_is_active_member(${table.groupId}))` }),
 ]);
 
 export const ingestionRuns = pgTable("ingestion_runs", {

@@ -40,14 +40,17 @@ The default invitation policy remains `friends_only`.
 
 | Role | Shared paper list | Members and invites | Group lifecycle |
 | --- | --- | --- | --- |
-| Owner | Read, add, remove, and reorder | Invite, remove, and assign roles | Choose successor and delete the group |
-| Admin | Read, add, remove, and reorder | Invite and remove members | Cannot transfer ownership or delete the group |
-| Member | Read, add, and remove papers | No member or invite management | Cannot change roles or group lifecycle |
+| Owner | Read, add, and remove any paper | Invite, remove, and assign roles | Choose successor and delete the group |
+| Admin | Read, add, and remove any paper | Invite and remove members | Cannot transfer ownership or delete the group |
+| Member | Read, add, and remove only their own additions | No member or invite management | Cannot change roles or group lifecycle |
 | Outsider or revoked member | No access; respond as not found | No access | No access |
 
 Every invitation requires explicit acceptance. A group has one shared paper list
 separate from every member's private playlists. Copying a shared paper into a
 private library is an explicit personal action and does not affect other users.
+The initial shared list is chronological by addition time. It has no manual
+reordering, stored sort position, or list revision. A group exists independently
+and may have an empty shared list.
 
 ## Data lifecycle
 

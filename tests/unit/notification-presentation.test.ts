@@ -25,6 +25,7 @@ function notification(
     groupInvitationId: null,
     groupInvitationStatus: null,
     group: null,
+    paperActivity: null,
     readAt: null,
     createdAt: "2026-08-03T22:00:00.000Z",
     expiresAt: "2026-11-01T22:00:00.000Z",
@@ -104,5 +105,55 @@ test("limits silent toast candidates and formats deterministic UTC timestamps", 
   assert.equal(
     formatNotificationTimestamp("2026-08-03T22:00:00.000Z"),
     "Aug 3, 2026, 10:00 PM",
+  );
+});
+
+test("presents aggregated and removed group paper activity", () => {
+  const group = {
+    id: "00000000-0000-4000-8000-000000000004",
+    name: "Systems Lab",
+  };
+
+  assert.deepEqual(
+    presentNotification(notification({
+      type: "group_papers_added",
+      friendRequestId: null,
+      friendRequestStatus: null,
+      group,
+      paperActivity: {
+        kind: "papers_added",
+        eventCount: 4,
+        representativePaper: null,
+      },
+    })),
+    {
+      title: "Papers added to group",
+      detail: "Ada added 4 papers to Systems Lab.",
+    },
+  );
+  assert.equal(
+    isImportantNotification(notification({ type: "group_papers_added" })),
+    false,
+  );
+
+  assert.deepEqual(
+    presentNotification(notification({
+      type: "group_paper_removed",
+      friendRequestId: null,
+      friendRequestStatus: null,
+      group,
+      paperActivity: {
+        kind: "paper_removed",
+        eventCount: 1,
+        representativePaper: {
+          id: "00000000-0000-4000-8000-000000000020",
+          title: "A Shared Result",
+        },
+      },
+    })),
+    {
+      title: "Your shared paper was removed",
+      detail: "Ada removed “A Shared Result” from Systems Lab.",
+    },
   );
 });

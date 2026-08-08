@@ -20,6 +20,11 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Defined the #99 shared-list contract: groups may be empty; papers are
+  chronological without manual positions, reorder, or list revisions; members
+  remove only their own additions while owner/admin may moderate any; and
+  copying a group paper into a private Library remains an explicit action.
+
 - Added a conditional database hardening migration that removes unnecessary
   direct `PUBLIC`, `anon`, and `authenticated` execution of Supabase's managed
   `rls_auto_enable()` helper without replacing or disabling its event trigger.
@@ -56,6 +61,15 @@ This project follows Semantic Versioning.
   A/B isolation tests use dedicated Clerk Development identities only.
 
 ### Added
+
+- Added the local-only #99 shared-paper foundation: membership-scoped read RLS,
+  service-role-only atomic add/remove/preference operations, duplicate and
+  500-item guards, detached `Former member` provenance, ten-minute addition
+  notification aggregation, important removal notifications, 90-day bounded
+  activity retention, and an eight-case isolated PostgreSQL 17 gate proving
+  role isolation and zero writes to personal ranking/library tables. The two
+  migrations are not applied to the shared Supabase project and both research-
+  group kill switches remain disabled.
 
 - Added and deployed the #98 notification center: authenticated header bell with `99+`
   badge, latest-20 desktop popover/mobile bottom sheet, reconnect/focus polling,
