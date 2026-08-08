@@ -294,6 +294,12 @@ owner_id = auth.jwt() ->> 'sub'
 
 These policies assume that Supabase receives a JWT where `sub` is the Clerk user ID. Until this is configured, direct client-side access to user-owned tables should not be used.
 
+Supabase's managed automatic-RLS event trigger remains enabled. Migration
+`20260808221535_restrict_rls_auto_enable_execution.sql` removes unnecessary
+direct execution of its `public.rls_auto_enable()` helper from `PUBLIC`, `anon`,
+and `authenticated` without changing the function or trigger behavior. The
+shared-project rollout was verified through metadata and security advisors.
+
 ## MVP Rule
 
 Use server-side access for user-specific data until Clerk JWT + Supabase RLS is fully configured and tested.
