@@ -172,6 +172,13 @@ recommendations, or profile embeddings. This foundation has passed an isolated
 PostgreSQL 17 migration suite but has not been applied to the shared Supabase
 project; both group runtime switches remain disabled.
 
+The matching local workspace reads directly in Server Components and performs
+mutations through authenticated Server Actions. Client-side catalog search uses
+one membership-authorized `private, no-store` Route Handler. The UI receives
+only the public member projection and a precomputed `canRemove` capability; it
+never receives contributor Clerk IDs. `Save privately` deliberately reuses the
+normal private playlist path and is separate from the group mutation.
+
 ### Durable Notifications
 
 `notifications` is an inbox of typed event pointers, not a message log. Each row

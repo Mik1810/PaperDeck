@@ -121,9 +121,11 @@ Aggiornato al 2026-08-04:
   inviti e delle membership #96 verificato su PostgreSQL isolato e sul database
   condiviso con fixture sintetiche completamente rimosse.
 - Lista paper condivisa #99: fondazione dati, RLS, operazioni atomiche,
-  preferenze/aggregazione notifiche e retention implementate e validate solo
-  in PostgreSQL locale isolato. Nessuna migrazione e' stata applicata al
-  Supabase condiviso; entrambi i kill switch restano disattivati.
+  preferenze/aggregazione notifiche, retention e workspace responsive
+  `/groups` implementati localmente. L'accesso usa il menu account Clerk senza
+  aggiungere voci alle navbar. Nessuna migrazione e' stata applicata al
+  Supabase condiviso; entrambi i kill switch restano disattivati e la UI
+  autenticata con dati di gruppo richiede ancora il rollout separato.
 - KaTeX: rendering LaTeX in abstract e summary su detail page e feed card (scelto dopo aver scartato MathJax per via della dimensione bundle e complessita' CDN).
 - Sicurezza: audit service-role completato, checklist rotazione secret documentata.
 - Test: suite Playwright smoke con 5 test dev-auth.

@@ -92,7 +92,7 @@ export type PaperPlaylistOption = {
   selected: boolean;
 };
 
-export type PlaylistSaveContext = "feed" | "digest" | "paper_detail";
+export type PlaylistSaveContext = "feed" | "digest" | "paper_detail" | "group";
 
 async function measureAsync<T>(
   timings: Record<string, number>,

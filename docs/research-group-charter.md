@@ -10,7 +10,8 @@ for #97 is applied to the shared project with an empty initial inbox and approve
 scheduled retention. The #98 notification UI is released, and its in-app
 `respond_research_group_invitation_in_app` RPC is deployed with execution
 restricted to `service_role`. Group functionality remains guarded by both
-disabled database switches.
+disabled database switches. The #99 shared-list workspace and operations are
+implemented only on a draft branch; their migrations and UI are not deployed.
 
 ## Product boundary
 

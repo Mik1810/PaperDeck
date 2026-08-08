@@ -24,6 +24,17 @@
   idempotency, aggregation/preferences, role moderation, outsider/revoked RLS,
   account-closure anonymization, kill switches, grants/function security, and
   retention cascade while proving zero writes to private library/ranking data.
+- Added the minimum responsive group workspace. `/groups` shows active groups,
+  incoming invitations, empty state, and group creation; `/groups/[groupId]`
+  shows chronological papers, explicit private saving, role-aware removal,
+  notification preference, exact-email invitation, member roles/removal, and
+  leave/delete controls.
+- Added `Research groups` to Clerk's existing account menu without adding a
+  desktop or mobile navbar item. Local dev-auth uses its existing badge as the
+  non-product test entry point.
+- Added an authenticated private/no-store catalog-search Route Handler for the
+  add-paper dialog. Every mutation authenticates inside its Server Action and
+  delegates authorization to the transactional repository/database checks.
 
 ## Rollout boundary
 
@@ -42,3 +53,8 @@
 - `TMPDIR=/tmp npm run audit:service-role`.
 - `TMPDIR=/tmp npm run build`.
 - `git diff --check`.
+- Browser gate: `/groups` is protected and redirects to Clerk sign-in, the
+  mobile sign-in view renders without a framework error overlay, and no login,
+  session, or data mutation was performed. Authenticated group pages remain
+  unverified because the local Clerk Development keys currently mismatch and
+  the shared group switches/migrations intentionally remain disabled.

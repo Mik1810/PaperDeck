@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   collaborationIdentities,
@@ -37,6 +37,7 @@ export type ResearchGroupMemberSummary = {
   imageUrl: string | null;
   role: ResearchGroupRole;
   joinedAt: string;
+  isCurrentUser: boolean;
 };
 
 async function getRuntimeSettings(): Promise<RuntimeSettings> {
@@ -96,6 +97,49 @@ export async function requireResearchGroupPermission(
     operation,
     ...settings,
   });
+}
+
+// Lists active memberships only after the global read switch is checked.
+/** @user-scoped */
+export async function listResearchGroups(
+  actorOwnerId: string,
+): Promise<ResearchGroupSummary[]> {
+  requireOwnerId(actorOwnerId, "listResearchGroups");
+  const settings = await getRuntimeSettings();
+  if (!settings.readsEnabled) {
+    throw new ResearchGroupUnavailableError();
+  }
+
+  return db
+    .select({
+      id: researchGroups.id,
+      name: researchGroups.name,
+      description: researchGroups.description,
+      role: researchGroupMembers.role,
+      revision: researchGroups.revision,
+      createdAt: researchGroups.createdAt,
+      updatedAt: researchGroups.updatedAt,
+    })
+    .from(researchGroups)
+    .innerJoin(
+      researchGroupMembers,
+      and(
+        eq(researchGroupMembers.groupId, researchGroups.id),
+        eq(researchGroupMembers.memberId, actorOwnerId),
+        isNull(researchGroupMembers.revokedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(researchGroups.state, "active"),
+        sql`exists (
+          select 1
+          from private.research_group_runtime_settings as settings
+          where settings.singleton and settings.reads_enabled
+        )`,
+      ),
+    )
+    .orderBy(desc(researchGroups.updatedAt), desc(researchGroups.id));
 }
 
 // Returns one private group only after the centralized ACL passes.
@@ -168,6 +212,7 @@ export async function listResearchGroupMembers(
       imageUrl: profiles.imageUrl,
       role: researchGroupMembers.role,
       joinedAt: researchGroupMembers.joinedAt,
+      memberOwnerId: researchGroupMembers.memberId,
     })
     .from(researchGroupMembers)
     .innerJoin(
@@ -192,6 +237,12 @@ export async function listResearchGroupMembers(
             and actor_membership.revoked_at is null
         )`,
       ),
+    )
+    .then((rows) =>
+      rows.map(({ memberOwnerId, ...row }) => ({
+        ...row,
+        isCurrentUser: memberOwnerId === actorOwnerId,
+      })),
     );
 }
 

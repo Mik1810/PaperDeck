@@ -70,6 +70,13 @@ This project follows Semantic Versioning.
   role isolation and zero writes to personal ranking/library tables. The two
   migrations are not applied to the shared Supabase project and both research-
   group kill switches remain disabled.
+- Added the local-only #99 group workspace: `/groups` lists memberships and
+  incoming invitations, `/groups/[groupId]` presents the chronological shared
+  list and responsive member management, and the Clerk account menu links the
+  workspace without adding another navbar item. Authenticated Server Actions
+  cover creation, invitation, roles, removal, preferences, leave/delete, and
+  paper add/remove; a private no-store catalog search powers the add dialog.
+  Shared cards expose an explicit `Save privately` playlist picker.
 
 - Added and deployed the #98 notification center: authenticated header bell with `99+`
   badge, latest-20 desktop popover/mobile bottom sheet, reconnect/focus polling,

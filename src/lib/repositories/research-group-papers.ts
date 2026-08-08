@@ -12,6 +12,7 @@ import {
 import { getPapersByIds } from "@/lib/repositories/catalog";
 import { requireOwnerId } from "@/lib/repositories/owner-guard";
 import { requireResearchGroupPermission } from "@/lib/repositories/research-groups";
+import { ResearchGroupUnavailableError } from "@/lib/research-groups/permissions";
 import type { Paper } from "@/types/paper";
 
 const contributorMemberships = alias(
@@ -43,6 +44,7 @@ export type ResearchGroupPaperItem = {
     imageUrl: string | null;
   } | null;
   addedAt: string;
+  canRemove: boolean;
 };
 
 function isNotificationPreference(
@@ -59,7 +61,7 @@ export async function listResearchGroupPapers(
   groupId: string,
 ): Promise<ResearchGroupPaperItem[]> {
   requireOwnerId(actorOwnerId, "listResearchGroupPapers");
-  await requireResearchGroupPermission(
+  const actorRole = await requireResearchGroupPermission(
     actorOwnerId,
     groupId,
     "member",
@@ -69,6 +71,7 @@ export async function listResearchGroupPapers(
   const rows = await db
     .select({
       paperId: researchGroupPaperItems.paperId,
+      addedBy: researchGroupPaperItems.addedBy,
       addedAt: researchGroupPaperItems.addedAt,
       contributorPublicId: contributorIdentities.publicId,
       contributorDisplayName: contributorProfiles.displayName,
@@ -131,8 +134,44 @@ export async function listResearchGroupPapers(
           }
         : null,
       addedAt: row.addedAt,
+      canRemove:
+        actorRole === "owner" ||
+        actorRole === "admin" ||
+        row.addedBy === actorOwnerId,
     }];
   });
+}
+
+/** @user-scoped */
+export async function getResearchGroupPaperNotificationPreference(
+  actorOwnerId: string,
+  groupId: string,
+): Promise<ResearchGroupPaperNotificationPreference> {
+  await requireResearchGroupPermission(
+    actorOwnerId,
+    groupId,
+    "member",
+    "read",
+  );
+
+  const rows = await db
+    .select({
+      preference: researchGroupMembers.paperNotificationPreference,
+    })
+    .from(researchGroupMembers)
+    .where(
+      and(
+        eq(researchGroupMembers.groupId, groupId),
+        eq(researchGroupMembers.memberId, actorOwnerId),
+        isNull(researchGroupMembers.revokedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!rows[0]) {
+    throw new ResearchGroupUnavailableError();
+  }
+  return rows[0].preference;
 }
 
 /** @user-scoped */
