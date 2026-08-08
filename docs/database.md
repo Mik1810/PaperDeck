@@ -189,14 +189,17 @@ The approved count-only gate found zero expired rows, after which
 `NOTIFICATION_RETENTION_ENABLED=true` enabled the bounded daily schedule. Manual
 dispatches default to dry-run mode.
 
-The local #98 UI reads through an authenticated, explicit-owner server route and
+The released #98 UI reads through an authenticated, explicit-owner server route and
 updates only read/archive acknowledgement fields through Server Actions. Friend
 and group invitation actions revalidate the authoritative source lifecycle. For
 group invitations, `respond_research_group_invitation_in_app` locks the intended
 recipient's pending invitation and delegates to the existing token-aware
 function with the stored digest. It is executable only by `service_role`, never
 returns the digest, and clears the digest through the existing single-use
-lifecycle. This RPC migration is not yet applied to the shared project.
+lifecycle. The RPC migration is applied to the shared project. Remote metadata
+verification confirmed `SECURITY INVOKER`, a fixed search path, recipient
+scoping, execution for `service_role` only, and both research-group runtime
+switches still disabled.
 
 ### Notification migration (applied)
 
