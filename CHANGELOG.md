@@ -77,6 +77,11 @@ This project follows Semantic Versioning.
   cover creation, invitation, roles, removal, preferences, leave/delete, and
   paper add/remove; a private no-store catalog search powers the add dialog.
   Shared cards expose an explicit `Save privately` playlist picker.
+- Added a disposable native-PostgreSQL browser gate for the #99 workspace. It
+  exercises member and owner permissions, create/delete, catalog search,
+  chronological add/remove, notification preferences, role changes, leave,
+  explicit private playlist saving, personal-ranking isolation, and responsive
+  mobile rendering without Clerk sessions or shared Supabase writes.
 
 - Added and deployed the #98 notification center: authenticated header bell with `99+`
   badge, latest-20 desktop popover/mobile bottom sheet, reconnect/focus polling,

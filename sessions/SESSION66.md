@@ -35,6 +35,23 @@
 - Added an authenticated private/no-store catalog-search Route Handler for the
   add-paper dialog. Every mutation authenticates inside its Server Action and
   delegates authorization to the transactional repository/database checks.
+- Added `npm run test:e2e:group-workspace`, a repeatable WSL browser gate backed
+  by a native PostgreSQL cluster under `/tmp`. It uses three synthetic local
+  identities, the real standalone schema plus the catalog-search migration,
+  enables group switches only inside the temporary database, and always stops
+  the local servers and deletes the cluster through a shell trap.
+- The gate covers member preference/leave permissions; owner create/delete,
+  search, add/remove, role changes, and explicit `Save privately`; database
+  assertions prove that a group add does not write personal interactions,
+  favorites, recommendations, or playlists, while the explicit private save
+  creates exactly its intended playlist row and `group`-context interaction.
+- Mobile Chromium verifies meaningful group content, no Next.js error overlay,
+  and no horizontal overflow. Exact-email invitation execution remains outside
+  the local gate because it intentionally requires a Clerk-authenticated
+  Supabase client.
+- The local setup exposed a maintenance gap: `supabase/schema.sql` does not
+  include the generated catalog `search_vector`; the gate therefore applies the
+  existing `20260714210105_add_search_indexes.sql` migration explicitly.
 
 ## Rollout boundary
 
@@ -55,6 +72,11 @@
 - `git diff --check`.
 - Browser gate: `/groups` is protected and redirects to Clerk sign-in, the
   mobile sign-in view renders without a framework error overlay, and no login,
-  session, or data mutation was performed. Authenticated group pages remain
-  unverified because the local Clerk Development keys currently mismatch and
-  the shared group switches/migrations intentionally remain disabled.
+  session, or shared-data mutation was performed.
+- `npm run test:e2e:group-workspace`: member, owner, and mobile phases passed
+  against disposable local PostgreSQL; report confirmed zero remote mutations
+  and zero Clerk sessions. The temporary database and its three synthetic
+  profiles were deleted after the run.
+- A separate read-only Clerk probe confirmed that the Development publishable
+  and secret keys belong to the same instance. Authenticated Clerk invitation
+  execution remains intentionally untested in this local-only gate.
