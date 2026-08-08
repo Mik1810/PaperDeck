@@ -22,9 +22,16 @@
   are gone, creates a public table and confirms RLS is still enabled
   automatically, then proves the migration is safe when the managed helper is
   absent.
-- The migration has not been applied to the shared PaperDeck Supabase project.
-  That remains a separately approved operation. No application rows, accounts,
-  sessions, or shared database settings were changed.
+- After explicit approval, applied only the grant-hardening migration to the
+  shared PaperDeck Supabase project. Supabase recorded it as migration
+  `20260808222536`; no application rows, accounts, sessions, or runtime feature
+  settings were changed.
+- Remote metadata confirmed the function is still present, remains
+  `SECURITY DEFINER` with `search_path=pg_catalog`, and has one attached enabled
+  event trigger. `PUBLIC`, `anon`, and `authenticated` can no longer execute it.
+- The security advisors no longer report `rls_auto_enable()` under either the
+  anonymous or authenticated `SECURITY DEFINER` executable finding. All other
+  previously classified advisor notices remain unchanged and outside #126.
 
 ## Validation
 
@@ -34,3 +41,5 @@
 - `npm run test:unit` (`114/114` passed).
 - `TMPDIR=/tmp npm run build`.
 - `git diff --check`.
+- Shared migration-history, function metadata, grants, event-trigger state, and
+  security-advisor readback.
