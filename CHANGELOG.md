@@ -10,10 +10,18 @@ This project follows Semantic Versioning.
 
 - Prevented Vercel serverless instances from exhausting Supabase's 15-client
   Session pool: the Drizzle/Postgres.js client now defaults to one connection,
-  disables prepared statements for Transaction pooler compatibility, and uses
-  bounded connect/idle timeouts. Deployment guidance now assigns Vercel
-  Production and Preview to Transaction mode on port 6543 while retaining
-  Session mode for the persistent local development process.
+  disables prepared statements for pooler compatibility, and uses bounded
+  connect/idle timeouts. The authenticated `/groups` route is now read-only
+  during rendering instead of updating the profile and provisioning `Read
+  later` on every visit. Production remains on the current Session-pooler
+  recovery configuration; Transaction mode remains isolated to Preview until
+  an authenticated concurrency gate passes.
+- Stabilized the research-group loading experience with a route-local retry
+  boundary, an AppShell-consistent skeleton, disabled automatic prefetch for
+  expensive group workspaces, and an E2E database-client limit matching
+  Production.
+- Precached the offline fallback icon and advanced the service-worker cache
+  version so a clean first offline visit no longer renders a broken image.
 - Aligned the local filenames of the in-app group-invitation response and
   managed automatic-RLS hardening migrations with their exact versions in the
   shared Supabase migration history. After a strict read-only catalog audit

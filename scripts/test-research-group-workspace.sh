@@ -84,7 +84,7 @@ sed \
 
 db_user=$(id -un)
 export DATABASE_URL="postgresql://$db_user@127.0.0.1:$db_port/postgres"
-export DATABASE_MAX_CONNECTIONS=3
+export DATABASE_MAX_CONNECTIONS=1
 export NEXT_PUBLIC_PAPERDECK_DEV_AUTH=true
 export TMPDIR=/tmp
 
