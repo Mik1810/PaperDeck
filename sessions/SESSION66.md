@@ -60,6 +60,15 @@
   operational references without changing either SQL payload or repairing
   remote migration history. Historical session notes retain the original names
   because they describe the rollout sequence at that time.
+- Audited the 17 older local migration versions missing from remote history in
+  a strict PostgreSQL read-only transaction. All 36 catalog checks passed,
+  covering their expected tables, columns, policies, RLS state, triggers,
+  indexes, constraints, functions, privileges, generated search vector,
+  `pg_trgm`, and `ivfflat.probes` configuration.
+- With explicit approval, recorded exactly those 17 already-present versions as
+  applied in `supabase_migrations.schema_migrations` using Supabase migration
+  repair. This was metadata normalization only: no migration SQL was replayed,
+  and no schema object or application row was changed or deleted.
 
 ## Rollout boundary
 
@@ -90,13 +99,13 @@
   execution remains intentionally untested in this local-only gate.
 - Remote migration preflight: zero groups, active memberships, and
   notifications; both #99 migrations absent; both runtime switches disabled.
-- After local filename alignment, a secret-scrubbed Supabase CLI dry-run no
-  longer reported the two timestamp mismatches. It then exposed an older
-  baseline gap: 17 pre-group local migrations exist in the shared schema but
-  are absent from `supabase_migrations.schema_migrations`, whose first recorded
-  version is `20260729105307`. `--include-all` was rejected because it would
-  attempt to replay existing DDL. No migration-history repair was performed.
-- Shared-database rollout remains blocked until the older baseline is audited
-  and either recorded as applied or an explicitly approved alternative rollout
-  mechanism is chosen. Both #99 migrations and both runtime switches remain
-  untouched.
+- After the approved metadata repair, read-only verification found 25 recorded
+  migrations with all 17 audited baseline versions present. Both #99 versions
+  and tables remained absent, and both runtime switches remained disabled.
+- A secret-scrubbed `supabase db push --dry-run` completed successfully and
+  proposed exactly `20260808225719_add_research_group_shared_papers.sql` and
+  `20260808230008_wire_research_group_shared_paper_operations.sql`, with no
+  seeds or roles. The dry-run applied nothing.
+- The migration-history blocker is resolved. Applying the two #99 migrations
+  remains a separate rollout decision; neither migration nor runtime switch was
+  applied or enabled in this session step.
