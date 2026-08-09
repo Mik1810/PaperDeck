@@ -91,8 +91,10 @@ LOG_LEVEL=info
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
 Production currently uses the Supabase Session pooler on port `5432`, with one
 Postgres.js connection per serverless instance and a five-second idle timeout.
-This is the current recovery configuration after authenticated multi-query
-requests stalled during the initial Transaction-pooler rollout. Preview may use
+This is the verified recovery configuration after authenticated multi-query
+requests stalled during the initial Transaction-pooler rollout: repeated
+authenticated `/groups` requests completed with HTTP 200, no runtime error, and
+no blocked or long-active database session. Preview may use
 the Transaction pooler on port `6543` for isolated compatibility and load
 testing; do not promote that connection mode without an authenticated Preview
 gate with explicit concurrent requests and a documented connection limit. The

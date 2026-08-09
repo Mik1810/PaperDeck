@@ -25,8 +25,7 @@
 - Production was restored to Session mode on port 5432 with the already-deployed
   one-connection client. The recovery deployment reached `READY`, the public
   `/groups` request returned HTTP 200, and a read-only connection audit found
-  only two idle Supavisor clients with zero blocked sessions. Authenticated
-  browser confirmation remained pending at the time of implementation.
+  only two idle Supavisor clients with zero blocked sessions.
 
 ## Changes
 
@@ -79,5 +78,14 @@
   render-time writes, notification-fetching boundary shells, the false-positive
   PWA cache test, automatic group-card prefetch, and unverified deployment
   wording.
-- Pending: Preview deployment verification and authenticated Production
-  confirmation after merging the fix.
+- Preview deployment `dpl_6EHnHUGaXRQzanX8DYKtd99LUer7` reached `READY`. PR
+  #132 was merged as `c6717079`, and Production deployment
+  `dpl_4GoXidSSrZbLxX9aJVpVKmiBqLCX` reached `READY` on the Session-pooler
+  recovery configuration.
+- Final authenticated Production confirmation succeeded: the user reported the
+  workspace was no longer blocked, four correlated `/groups` requests completed
+  with HTTP 200, and the route's runtime-error window was empty. A post-request
+  database audit found four idle Supavisor clients, zero blocked sessions, and
+  zero active queries older than ten seconds.
+- Production `offline.html` and `sw.js` checksums matched the merged files. The
+  offline page remained complete at 80 lines and 2,303 bytes.

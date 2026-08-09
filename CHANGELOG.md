@@ -13,7 +13,7 @@ This project follows Semantic Versioning.
   disables prepared statements for pooler compatibility, and uses bounded
   connect/idle timeouts. The authenticated `/groups` route is now read-only
   during rendering instead of updating the profile and provisioning `Read
-  later` on every visit. Production remains on the current Session-pooler
+  later` on every visit. Production uses the authenticated, verified Session-pooler
   recovery configuration; Transaction mode remains isolated to Preview until
   an authenticated concurrency gate passes.
 - Stabilized the research-group loading experience with a route-local retry
