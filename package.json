@@ -35,6 +35,8 @@
     "test:integration:clerk-deletion": "node --conditions react-server --import tsx --test tests/integration/clerk-user-deletion-webhook-live.test.ts",
     "test:integration:group-invitations": "node --conditions react-server --import tsx --test tests/integration/research-group-invitations.test.ts",
     "test:integration:notifications": "node --conditions react-server --import tsx --test tests/integration/notifications.test.ts",
+    "test:integration:group-papers": "bash scripts/test-research-group-paper-migrations.sh",
+    "test:e2e:group-workspace": "bash scripts/test-research-group-workspace.sh",
     "test:migration:rls-auto-enable": "bash scripts/test-rls-auto-enable-migration.sh",
     "test:unit": "node --conditions react-server --import tsx --test tests/unit/*.test.ts",
     "test:e2e": "playwright test",

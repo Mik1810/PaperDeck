@@ -4,7 +4,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
-import { BookOpenCheck, Settings } from "lucide-react";
+import { BookOpenCheck, Settings, Users } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 import { AppNavLink } from "@/components/app-nav-link";
 import { NotificationCenter } from "@/components/notification-center";
@@ -88,9 +88,12 @@ export function AppShell({
               <Settings aria-hidden="true" size={18} strokeWidth={2.4} />
             </AppNavLink>
             {devAuthEnabled ? (
-              <div className="h-10 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-black text-amber-800">
+              <AppNavLink
+                href="/groups"
+                className="h-10 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-black text-amber-800"
+              >
                 Local dev
-              </div>
+              </AppNavLink>
             ) : (
               <>
                 <Show when="signed-out">
@@ -107,7 +110,15 @@ export function AppShell({
                         avatarBox: "h-10 w-10",
                       },
                     }}
-                  />
+                  >
+                    <UserButton.MenuItems>
+                      <UserButton.Link
+                        href="/groups"
+                        label="Research groups"
+                        labelIcon={<Users aria-hidden="true" size={16} />}
+                      />
+                    </UserButton.MenuItems>
+                  </UserButton>
                 </Show>
               </>
             )}

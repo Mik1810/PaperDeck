@@ -38,6 +38,9 @@ Current implementation:
 - `research_groups` and `research_group_members` form a separate private
   collaboration domain. Their repository uses one centralized owner/admin/member
   permission evaluator before returning data or mutating rows.
+- `research_group_paper_items` stores the current chronological group list,
+  while `research_group_paper_activity` stores only minimal 90-day activity for
+  group notifications. Neither table is a personal playlist or ranking input.
 - `notifications` stores recipient-owned durable event pointers. Domain triggers
   create them in the same transaction as friendship, invitation, and membership
   changes; `src/lib/repositories/notifications.ts` exposes only recipient-scoped
@@ -109,6 +112,8 @@ These are shared paper and topic catalog data. Authenticated users can read them
 
 - `research_groups`
 - `research_group_members`
+- `research_group_paper_items` (local #99 migration; not remotely applied)
+- `research_group_paper_activity` (local #99 migration; not remotely applied)
 
 Membership is the single ownership source: each group must have exactly one
 active `owner`. A selected successor must be an active non-owner member.
@@ -150,6 +155,32 @@ owner-only deletion, unrelated membership removal, and duplicate-delivery
 behavior, then verify zero temporary rows and restore both runtime switches to
 disabled.
 
+The local #99 foundation adds one chronological shared-paper list per group.
+The group can exist with no papers; `(group_id, paper_id)` prevents duplicates,
+and there is deliberately no list position, manual reorder, or revision field.
+Any active member may add. Owner/admin may remove any item, while a member may
+remove only an item they added. Account deletion preserves a surviving group's
+paper while setting retained contributor/activity references to null so the UI
+can display `Former member` without retaining a Clerk identifier.
+
+Authenticated Data API clients receive read-only table grants protected by the
+existing membership RLS and read switch. All mutations are service-role-only,
+`SECURITY INVOKER` functions that repeat the active-group, active-membership,
+and write-switch checks inside the transaction. The list is capped at 500
+current papers. Group writes never touch favorites, playlists, interactions,
+recommendations, or profile embeddings. This foundation passed an isolated
+PostgreSQL 17 migration suite and is applied to the shared Supabase project.
+Post-deploy checks confirmed RLS, grants, function privileges, a validated
+notification-source constraint, zero shared-paper/activity rows, and both group
+runtime switches still disabled.
+
+The matching local workspace reads directly in Server Components and performs
+mutations through authenticated Server Actions. Client-side catalog search uses
+one membership-authorized `private, no-store` Route Handler. The UI receives
+only the public member projection and a precomputed `canRemove` capability; it
+never receives contributor Clerk IDs. `Save privately` deliberately reuses the
+normal private playlist path and is separate from the group mutation.
+
 ### Durable Notifications
 
 `notifications` is an inbox of typed event pointers, not a message log. Each row
@@ -158,11 +189,13 @@ and a source reference to a friend request, group invitation, or group. It never
 stores an email, Clerk identifier for presentation, invitation token, rendered
 message, or free-form payload. Source rows remain authoritative.
 
-The initial event set covers received and accepted friend requests, received and
+The deployed event set covers received and accepted friend requests, received and
 accepted group invitations, member joins, membership endings, role changes, and
-ownership transfers. Blocks, unblocks, unfriend, declines, and shared-paper
-activity do not create notifications in this slice. Shared-paper burst
-aggregation belongs to #99.
+ownership transfers. The local, not-yet-deployed #99 extension adds ten-minute
+aggregation for paper additions and individual paper-removal events. Per-group
+preferences are `all`, `important_only`, or `muted`; removals are important,
+while addition bursts are informational. Blocks, unblocks, unfriend, and
+declines remain silent.
 
 PostgreSQL `AFTER` triggers call a private idempotent insert helper, so a domain
 mutation and its notification commit or roll back together. The recipient and
@@ -178,6 +211,8 @@ apply an explicit recipient predicate as defense in depth.
 Rows expire after 90 days. Normal inbox reads exclude expired rows, and the
 daily `Prune expired notifications` workflow calls the private bounded cleanup
 function until the current backlog is drained or its safety limit is reached.
+The local #99 extension also purges the minimal activity source in bounded
+batches; deleting expired activity cascades to its derived notifications.
 Scheduled runs remain disabled unless the repository variable
 `NOTIFICATION_RETENTION_ENABLED` is exactly `true`; manual dry runs remain
 available for the rollout gate. The workflow reports counts only. Realtime
@@ -295,7 +330,7 @@ owner_id = auth.jwt() ->> 'sub'
 These policies assume that Supabase receives a JWT where `sub` is the Clerk user ID. Until this is configured, direct client-side access to user-owned tables should not be used.
 
 Supabase's managed automatic-RLS event trigger remains enabled. Migration
-`20260808221535_restrict_rls_auto_enable_execution.sql` removes unnecessary
+`20260808222536_restrict_rls_auto_enable_execution.sql` removes unnecessary
 direct execution of its `public.rls_auto_enable()` helper from `PUBLIC`, `anon`,
 and `authenticated` without changing the function or trigger behavior. The
 shared-project rollout was verified through metadata and security advisors.

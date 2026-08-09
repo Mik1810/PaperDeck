@@ -1104,6 +1104,17 @@ create type public.research_group_state as enum (
   'archived'
 );
 
+create type public.research_group_paper_notification_preference as enum (
+  'all',
+  'important_only',
+  'muted'
+);
+
+create type public.research_group_paper_activity_kind as enum (
+  'papers_added',
+  'paper_removed'
+);
+
 create table private.research_group_runtime_settings (
   singleton boolean primary key default true check (singleton),
   reads_enabled boolean not null default false,
@@ -1146,6 +1157,10 @@ create table public.research_group_members (
   member_id text not null references public.profiles(owner_id)
     on delete cascade,
   role public.research_group_role not null,
+  paper_notification_preference
+    public.research_group_paper_notification_preference
+    not null
+    default 'all',
   joined_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   revoked_at timestamptz,
@@ -2287,6 +2302,105 @@ create policy research_group_invitations_recipient_read
     and (select private.research_groups_reads_enabled())
   );
 
+create table public.research_group_paper_items (
+  group_id uuid not null
+    references public.research_groups(id) on delete cascade,
+  paper_id uuid not null
+    references public.papers(id) on delete cascade,
+  added_by text
+    references public.profiles(owner_id) on delete set null,
+  added_at timestamptz not null default now(),
+  primary key (group_id, paper_id)
+);
+
+create index research_group_paper_items_group_added_idx
+  on public.research_group_paper_items (group_id, added_at desc, paper_id);
+create index research_group_paper_items_paper_idx
+  on public.research_group_paper_items (paper_id);
+create index research_group_paper_items_contributor_idx
+  on public.research_group_paper_items (added_by)
+  where added_by is not null;
+
+create table public.research_group_paper_activity (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null
+    references public.research_groups(id) on delete cascade,
+  kind public.research_group_paper_activity_kind not null,
+  actor_id text
+    references public.profiles(owner_id) on delete set null,
+  representative_paper_id uuid
+    references public.papers(id) on delete set null,
+  event_count integer not null default 1,
+  bucket_started_at timestamptz,
+  first_occurred_at timestamptz not null default now(),
+  last_occurred_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '90 days'),
+  constraint research_group_paper_activity_count_check
+    check (event_count > 0),
+  constraint research_group_paper_activity_time_check
+    check (
+      first_occurred_at <= last_occurred_at
+      and last_occurred_at < expires_at
+    ),
+  constraint research_group_paper_activity_kind_check
+    check (
+      (kind = 'papers_added' and bucket_started_at is not null)
+      or
+      (kind = 'paper_removed' and bucket_started_at is null and event_count = 1)
+    ),
+  unique (group_id, actor_id, kind, bucket_started_at)
+);
+
+create index research_group_paper_activity_group_created_idx
+  on public.research_group_paper_activity (
+    group_id,
+    last_occurred_at desc,
+    id desc
+  );
+create index research_group_paper_activity_expiry_idx
+  on public.research_group_paper_activity (expires_at, id);
+create index research_group_paper_activity_actor_idx
+  on public.research_group_paper_activity (actor_id)
+  where actor_id is not null;
+
+alter table public.research_group_paper_items enable row level security;
+alter table public.research_group_paper_activity enable row level security;
+
+create policy research_group_paper_items_member_read
+  on public.research_group_paper_items
+  for select
+  to authenticated
+  using (
+    (select private.research_groups_reads_enabled())
+    and (select private.research_group_is_active_member(group_id))
+  );
+
+create policy research_group_paper_activity_member_read
+  on public.research_group_paper_activity
+  for select
+  to authenticated
+  using (
+    expires_at > now()
+    and (select private.research_groups_reads_enabled())
+    and (select private.research_group_is_active_member(group_id))
+  );
+
+revoke all on table public.research_group_paper_items
+  from public, anon, authenticated;
+revoke all on table public.research_group_paper_activity
+  from public, anon, authenticated;
+grant select on table public.research_group_paper_items to authenticated;
+grant select on table public.research_group_paper_activity to authenticated;
+grant select, insert, update, delete
+  on table public.research_group_paper_items to service_role;
+grant select, insert, update, delete
+  on table public.research_group_paper_activity to service_role;
+
+comment on table public.research_group_paper_items is
+  'The current chronological shared-paper list for each private research group. It is isolated from every personal library and ranking signal.';
+comment on table public.research_group_paper_activity is
+  'Minimal 90-day paper activity used as the authoritative source for aggregated group notifications; no rendered text or personal library state is stored.';
+
 create type public.notification_type as enum (
   'friend_request_received',
   'friendship_accepted',
@@ -2295,7 +2409,9 @@ create type public.notification_type as enum (
   'group_member_joined',
   'group_membership_ended',
   'group_role_changed',
-  'group_ownership_transferred'
+  'group_ownership_transferred',
+  'group_papers_added',
+  'group_paper_removed'
 );
 
 create table public.notifications (
@@ -2312,6 +2428,8 @@ create table public.notifications (
     references public.research_group_invitations(id) on delete cascade,
   group_id uuid
     references public.research_groups(id) on delete cascade,
+  group_paper_activity_id uuid
+    references public.research_group_paper_activity(id) on delete cascade,
   read_at timestamptz,
   archived_at timestamptz,
   created_at timestamptz not null default now(),
@@ -2329,12 +2447,14 @@ create table public.notifications (
         and friend_request_id is not null
         and group_invitation_id is null
         and group_id is null
+        and group_paper_activity_id is null
       )
       or (
         type in ('group_invitation_received', 'group_invitation_accepted')
         and friend_request_id is null
         and group_invitation_id is not null
         and group_id is not null
+        and group_paper_activity_id is null
       )
       or (
         type in (
@@ -2346,6 +2466,14 @@ create table public.notifications (
         and friend_request_id is null
         and group_invitation_id is null
         and group_id is not null
+        and group_paper_activity_id is null
+      )
+      or (
+        type in ('group_papers_added', 'group_paper_removed')
+        and friend_request_id is null
+        and group_invitation_id is null
+        and group_id is not null
+        and group_paper_activity_id is not null
       )
     )
 );
@@ -2367,6 +2495,9 @@ create index notifications_group_invitation_idx
 create index notifications_group_idx
   on public.notifications (group_id)
   where group_id is not null;
+create index notifications_group_paper_activity_idx
+  on public.notifications (group_paper_activity_id)
+  where group_paper_activity_id is not null;
 create index notifications_expiry_idx
   on public.notifications (expires_at);
 
@@ -2666,6 +2797,386 @@ comment on function private.enqueue_notification(
   'Internal idempotent notification insert used only by database triggers.';
 comment on function private.purge_expired_notifications(integer) is
   'Deletes at most the requested number of notifications after their 90-day retention window.';
+
+create or replace function public.add_research_group_paper(
+  p_actor_id text,
+  p_group_id uuid,
+  p_paper_id uuid
+)
+returns table (changed boolean, activity_id uuid)
+language plpgsql
+security invoker
+set search_path = pg_catalog, public, private
+as $$
+declare
+  actor_role public.research_group_role;
+  inserted_paper_id uuid;
+  current_count integer;
+  activity_bucket timestamptz;
+  current_activity_id uuid;
+  operation_time timestamptz := now();
+begin
+  perform 1
+  from private.research_group_runtime_settings
+  where singleton and reads_enabled and writes_enabled
+  for share;
+  if not found then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  perform 1
+  from public.research_groups
+  where id = p_group_id and state = 'active'
+  for update;
+  if not found then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  select membership.role
+  into actor_role
+  from public.research_group_members as membership
+  where membership.group_id = p_group_id
+    and membership.member_id = p_actor_id
+    and membership.revoked_at is null
+  for share;
+  if actor_role is null then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  perform 1 from public.papers where id = p_paper_id;
+  if not found then
+    raise exception 'research_group_paper_unavailable' using errcode = 'P0001';
+  end if;
+
+  select count(*)::integer
+  into current_count
+  from public.research_group_paper_items
+  where group_id = p_group_id;
+
+  insert into public.research_group_paper_items (
+    group_id,
+    paper_id,
+    added_by,
+    added_at
+  ) values (
+    p_group_id,
+    p_paper_id,
+    p_actor_id,
+    operation_time
+  )
+  on conflict (group_id, paper_id) do nothing
+  returning paper_id into inserted_paper_id;
+
+  if inserted_paper_id is null then
+    return query select false, null::uuid;
+    return;
+  end if;
+
+  if current_count >= 500 then
+    raise exception 'research_group_paper_limit_reached' using errcode = 'P0001';
+  end if;
+
+  activity_bucket := date_bin(
+    interval '10 minutes',
+    operation_time,
+    timestamptz '2001-01-01 00:00:00+00'
+  );
+
+  insert into public.research_group_paper_activity (
+    group_id,
+    kind,
+    actor_id,
+    representative_paper_id,
+    event_count,
+    bucket_started_at,
+    first_occurred_at,
+    last_occurred_at,
+    expires_at
+  ) values (
+    p_group_id,
+    'papers_added',
+    p_actor_id,
+    p_paper_id,
+    1,
+    activity_bucket,
+    operation_time,
+    operation_time,
+    operation_time + interval '90 days'
+  )
+  on conflict (group_id, actor_id, kind, bucket_started_at)
+  do update set
+    representative_paper_id = excluded.representative_paper_id,
+    event_count = public.research_group_paper_activity.event_count + 1,
+    last_occurred_at = excluded.last_occurred_at,
+    expires_at = excluded.expires_at
+  returning id into current_activity_id;
+
+  insert into public.notifications (
+    recipient_id,
+    actor_id,
+    type,
+    dedupe_key,
+    group_id,
+    group_paper_activity_id,
+    created_at,
+    expires_at
+  )
+  select
+    membership.member_id,
+    p_actor_id,
+    'group_papers_added'::public.notification_type,
+    'group-paper-activity:' || current_activity_id::text,
+    p_group_id,
+    current_activity_id,
+    operation_time,
+    operation_time + interval '90 days'
+  from public.research_group_members as membership
+  where membership.group_id = p_group_id
+    and membership.revoked_at is null
+    and membership.member_id <> p_actor_id
+    and membership.paper_notification_preference = 'all'
+  on conflict (recipient_id, dedupe_key)
+  do update set
+    read_at = null,
+    archived_at = null,
+    created_at = excluded.created_at,
+    expires_at = excluded.expires_at;
+
+  return query select true, current_activity_id;
+end;
+$$;
+
+create or replace function public.remove_research_group_paper(
+  p_actor_id text,
+  p_group_id uuid,
+  p_paper_id uuid
+)
+returns table (changed boolean, activity_id uuid)
+language plpgsql
+security invoker
+set search_path = pg_catalog, public, private
+as $$
+declare
+  actor_role public.research_group_role;
+  original_contributor_id text;
+  current_activity_id uuid;
+  operation_time timestamptz := now();
+begin
+  perform 1
+  from private.research_group_runtime_settings
+  where singleton and reads_enabled and writes_enabled
+  for share;
+  if not found then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  perform 1
+  from public.research_groups
+  where id = p_group_id and state = 'active'
+  for update;
+  if not found then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  select membership.role
+  into actor_role
+  from public.research_group_members as membership
+  where membership.group_id = p_group_id
+    and membership.member_id = p_actor_id
+    and membership.revoked_at is null
+  for share;
+  if actor_role is null then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  select item.added_by
+  into original_contributor_id
+  from public.research_group_paper_items as item
+  where item.group_id = p_group_id and item.paper_id = p_paper_id
+  for update;
+  if not found then
+    return query select false, null::uuid;
+    return;
+  end if;
+
+  if actor_role = 'member'
+    and original_contributor_id is distinct from p_actor_id then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  delete from public.research_group_paper_items
+  where group_id = p_group_id and paper_id = p_paper_id;
+
+  insert into public.research_group_paper_activity (
+    group_id,
+    kind,
+    actor_id,
+    representative_paper_id,
+    event_count,
+    bucket_started_at,
+    first_occurred_at,
+    last_occurred_at,
+    expires_at
+  ) values (
+    p_group_id,
+    'paper_removed',
+    p_actor_id,
+    p_paper_id,
+    1,
+    null,
+    operation_time,
+    operation_time,
+    operation_time + interval '90 days'
+  )
+  returning id into current_activity_id;
+
+  if original_contributor_id is not null
+    and original_contributor_id <> p_actor_id
+    and exists (
+      select 1
+      from public.research_group_members as membership
+      where membership.group_id = p_group_id
+        and membership.member_id = original_contributor_id
+        and membership.revoked_at is null
+        and membership.paper_notification_preference in (
+          'all',
+          'important_only'
+        )
+    ) then
+    insert into public.notifications (
+      recipient_id,
+      actor_id,
+      type,
+      dedupe_key,
+      group_id,
+      group_paper_activity_id,
+      created_at,
+      expires_at
+    ) values (
+      original_contributor_id,
+      p_actor_id,
+      'group_paper_removed',
+      'group-paper-activity:' || current_activity_id::text,
+      p_group_id,
+      current_activity_id,
+      operation_time,
+      operation_time + interval '90 days'
+    );
+  end if;
+
+  return query select true, current_activity_id;
+end;
+$$;
+
+create or replace function private.purge_expired_group_paper_activity(
+  p_batch_size integer default 1000
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  deleted_count integer;
+begin
+  if p_batch_size < 1 or p_batch_size > 10000 then
+    raise exception 'invalid_group_paper_activity_purge_batch'
+      using errcode = '22023';
+  end if;
+
+  with expired as (
+    select activity.id
+    from public.research_group_paper_activity as activity
+    where activity.expires_at <= now()
+    order by activity.expires_at, activity.id
+    limit p_batch_size
+    for update skip locked
+  )
+  delete from public.research_group_paper_activity as activity
+  using expired
+  where activity.id = expired.id;
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+create or replace function public.set_research_group_paper_notification_preference(
+  p_actor_id text,
+  p_group_id uuid,
+  p_preference public.research_group_paper_notification_preference
+)
+returns boolean
+language plpgsql
+security invoker
+set search_path = pg_catalog, public, private
+as $$
+begin
+  perform 1
+  from private.research_group_runtime_settings
+  where singleton and reads_enabled and writes_enabled
+  for share;
+  if not found then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  perform 1
+  from public.research_groups
+  where id = p_group_id and state = 'active'
+  for update;
+  if not found then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  update public.research_group_members
+  set
+    paper_notification_preference = p_preference,
+    updated_at = now()
+  where group_id = p_group_id
+    and member_id = p_actor_id
+    and revoked_at is null;
+  if not found then
+    raise exception 'research_group_unavailable' using errcode = 'P0001';
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.add_research_group_paper(text, uuid, uuid)
+  from public, anon, authenticated;
+revoke all on function public.remove_research_group_paper(text, uuid, uuid)
+  from public, anon, authenticated;
+revoke all on function private.purge_expired_group_paper_activity(integer)
+  from public, anon, authenticated, service_role;
+revoke all on function public.set_research_group_paper_notification_preference(
+  text,
+  uuid,
+  public.research_group_paper_notification_preference
+) from public, anon, authenticated;
+grant execute on function public.add_research_group_paper(text, uuid, uuid)
+  to service_role;
+grant execute on function public.remove_research_group_paper(text, uuid, uuid)
+  to service_role;
+grant execute on function public.set_research_group_paper_notification_preference(
+  text,
+  uuid,
+  public.research_group_paper_notification_preference
+) to service_role;
+
+comment on function public.add_research_group_paper(text, uuid, uuid) is
+  'Service-role-only idempotent shared-paper add with an in-transaction member recheck and aggregated notifications.';
+comment on function public.remove_research_group_paper(text, uuid, uuid) is
+  'Service-role-only idempotent shared-paper removal. Members remove only their own additions; owner/admin may moderate all.';
+comment on function private.purge_expired_group_paper_activity(integer) is
+  'Deletes a bounded batch of minimal group-paper activity after its 90-day retention window.';
+comment on function public.set_research_group_paper_notification_preference(
+  text,
+  uuid,
+  public.research_group_paper_notification_preference
+) is
+  'Service-role-only self preference update with an in-transaction active-membership recheck.';
+
 create or replace function public.respond_research_group_invitation_in_app(
   p_actor_id text,
   p_invitation_id uuid,

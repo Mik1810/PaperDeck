@@ -1,6 +1,6 @@
 # PaperDeck ROADMAP
 
-Ultimo aggiornamento: 2026-07-18
+Ultimo aggiornamento: 2026-08-09
 
 ## Visione
 
@@ -49,6 +49,11 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Discovery collaborativa: ricerca account tramite email esatta disattivata di default e attivabile esplicitamente; amicizie reciproche con cooldown di 30 giorni dopo un rifiuto e nessun social graph pubblico.
 - Ownership gruppi: successore scelto dall'owner, altrimenti admin attivo piu' anziano, poi membro attivo piu' anziano; gruppo eliminato solo se non esistono altri membri.
 - Fondazione gruppi: dominio `research_groups` separato dalle playlist private, membership come unica fonte dell'owner, ACL centralizzata e kill switch database-backed per letture/scritture.
+- Lista paper dei gruppi: un gruppo puo' essere vuoto e conserva una sola lista
+  cronologica senza posizione, riordino o revisione. Owner e admin possono
+  rimuovere qualsiasi paper; un member puo' rimuovere soltanto le proprie
+  aggiunte. Salvare un paper del gruppo nella Library resta un'azione privata
+  esplicita e l'attivita' del gruppo non alimenta il ranking personale.
 - Inviti gruppi: token casuale a uso singolo con scadenza di sette giorni, solo digest nel database, accettazione esplicita e controlli transazionali su ruolo, opt-in, policy, amicizia e blocchi; #96 applicata e verificata sul Supabase condiviso, con funzionalita' ancora disabilitata dai kill switch.
 - Chiusura account Clerk: il webhook verificato usa una sola RPC service-role transazionale per completare successione/rimozione membership prima di eliminare l'identita' collaborativa; migrazione, gate sintetico e deployment Production sono verificati sul progetto Supabase condiviso.
 - Notifiche collaborative: inbox durevole in-app con badge `99+`, menu degli ultimi 20 eventi, azioni inline e futura cronologia completa; eventi realtime accelerano la UI ma non sostituiscono Postgres.
@@ -115,6 +120,12 @@ Aggiornato al 2026-08-04:
   al progetto Supabase condiviso con kill switch disattivati; lifecycle degli
   inviti e delle membership #96 verificato su PostgreSQL isolato e sul database
   condiviso con fixture sintetiche completamente rimosse.
+- Lista paper condivisa #99: fondazione dati, RLS, operazioni atomiche,
+  preferenze/aggregazione notifiche, retention e workspace responsive
+  `/groups` implementati localmente. L'accesso usa il menu account Clerk senza
+  aggiungere voci alle navbar. Nessuna migrazione e' stata applicata al
+  Supabase condiviso; entrambi i kill switch restano disattivati e la UI
+  autenticata con dati di gruppo richiede ancora il rollout separato.
 - KaTeX: rendering LaTeX in abstract e summary su detail page e feed card (scelto dopo aver scartato MathJax per via della dimensione bundle e complessita' CDN).
 - Sicurezza: audit service-role completato, checklist rotazione secret documentata.
 - Test: suite Playwright smoke con 5 test dev-auth.

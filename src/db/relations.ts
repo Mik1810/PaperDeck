@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, researchGroupInvitations, notifications, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes } from "./schema";
+import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, researchGroupInvitations, notifications, playlists, recommendationImpressions, userPaperInteractions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes, researchGroupPaperItems, researchGroupPaperActivity } from "./schema";
 
 export const playlistsRelations = relations(playlists, ({one, many}) => ({
 	profile: one(profiles, {
@@ -39,6 +39,8 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	researchGroupInvitationsReceived: many(researchGroupInvitations, { relationName: "researchGroupInvitations_recipient" }),
 	notificationsReceived: many(notifications, { relationName: "notifications_recipient" }),
 	notificationActions: many(notifications, { relationName: "notifications_actor" }),
+	researchGroupPaperContributions: many(researchGroupPaperItems),
+	researchGroupPaperActions: many(researchGroupPaperActivity),
 	selectedSuccessorForGroups: many(researchGroups),
 	playlists: many(playlists),
 	recommendationImpressions: many(recommendationImpressions),
@@ -75,6 +77,8 @@ export const researchGroupsRelations = relations(researchGroups, ({one, many}) =
 	memberships: many(researchGroupMembers),
 	invitations: many(researchGroupInvitations),
 	notifications: many(notifications),
+	sharedPaperItems: many(researchGroupPaperItems),
+	sharedPaperActivity: many(researchGroupPaperActivity),
 }));
 
 export const researchGroupMembersRelations = relations(researchGroupMembers, ({one}) => ({
@@ -127,6 +131,10 @@ export const notificationsRelations = relations(notifications, ({one}) => ({
 	group: one(researchGroups, {
 		fields: [notifications.groupId],
 		references: [researchGroups.id]
+	}),
+	groupPaperActivity: one(researchGroupPaperActivity, {
+		fields: [notifications.groupPaperActivityId],
+		references: [researchGroupPaperActivity.id]
 	}),
 }));
 
@@ -182,6 +190,39 @@ export const papersRelations = relations(papers, ({many}) => ({
 	paperTopics: many(paperTopics),
 	paperExternalIds: many(paperExternalIds),
 	paperNotes: many(paperNotes),
+	researchGroupPaperItems: many(researchGroupPaperItems),
+	researchGroupPaperActivity: many(researchGroupPaperActivity),
+}));
+
+export const researchGroupPaperItemsRelations = relations(researchGroupPaperItems, ({one}) => ({
+	group: one(researchGroups, {
+		fields: [researchGroupPaperItems.groupId],
+		references: [researchGroups.id]
+	}),
+	paper: one(papers, {
+		fields: [researchGroupPaperItems.paperId],
+		references: [papers.id]
+	}),
+	contributor: one(profiles, {
+		fields: [researchGroupPaperItems.addedBy],
+		references: [profiles.ownerId]
+	}),
+}));
+
+export const researchGroupPaperActivityRelations = relations(researchGroupPaperActivity, ({one, many}) => ({
+	group: one(researchGroups, {
+		fields: [researchGroupPaperActivity.groupId],
+		references: [researchGroups.id]
+	}),
+	actor: one(profiles, {
+		fields: [researchGroupPaperActivity.actorId],
+		references: [profiles.ownerId]
+	}),
+	representativePaper: one(papers, {
+		fields: [researchGroupPaperActivity.representativePaperId],
+		references: [papers.id]
+	}),
+	notifications: many(notifications),
 }));
 
 export const recommendationsRelations = relations(recommendations, ({one}) => ({

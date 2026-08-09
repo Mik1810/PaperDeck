@@ -17,7 +17,9 @@ import {
   collaborationIdentities,
   friendRequests,
   notifications,
+  papers,
   profiles,
+  researchGroupPaperActivity,
   researchGroupInvitations,
   researchGroups,
 } from "@/db/schema";
@@ -59,6 +61,14 @@ export type NotificationSummary = {
   group: {
     id: string;
     name: string;
+  } | null;
+  paperActivity: {
+    kind: "papers_added" | "paper_removed";
+    eventCount: number;
+    representativePaper: {
+      id: string;
+      title: string;
+    } | null;
   } | null;
   readAt: string | null;
   createdAt: string;
@@ -112,6 +122,10 @@ export async function listNotifications(
       groupInvitationStatus: researchGroupInvitations.status,
       groupId: researchGroups.id,
       groupName: researchGroups.name,
+      paperActivityKind: researchGroupPaperActivity.kind,
+      paperActivityEventCount: researchGroupPaperActivity.eventCount,
+      representativePaperId: papers.id,
+      representativePaperTitle: papers.title,
       readAt: notifications.readAt,
       createdAt: notifications.createdAt,
       expiresAt: notifications.expiresAt,
@@ -128,6 +142,17 @@ export async function listNotifications(
       eq(researchGroupInvitations.id, notifications.groupInvitationId),
     )
     .leftJoin(researchGroups, eq(researchGroups.id, notifications.groupId))
+    .leftJoin(
+      researchGroupPaperActivity,
+      eq(
+        researchGroupPaperActivity.id,
+        notifications.groupPaperActivityId,
+      ),
+    )
+    .leftJoin(
+      papers,
+      eq(papers.id, researchGroupPaperActivity.representativePaperId),
+    )
     .where(
       and(
         eq(notifications.recipientId, ownerId),
@@ -146,6 +171,8 @@ export async function listNotifications(
                 "group_membership_ended",
                 "group_role_changed",
                 "group_ownership_transferred",
+                "group_papers_added",
+                "group_paper_removed",
               ])
             : undefined,
         options.readState === "unread"
@@ -178,6 +205,20 @@ export async function listNotifications(
         ? {
             id: row.groupId,
             name: row.groupName,
+          }
+        : null,
+    paperActivity:
+      row.paperActivityKind && row.paperActivityEventCount
+        ? {
+            kind: row.paperActivityKind,
+            eventCount: row.paperActivityEventCount,
+            representativePaper:
+              row.representativePaperId && row.representativePaperTitle
+                ? {
+                    id: row.representativePaperId,
+                    title: row.representativePaperTitle,
+                  }
+                : null,
           }
         : null,
     readAt: row.readAt,

@@ -19,6 +19,8 @@ type PlaylistPickerProps = {
   onSaveComplete?: () => void;
   paperId: string;
   recommendationImpressionId?: string;
+  savedLabel?: string;
+  unsavedLabel?: string;
   variant?: "icon" | "compact" | "full";
 };
 
@@ -32,6 +34,8 @@ export function PlaylistPicker({
   onSaveComplete,
   paperId,
   recommendationImpressionId,
+  savedLabel = "Saved",
+  unsavedLabel = "Save to playlist",
   variant = "full",
 }: PlaylistPickerProps) {
   const router = useRouter();
@@ -175,7 +179,7 @@ export function PlaylistPicker({
     }
   }
 
-  const buttonLabel = saved ? "Manage saved playlists" : "Save to playlist";
+  const buttonLabel = saved ? "Manage saved playlists" : unsavedLabel;
   const buttonClassName =
     variant === "icon"
       ? `grid h-12 w-full place-items-center rounded-lg border ${
@@ -217,7 +221,7 @@ export function PlaylistPicker({
           size={variant === "icon" ? 19 : 18}
           strokeWidth={2.5}
         />
-        {variant === "icon" ? null : saved ? "Saved" : "Save to playlist"}
+        {variant === "icon" ? null : saved ? savedLabel : unsavedLabel}
       </button>
 
       {open && typeof document !== "undefined"

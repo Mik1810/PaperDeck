@@ -8,6 +8,13 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Aligned the local filenames of the in-app group-invitation response and
+  managed automatic-RLS hardening migrations with their exact versions in the
+  shared Supabase migration history. After a strict read-only catalog audit
+  confirmed all 17 older local migrations were already structurally present,
+  recorded only those versions as applied in remote migration metadata. No
+  migration SQL was replayed and no application schema or data was changed or
+  deleted; a final dry-run now proposes only the two still-local #99 migrations.
 - Set `touch-action: pan-y` on the `PaperCard` internal scrollable container
   and its `article` ancestor to prevent the browser from stealing horizontal
   touch gestures for native vertical scrolling, fixing mobile deck swipe
@@ -19,6 +26,11 @@ This project follows Semantic Versioning.
   notification-center TypeScript build failure.
 
 ### Changed
+
+- Defined the #99 shared-list contract: groups may be empty; papers are
+  chronological without manual positions, reorder, or list revisions; members
+  remove only their own additions while owner/admin may moderate any; and
+  copying a group paper into a private Library remains an explicit action.
 
 - Added a conditional database hardening migration that removes unnecessary
   direct `PUBLIC`, `anon`, and `authenticated` execution of Supabase's managed
@@ -56,6 +68,27 @@ This project follows Semantic Versioning.
   A/B isolation tests use dedicated Clerk Development identities only.
 
 ### Added
+
+- Added the #99 shared-paper foundation: membership-scoped read RLS,
+  service-role-only atomic add/remove/preference operations, duplicate and
+  500-item guards, detached `Former member` provenance, ten-minute addition
+  notification aggregation, important removal notifications, 90-day bounded
+  activity retention, and an eight-case isolated PostgreSQL 17 gate proving
+  role isolation and zero writes to personal ranking/library tables. The two
+  migrations are applied to the shared Supabase project with zero shared-paper
+  or activity rows; both research-group kill switches remain disabled.
+- Added the local-only #99 group workspace: `/groups` lists memberships and
+  incoming invitations, `/groups/[groupId]` presents the chronological shared
+  list and responsive member management, and the Clerk account menu links the
+  workspace without adding another navbar item. Authenticated Server Actions
+  cover creation, invitation, roles, removal, preferences, leave/delete, and
+  paper add/remove; a private no-store catalog search powers the add dialog.
+  Shared cards expose an explicit `Save privately` playlist picker.
+- Added a disposable native-PostgreSQL browser gate for the #99 workspace. It
+  exercises member and owner permissions, create/delete, catalog search,
+  chronological add/remove, notification preferences, role changes, leave,
+  explicit private playlist saving, personal-ranking isolation, and responsive
+  mobile rendering without Clerk sessions or shared Supabase writes.
 
 - Added and deployed the #98 notification center: authenticated header bell with `99+`
   badge, latest-20 desktop popover/mobile bottom sheet, reconnect/focus polling,

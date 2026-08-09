@@ -80,7 +80,12 @@ function requireUuid(value: string, label: string) {
 }
 
 function isPlaylistSaveContext(value: string): value is PlaylistSaveContext {
-  return value === "feed" || value === "digest" || value === "paper_detail";
+  return (
+    value === "feed" ||
+    value === "digest" ||
+    value === "paper_detail" ||
+    value === "group"
+  );
 }
 
 function sourcePathFrom(formData: FormData, fallback: string) {
@@ -542,7 +547,9 @@ function revalidatePlaylistPickerPaths(
       ? "/feed"
       : context === "digest"
         ? "/digest"
-        : `/papers/${paperId}`,
+        : context === "group"
+          ? "/groups"
+          : `/papers/${paperId}`,
   );
 }
 
