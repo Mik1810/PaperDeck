@@ -75,10 +75,10 @@
 - PR #128 was merged to `main` as `0aa1a07`; the matching Vercel Production
   deployment reached `READY`.
 - Both #99 migrations are applied to the shared Supabase project.
-- Both research-group runtime switches remain disabled.
-- The UI is deployed but remains unavailable through the disabled runtime
-  switches. Switch enablement remains a separate, explicitly discussed rollout
-  decision.
+- Research-group reads are enabled; writes remain disabled.
+- The deployed UI may read membership-scoped group state, while every mutation
+  remains unavailable. Write enablement is a separate, explicitly discussed
+  rollout decision.
 
 ## Validation
 
@@ -128,3 +128,10 @@
   error, horizontal overflow, page/console error, or HTTP 5xx response. Vercel
   runtime error logs for the 30-minute deployment window were empty. No sign-in,
   Clerk session, or application-data mutation was performed.
+- After explicit approval, changed exactly the singleton runtime configuration
+  row from `reads=false, writes=false` to `reads=true, writes=false` through a
+  guarded transaction. Post-change read-only verification confirmed the read
+  helper is active, all add/remove/preference RPCs still require both switches,
+  and group, membership, notification, shared-paper, and activity counts remain
+  zero. A fresh anonymous mobile smoke remained free of framework, overflow,
+  page/console, and HTTP 5xx errors; no authentication session was created.

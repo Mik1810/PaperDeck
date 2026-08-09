@@ -76,7 +76,8 @@ This project follows Semantic Versioning.
   activity retention, and an eight-case isolated PostgreSQL 17 gate proving
   role isolation and zero writes to personal ranking/library tables. The two
   migrations are applied to the shared Supabase project with zero shared-paper
-  or activity rows; both research-group kill switches remain disabled.
+  or activity rows; reads are enabled while the write kill switch remains
+  disabled.
 - Added and deployed the #99 group workspace: `/groups` lists memberships and
   incoming invitations, `/groups/[groupId]` presents the chronological shared
   list and responsive member management, and the Clerk account menu links the
@@ -84,8 +85,8 @@ This project follows Semantic Versioning.
   cover creation, invitation, roles, removal, preferences, leave/delete, and
   paper add/remove; a private no-store catalog search powers the add dialog.
   Shared cards expose an explicit `Save privately` playlist picker. The
-  production deployment is live behind the disabled research-group read/write
-  switches.
+  production deployment is live with research-group reads enabled and writes
+  still disabled.
 - Added a disposable native-PostgreSQL browser gate for the #99 workspace. It
   exercises member and owner permissions, create/delete, catalog search,
   chronological add/remove, notification preferences, role changes, leave,
