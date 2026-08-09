@@ -155,3 +155,13 @@
   on port 6543, while Production remains on its original Session mode port 5432
   pending a separately approved rollout. No secret value was printed or stored
   in a repository file.
+- Deployed commit `5f5a45c` to Preview. The deployment reached `READY`; an
+  anonymous `/groups` request returned HTTP 200, and its runtime-log window had
+  no `EMAXCONNSESSION`, prepared-statement, connection-timeout, or other runtime
+  errors. This smoke did not create a Clerk session and therefore did not
+  exercise the authenticated profile-upsert path.
+- `vercel curl` automatically created one project-wide Deployment Protection
+  automation bypass. After identifying its scope without exposing the secret,
+  it was explicitly approved and revoked; read-only verification found zero
+  remaining automation-bypass entries. Preview and the current Production
+  deployment both remained `READY`, and no redeployment was triggered.
