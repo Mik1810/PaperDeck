@@ -77,13 +77,15 @@ This project follows Semantic Versioning.
   role isolation and zero writes to personal ranking/library tables. The two
   migrations are applied to the shared Supabase project with zero shared-paper
   or activity rows; both research-group kill switches remain disabled.
-- Added the local-only #99 group workspace: `/groups` lists memberships and
+- Added and deployed the #99 group workspace: `/groups` lists memberships and
   incoming invitations, `/groups/[groupId]` presents the chronological shared
   list and responsive member management, and the Clerk account menu links the
   workspace without adding another navbar item. Authenticated Server Actions
   cover creation, invitation, roles, removal, preferences, leave/delete, and
   paper add/remove; a private no-store catalog search powers the add dialog.
-  Shared cards expose an explicit `Save privately` playlist picker.
+  Shared cards expose an explicit `Save privately` playlist picker. The
+  production deployment is live behind the disabled research-group read/write
+  switches.
 - Added a disposable native-PostgreSQL browser gate for the #99 workspace. It
   exercises member and owner permissions, create/delete, catalog search,
   chronological add/remove, notification preferences, role changes, leave,

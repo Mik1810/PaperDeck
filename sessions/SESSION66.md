@@ -72,11 +72,13 @@
 
 ## Rollout boundary
 
-- Work is local on `codex/group-shared-paper-foundation`.
+- PR #128 was merged to `main` as `0aa1a07`; the matching Vercel Production
+  deployment reached `READY`.
 - Both #99 migrations are applied to the shared Supabase project.
 - Both research-group runtime switches remain disabled.
-- UI release and switch enablement remain separate, explicitly discussed
-  rollout decisions.
+- The UI is deployed but remains unavailable through the disabled runtime
+  switches. Switch enablement remains a separate, explicitly discussed rollout
+  decision.
 
 ## Validation
 
@@ -118,3 +120,11 @@
 - The post-deploy migration dry-run is empty. Supabase advisors reported no
   finding on the #99 objects; their warnings concern pre-existing RLS policy
   performance and the existing `vector`/`pg_trgm` extension locations.
+- Final local release gates on `e39e555`: lint, typecheck, and production build
+  passed before merging PR #128 without waiting for the still-running CI.
+- The Vercel Production deployment for merge commit `0aa1a07` reached `READY`.
+  Anonymous desktop and 390x844 mobile smoke checks confirmed that `/groups`
+  redirects to Clerk sign-in with its original destination, without a Next.js
+  error, horizontal overflow, page/console error, or HTTP 5xx response. Vercel
+  runtime error logs for the 30-minute deployment window were empty. No sign-in,
+  Clerk session, or application-data mutation was performed.
