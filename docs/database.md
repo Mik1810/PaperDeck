@@ -171,13 +171,15 @@ current papers. Group writes never touch favorites, playlists, interactions,
 recommendations, or profile embeddings. This foundation passed an isolated
 PostgreSQL 17 migration suite and is applied to the shared Supabase project.
 Post-deploy checks confirmed RLS, grants, function privileges, a validated
-notification-source constraint, zero shared-paper/activity rows, and both group
-runtime switches still disabled.
+notification-source constraint, and zero shared-paper/activity rows. The read
+switch is enabled; the write switch remains disabled, so mutation functions
+still fail closed.
 
-The matching local workspace reads directly in Server Components and performs
-mutations through authenticated Server Actions. Client-side catalog search uses
-one membership-authorized `private, no-store` Route Handler. The UI receives
-only the public member projection and a precomputed `canRemove` capability; it
+The matching deployed workspace reads directly in Server Components and
+performs mutations through authenticated Server Actions. Client-side catalog
+search uses one membership-authorized `private, no-store` Route Handler. The UI
+receives only the public member projection and a precomputed `canRemove`
+capability; it
 never receives contributor Clerk IDs. `Save privately` deliberately reuses the
 normal private playlist path and is separate from the group mutation.
 
