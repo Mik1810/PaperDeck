@@ -25,7 +25,7 @@ function createDb() {
   const client = postgres(process.env.DATABASE_URL, {
     max: databaseMaxConnections(),
     prepare: false,
-    idle_timeout: 20,
+    idle_timeout: 5,
     connect_timeout: 10,
   });
 

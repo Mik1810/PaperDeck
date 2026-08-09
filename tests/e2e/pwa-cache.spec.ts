@@ -19,7 +19,9 @@ test.describe("PWA cache policy", () => {
 
     const firstVisit = await context.newPage();
     await firstVisit.setViewportSize({ width: 390, height: 844 });
-    await firstVisit.goto("/feed", { waitUntil: "domcontentloaded" });
+    await firstVisit.goto(`/pwa-install-check-${Date.now()}`, {
+      waitUntil: "domcontentloaded",
+    });
 
     await expect
       .poll(() =>
@@ -39,7 +41,7 @@ test.describe("PWA cache policy", () => {
     ).toHaveCount(0);
   });
 
-  test("keeps authenticated navigations out of Cache Storage", async ({
+  test("keeps dynamic navigations out of Cache Storage", async ({
     context,
     page,
   }) => {
@@ -87,21 +89,17 @@ test.describe("PWA cache policy", () => {
       .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
       .toBe(true);
 
-    const navigationCacheCheck = `/feed?nav-cache-check=${Date.now()}`;
+    const navigationCacheCheck = `/pwa-navigation-check-${Date.now()}`;
     await page.goto(navigationCacheCheck, {
       waitUntil: "domcontentloaded",
     });
 
-    const notificationCacheCheck = `/notifications?nav-cache-check=${Date.now()}`;
-    await page.goto(notificationCacheCheck, {
+    const secondNavigationCacheCheck = `/pwa-navigation-check-secondary-${Date.now()}`;
+    await page.goto(secondNavigationCacheCheck, {
       waitUntil: "domcontentloaded",
     });
 
-    await page.goto(`/offline.html?cache-inspection=${Date.now()}`, {
-      waitUntil: "domcontentloaded",
-    });
-
-    const rscCacheCheck = `/feed?_rsc=cache-check-${Date.now()}`;
+    const rscCacheCheck = `/pwa-rsc-check-${Date.now()}?_rsc=cache-check`;
     await page.evaluate(async (url) => {
       await fetch(url, {
         headers: { RSC: "1" },
@@ -126,18 +124,25 @@ test.describe("PWA cache policy", () => {
     });
 
     expect(cachedUrls).toContain("/offline.html");
-    expect(cachedUrls).not.toContain("/feed");
+    expect(cachedUrls).toContain("/apple-touch-icon.png");
     expect(cachedUrls).not.toContain(navigationCacheCheck);
-    expect(cachedUrls).not.toContain(notificationCacheCheck);
+    expect(cachedUrls).not.toContain(secondNavigationCacheCheck);
     expect(cachedUrls).not.toContain(rscCacheCheck);
 
     await context.setOffline(true);
-    await page.goto(`/feed?offline-check=${Date.now()}`, {
+    await page.goto(`/pwa-offline-check-${Date.now()}`, {
       waitUntil: "domcontentloaded",
     });
 
     await expect(
       page.getByRole("heading", { name: "You're offline" }),
     ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.locator("img.offline-icon").evaluate((image) =>
+          image instanceof HTMLImageElement ? image.naturalWidth : 0,
+        ),
+      )
+      .toBeGreaterThan(0);
   });
 });

@@ -5,36 +5,34 @@ import {
   GroupCreateButton,
   GroupInvitationDecision,
 } from "@/components/research-group-controls";
-import { requireUserContext } from "@/lib/auth/session";
+import { requireOwnerId } from "@/lib/auth/session";
 import { ResearchGroupUnavailableError } from "@/lib/research-groups/permissions";
 import { listIncomingResearchGroupInvitations } from "@/lib/repositories/research-group-invitations";
 import { listResearchGroups } from "@/lib/repositories/research-groups";
-import {
-  ensureUserProfile,
-  getReadLaterCount,
-} from "@/lib/repositories/user-data";
+import { getReadLaterCount } from "@/lib/repositories/user-data";
 
 export const dynamic = "force-dynamic";
 
 async function loadResearchGroupsPage(ownerId: string) {
-  return Promise.all([
-    listResearchGroups(ownerId),
+  const groups = await listResearchGroups(ownerId);
+  const [invitations, readLaterCount] = await Promise.all([
     listIncomingResearchGroupInvitations(ownerId),
     getReadLaterCount(ownerId),
   ]);
+
+  return [groups, invitations, readLaterCount] as const;
 }
 
 export default async function ResearchGroupsPage() {
-  const user = await requireUserContext();
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
 
-  const data = await loadResearchGroupsPage(user.ownerId).catch((error) => {
+  const data = await loadResearchGroupsPage(ownerId).catch((error) => {
     if (error instanceof ResearchGroupUnavailableError) return null;
     throw error;
   });
 
   if (!data) {
-    const readLaterCount = await getReadLaterCount(user.ownerId);
+    const readLaterCount = await getReadLaterCount(ownerId);
     return (
       <AppShell
         title="Research groups"
@@ -103,6 +101,7 @@ export default async function ResearchGroupsPage() {
                   <Link
                     key={group.id}
                     href={`/groups/${group.id}`}
+                    prefetch={false}
                     className="group rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
                   >
                     <div className="flex items-start justify-between gap-3">

@@ -25,7 +25,7 @@ export default defineConfig({
     command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
     env: {
       DATABASE_URL: process.env.DATABASE_URL,
-      DATABASE_MAX_CONNECTIONS: "3",
+      DATABASE_MAX_CONNECTIONS: "1",
       NEXT_PUBLIC_PAPERDECK_DEV_AUTH: "true",
       PAPERDECK_DEV_OWNER_ID: ownerId,
       NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in",

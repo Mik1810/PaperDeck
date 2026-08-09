@@ -77,7 +77,7 @@ NEXT_PUBLIC_PAPERDECK_DEV_AUTH=false
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
 SUPABASE_SERVICE_ROLE_KEY=replace_me
-DATABASE_URL=postgresql://transaction-pooler-host:6543/postgres
+DATABASE_URL=postgresql://session-pooler-host:5432/postgres
 DATABASE_MAX_CONNECTIONS=1
 LOG_LEVEL=info
 ```
@@ -89,12 +89,19 @@ LOG_LEVEL=info
   Production-only custom-domain value blindly into Preview.
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
-Use Supabase Transaction pooler port `6543` for Vercel Production and Preview;
-keep Session pooler port `5432` for the persistent local development process.
-The shared Postgres.js client disables prepared statements for Transaction
-pooler compatibility, opens one connection per serverless instance, and closes
-idle clients promptly. Keep `DATABASE_MAX_CONNECTIONS=1`; increasing the
-server-side pool does not make Session mode suitable for serverless traffic.
+Production currently uses the Supabase Session pooler on port `5432`, with one
+Postgres.js connection per serverless instance and a five-second idle timeout.
+This is the current recovery configuration after authenticated multi-query
+requests stalled during the initial Transaction-pooler rollout. Preview may use
+the Transaction pooler on port `6543` for isolated compatibility and load
+testing; do not promote that connection mode without an authenticated Preview
+gate with explicit concurrent requests and a documented connection limit. The
+shared client keeps prepared statements disabled so both pooler modes remain
+supported. Keep `DATABASE_MAX_CONNECTIONS=1` while Production uses Session mode
+so concurrent serverless instances cannot each reserve a larger share of the
+15-client pool. The Supabase role currently enforces its existing two-minute
+statement timeout; lowering that shared setting requires a separate workload
+audit because ingestion and maintenance queries use the same database role.
 Use `LOG_LEVEL=info` for normal production diagnostics; raise to `debug` only for short investigations and lower to `warn` only if log volume becomes noisy.
 
 `CLERK_AUTHORIZED_PARTIES` is optional while developing, but should be set in production to the final app origin. Use a comma-separated list if more than one origin is intentionally allowed.

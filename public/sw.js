@@ -1,7 +1,7 @@
-const CACHE_VERSION = "paperdeck-v3";
+const CACHE_VERSION = "paperdeck-v4";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
-const PRECACHE_URLS = ["/offline.html"];
+const PRECACHE_URLS = ["/offline.html", "/apple-touch-icon.png"];
 
 const STATIC_PATTERNS = [
   /\.(?:js|css|woff2?|ttf|eot|otf)$/,
