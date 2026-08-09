@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Aligned the local filenames of the in-app group-invitation response and
+  managed automatic-RLS hardening migrations with their exact versions in the
+  shared Supabase migration history. Their SQL content is unchanged and remote
+  history was not rewritten. The alignment removes those two mismatches, while
+  an older unrecorded schema baseline still prevents safe CLI migration pushes.
 - Set `touch-action: pan-y` on the `PaperCard` internal scrollable container
   and its `article` ancestor to prevent the browser from stealing horizontal
   touch gestures for native vertical scrolling, fixing mobile deck swipe

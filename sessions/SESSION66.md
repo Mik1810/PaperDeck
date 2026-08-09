@@ -52,6 +52,14 @@
 - The local setup exposed a maintenance gap: `supabase/schema.sql` does not
   include the generated catalog `search_vector`; the gate therefore applies the
   existing `20260714210105_add_search_indexes.sql` migration explicitly.
+- A read-only shared-database preflight found two migration-history versions
+  whose SQL matched local files exactly but whose local timestamps differed.
+  Renamed the local files to the authoritative remote versions
+  `20260808220459_add_in_app_group_invitation_response.sql` and
+  `20260808222536_restrict_rls_auto_enable_execution.sql`, updating current
+  operational references without changing either SQL payload or repairing
+  remote migration history. Historical session notes retain the original names
+  because they describe the rollout sequence at that time.
 
 ## Rollout boundary
 
@@ -80,3 +88,15 @@
 - A separate read-only Clerk probe confirmed that the Development publishable
   and secret keys belong to the same instance. Authenticated Clerk invitation
   execution remains intentionally untested in this local-only gate.
+- Remote migration preflight: zero groups, active memberships, and
+  notifications; both #99 migrations absent; both runtime switches disabled.
+- After local filename alignment, a secret-scrubbed Supabase CLI dry-run no
+  longer reported the two timestamp mismatches. It then exposed an older
+  baseline gap: 17 pre-group local migrations exist in the shared schema but
+  are absent from `supabase_migrations.schema_migrations`, whose first recorded
+  version is `20260729105307`. `--include-all` was rejected because it would
+  attempt to replay existing DDL. No migration-history repair was performed.
+- Shared-database rollout remains blocked until the older baseline is audited
+  and either recorded as applied or an explicitly approved alternative rollout
+  mechanism is chosen. Both #99 migrations and both runtime switches remain
+  untouched.

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-migration="$repo_root/supabase/migrations/20260808221535_restrict_rls_auto_enable_execution.sql"
+migration="$repo_root/supabase/migrations/20260808222536_restrict_rls_auto_enable_execution.sql"
 if command -v initdb >/dev/null 2>&1; then
   postgres_bin=$(dirname "$(command -v initdb)")
 else
