@@ -135,3 +135,33 @@
   and group, membership, notification, shared-paper, and activity counts remain
   zero. A fresh anonymous mobile smoke remained free of framework, overflow,
   page/console, and HTTP 5xx errors; no authentication session was created.
+- Investigated the authenticated `/groups` failure from the supplied screen
+  recording. The black screen was the Next.js server error boundary, not a
+  loading-theme flash. Vercel recorded repeated profile-upsert failures with
+  Supavisor `EMAXCONNSESSION`: Session mode had reached its 15-client limit.
+- Confirmed Vercel Production lacked `DATABASE_MAX_CONNECTIONS`, so the runtime
+  used the code default of three connections per serverless instance. A
+  read-only connection audit observed 14 idle Supavisor clients plus one active
+  client at the time of diagnosis.
+- Changed the shared Drizzle/Postgres.js client to default to one connection,
+  disable prepared statements, close idle clients after 20 seconds, and bound
+  connection attempts to 10 seconds. Updated deployment guidance to use the
+  Supabase Transaction pooler on port 6543 for Vercel while leaving persistent
+  local development on Session mode port 5432.
+- A read-only probe confirmed the shared Transaction pooler on port 6543 works
+  with the new client options and preserves `reads=true`, `writes=false` with
+  zero group/shared-paper rows. Split Vercel's previously shared sensitive
+  `DATABASE_URL` entry into two explicit scopes: Preview uses Transaction mode
+  on port 6543, while Production remains on its original Session mode port 5432
+  pending a separately approved rollout. No secret value was printed or stored
+  in a repository file.
+- Deployed commit `5f5a45c` to Preview. The deployment reached `READY`; an
+  anonymous `/groups` request returned HTTP 200, and its runtime-log window had
+  no `EMAXCONNSESSION`, prepared-statement, connection-timeout, or other runtime
+  errors. This smoke did not create a Clerk session and therefore did not
+  exercise the authenticated profile-upsert path.
+- `vercel curl` automatically created one project-wide Deployment Protection
+  automation bypass. After identifying its scope without exposing the secret,
+  it was explicitly approved and revoked; read-only verification found zero
+  remaining automation-bypass entries. Preview and the current Production
+  deployment both remained `READY`, and no redeployment was triggered.

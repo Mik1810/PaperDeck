@@ -8,7 +8,7 @@ const globalForDb = globalThis as unknown as {
 };
 
 function databaseMaxConnections() {
-  const value = Number(process.env.DATABASE_MAX_CONNECTIONS ?? 3);
+  const value = Number(process.env.DATABASE_MAX_CONNECTIONS ?? 1);
 
   if (!Number.isInteger(value) || value < 1) {
     return 1;
@@ -24,6 +24,9 @@ function createDb() {
 
   const client = postgres(process.env.DATABASE_URL, {
     max: databaseMaxConnections(),
+    prepare: false,
+    idle_timeout: 20,
+    connect_timeout: 10,
   });
 
   return drizzle(client, { schema: { ...schema, ...relations } });

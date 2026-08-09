@@ -77,6 +77,7 @@ NEXT_PUBLIC_PAPERDECK_DEV_AUTH=false
 NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace_me
 SUPABASE_SERVICE_ROLE_KEY=replace_me
+DATABASE_URL=postgresql://transaction-pooler-host:6543/postgres
 DATABASE_MAX_CONNECTIONS=1
 LOG_LEVEL=info
 ```
@@ -88,7 +89,12 @@ LOG_LEVEL=info
   Production-only custom-domain value blindly into Preview.
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
-Keep `DATABASE_MAX_CONNECTIONS=1` unless the Supabase pool size is increased; Vercel serverless instances multiply database clients.
+Use Supabase Transaction pooler port `6543` for Vercel Production and Preview;
+keep Session pooler port `5432` for the persistent local development process.
+The shared Postgres.js client disables prepared statements for Transaction
+pooler compatibility, opens one connection per serverless instance, and closes
+idle clients promptly. Keep `DATABASE_MAX_CONNECTIONS=1`; increasing the
+server-side pool does not make Session mode suitable for serverless traffic.
 Use `LOG_LEVEL=info` for normal production diagnostics; raise to `debug` only for short investigations and lower to `warn` only if log volume becomes noisy.
 
 `CLERK_AUTHORIZED_PARTIES` is optional while developing, but should be set in production to the final app origin. Use a comma-separated list if more than one origin is intentionally allowed.
