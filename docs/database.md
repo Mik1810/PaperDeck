@@ -168,9 +168,11 @@ existing membership RLS and read switch. All mutations are service-role-only,
 `SECURITY INVOKER` functions that repeat the active-group, active-membership,
 and write-switch checks inside the transaction. The list is capped at 500
 current papers. Group writes never touch favorites, playlists, interactions,
-recommendations, or profile embeddings. This foundation has passed an isolated
-PostgreSQL 17 migration suite but has not been applied to the shared Supabase
-project; both group runtime switches remain disabled.
+recommendations, or profile embeddings. This foundation passed an isolated
+PostgreSQL 17 migration suite and is applied to the shared Supabase project.
+Post-deploy checks confirmed RLS, grants, function privileges, a validated
+notification-source constraint, zero shared-paper/activity rows, and both group
+runtime switches still disabled.
 
 The matching local workspace reads directly in Server Components and performs
 mutations through authenticated Server Actions. Client-side catalog search uses

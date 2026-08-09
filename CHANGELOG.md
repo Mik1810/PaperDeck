@@ -69,14 +69,14 @@ This project follows Semantic Versioning.
 
 ### Added
 
-- Added the local-only #99 shared-paper foundation: membership-scoped read RLS,
+- Added the #99 shared-paper foundation: membership-scoped read RLS,
   service-role-only atomic add/remove/preference operations, duplicate and
   500-item guards, detached `Former member` provenance, ten-minute addition
   notification aggregation, important removal notifications, 90-day bounded
   activity retention, and an eight-case isolated PostgreSQL 17 gate proving
   role isolation and zero writes to personal ranking/library tables. The two
-  migrations are not applied to the shared Supabase project and both research-
-  group kill switches remain disabled.
+  migrations are applied to the shared Supabase project with zero shared-paper
+  or activity rows; both research-group kill switches remain disabled.
 - Added the local-only #99 group workspace: `/groups` lists memberships and
   incoming invitations, `/groups/[groupId]` presents the chronological shared
   list and responsive member management, and the Clerk account menu links the

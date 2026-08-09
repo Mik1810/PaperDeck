@@ -73,10 +73,10 @@
 ## Rollout boundary
 
 - Work is local on `codex/group-shared-paper-foundation`.
-- Neither #99 migration has been applied to the shared Supabase project.
+- Both #99 migrations are applied to the shared Supabase project.
 - Both research-group runtime switches remain disabled.
-- Remote migration, UI release, and switch enablement require a separate
-  explicitly discussed rollout decision.
+- UI release and switch enablement remain separate, explicitly discussed
+  rollout decisions.
 
 ## Validation
 
@@ -106,6 +106,15 @@
   proposed exactly `20260808225719_add_research_group_shared_papers.sql` and
   `20260808230008_wire_research_group_shared_paper_operations.sql`, with no
   seeds or roles. The dry-run applied nothing.
-- The migration-history blocker is resolved. Applying the two #99 migrations
-  remains a separate rollout decision; neither migration nor runtime switch was
-  applied or enabled in this session step.
+- Applied exactly the two #99 migrations after an unchanged read-only preflight
+  showed zero groups, active memberships, and notifications. No seed or role
+  file was included, and no application row was inserted, changed, or deleted.
+- Post-deploy read-only verification found 27 recorded migrations, both new
+  tables with RLS enabled, the two intended authenticated member-read policies,
+  explicit read-only authenticated grants, service-role-only writes and RPCs,
+  the expected enum values/columns, and a validated notification-source
+  constraint. All group/shared-paper/activity/notification counts remained
+  zero, and both runtime switches remained disabled.
+- The post-deploy migration dry-run is empty. Supabase advisors reported no
+  finding on the #99 objects; their warnings concern pre-existing RLS policy
+  performance and the existing `vector`/`pg_trgm` extension locations.
