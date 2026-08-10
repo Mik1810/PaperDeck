@@ -236,7 +236,7 @@ export async function loadResearchGroupWorkspace(
       ) as read_later_count
     from authorized_group
   `);
-  const row = rows[0];
+  const row = rows.rows[0];
 
   if (!row) {
     throw new ResearchGroupUnavailableError();

@@ -42,7 +42,7 @@ export async function addResearchGroupPaper(
     )
   `);
 
-  return rows[0] ?? { changed: false, activity_id: null };
+  return rows.rows[0] ?? { changed: false, activity_id: null };
 }
 
 /** @user-scoped */
@@ -64,7 +64,7 @@ export async function removeResearchGroupPaper(
     )
   `);
 
-  return rows[0] ?? { changed: false, activity_id: null };
+  return rows.rows[0] ?? { changed: false, activity_id: null };
 }
 
 /** @user-scoped */
@@ -89,5 +89,5 @@ export async function setResearchGroupPaperNotificationPreference(
     ) as changed
   `);
 
-  return rows[0]?.changed ?? false;
+  return rows.rows[0]?.changed ?? false;
 }

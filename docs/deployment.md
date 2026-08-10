@@ -89,21 +89,32 @@ LOG_LEVEL=info
   Production-only custom-domain value blindly into Preview.
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
-Production currently uses the Supabase Session pooler on port `5432`, with one
-Postgres.js connection per serverless instance and a five-second idle timeout.
-This is the verified recovery configuration after authenticated multi-query
-requests stalled during the initial Transaction-pooler rollout: repeated
-authenticated `/groups` requests completed with HTTP 200, no runtime error, and
-no blocked or long-active database session. Preview may use
-the Transaction pooler on port `6543` for isolated compatibility and load
-testing; do not promote that connection mode without an authenticated Preview
-gate with explicit concurrent requests and a documented connection limit. The
-shared client keeps prepared statements disabled so both pooler modes remain
-supported. Keep `DATABASE_MAX_CONNECTIONS=1` while Production uses Session mode
-so concurrent serverless instances cannot each reserve a larger share of the
-15-client pool. The Supabase role currently enforces its existing two-minute
-statement timeout; lowering that shared setting requires a separate workload
-audit because ingestion and maintenance queries use the same database role.
+Local development may keep the Supabase Session pooler on port `5432` and omit
+`DATABASE_MAX_CONNECTIONS`; the application default remains one connection, so
+no `.env.local` change is required. Vercel Preview is the promotion gate for the
+Supabase Transaction pooler on port `6543`; set
+`DATABASE_MAX_CONNECTIONS=3` there so a Fluid Compute instance can serve
+concurrent work while node-postgres queues excess queries safely. After the
+read-only concurrency probe and Preview runtime checks pass, Production can use
+the same port and limit. Drizzle uses node-postgres without named prepared
+statements, which is compatible with Transaction mode. Both modes retain a
+five-second idle timeout and ten-second connection timeout. The Supabase role
+currently enforces its existing two-minute statement timeout; lowering that
+shared setting requires a separate workload audit because ingestion and
+maintenance queries use the same database role.
+
+Run the secret-safe, read-only Transaction gate from a configured local
+checkout with:
+
+```bash
+npm run test:pooler:transaction -- \
+  --shape=index --concurrency=12 --iterations=5 \
+  --max-connections=3 --deadline-ms=15000
+```
+
+The report contains only configuration flags, counts, timings, and sanitized
+error classes. It performs no mutations and never reports connection strings,
+database identifiers, or user identifiers.
 Use `LOG_LEVEL=info` for normal production diagnostics; raise to `debug` only for short investigations and lower to `warn` only if log volume becomes noisy.
 
 `CLERK_AUTHORIZED_PARTIES` is optional while developing, but should be set in production to the final app origin. Use a comma-separated list if more than one origin is intentionally allowed.

@@ -81,7 +81,7 @@ export async function createResearchGroupInvitation(
       ) as invitation_id
     `),
   );
-  const invitation = rows[0];
+  const invitation = rows.rows[0];
   if (!invitation) {
     throw new ResearchGroupUnavailableError();
   }
@@ -113,7 +113,7 @@ export async function respondResearchGroupInvitation(
       ) as status
     `),
   );
-  const status = rows[0]?.status;
+  const status = rows.rows[0]?.status;
   if (status !== "accepted" && status !== "declined") {
     throw new ResearchGroupUnavailableError();
   }
@@ -136,7 +136,7 @@ export async function respondResearchGroupInvitationInApp(
       ) as status
     `),
   );
-  const status = rows[0]?.status;
+  const status = rows.rows[0]?.status;
   if (status !== "accepted" && status !== "declined") {
     throw new ResearchGroupUnavailableError();
   }

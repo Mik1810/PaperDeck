@@ -47,7 +47,7 @@ async function getRuntimeSettings(): Promise<RuntimeSettings> {
     from private.research_group_runtime_settings
     where singleton
   `);
-  const settings = result[0];
+  const settings = result.rows[0];
 
   return {
     readsEnabled: settings?.reads_enabled ?? false,
@@ -176,8 +176,8 @@ export async function createResearchGroup(
       actualRole: "owner",
       minimumRole: "owner",
       operation: "write",
-      readsEnabled: settingsRows[0]?.reads_enabled ?? false,
-      writesEnabled: settingsRows[0]?.writes_enabled ?? false,
+      readsEnabled: settingsRows.rows[0]?.reads_enabled ?? false,
+      writesEnabled: settingsRows.rows[0]?.writes_enabled ?? false,
     });
 
     const [group] = await transaction
@@ -236,8 +236,8 @@ export async function selectResearchGroupSuccessor(
       actualRole: ownerRows[0]?.role ?? null,
       minimumRole: "owner",
       operation: "write",
-      readsEnabled: settingsRows[0]?.reads_enabled ?? false,
-      writesEnabled: settingsRows[0]?.writes_enabled ?? false,
+      readsEnabled: settingsRows.rows[0]?.reads_enabled ?? false,
+      writesEnabled: settingsRows.rows[0]?.writes_enabled ?? false,
     });
 
     if (successorOwnerId !== null) {
@@ -311,8 +311,8 @@ export async function deleteResearchGroup(
       actualRole: ownerRows[0]?.role ?? null,
       minimumRole: "owner",
       operation: "write",
-      readsEnabled: settingsRows[0]?.reads_enabled ?? false,
-      writesEnabled: settingsRows[0]?.writes_enabled ?? false,
+      readsEnabled: settingsRows.rows[0]?.reads_enabled ?? false,
+      writesEnabled: settingsRows.rows[0]?.writes_enabled ?? false,
     });
     await transaction
       .delete(researchGroups)
@@ -325,9 +325,10 @@ export async function deleteResearchGroup(
 /** @admin */
 export async function handleResearchGroupAccountClosure(ownerId: string) {
   requireOwnerId(ownerId, "handleResearchGroupAccountClosure");
-  return db.execute<{
+  const result = await db.execute<{
     groups_transferred: number;
     groups_deleted: number;
     memberships_removed: number;
   }>(sql`select * from handle_research_group_account_closure(${ownerId})`);
+  return result.rows;
 }
