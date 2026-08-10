@@ -64,15 +64,21 @@
   p95 1.824 seconds under 12-way load.
 - `npm run lint` passed.
 - `npm run typecheck` passed.
-- `npm run test:unit`: 119/119 passed before the driver migration; a final full
-  run follows after documentation.
-- `npm run build` passed before the driver migration; a final build follows.
+- `npm run test:unit`: 119/119 passed after the driver migration.
+- `npm run build` passed after the driver migration.
 - `npm run test:e2e:group-workspace` passed all member, owner, and mobile phases
   after the driver migration, with zero remote mutations and zero Clerk
   sessions.
 
 ## Rollout
 
-- Preview and Production promotion evidence will be appended after each gate;
-  the existing Production Session-pooler deployment remains the rollback
-  target until verification completes.
+- Vercel Preview received a Sensitive Transaction-pooler `DATABASE_URL` and
+  `DATABASE_MAX_CONNECTIONS=3`; deployment
+  `dpl_HSePbubZk3vPjkR7FSDxHmhmy4Yp` reached Ready.
+- `/groups` returned the expected unauthenticated redirect. The read-only gate
+  executed with the actual Preview environment completed 60/60 `/groups`
+  loads, with zero failures, zero mutations, and p95 1.675 seconds.
+- Sanitized Preview runtime-log inspection found zero error events after the
+  deployment and smoke request.
+- Production promotion remains pending; the existing Session-pooler deployment
+  remains the rollback target until final verification completes.
