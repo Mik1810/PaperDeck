@@ -17,6 +17,28 @@ type PaperRow = typeof papers.$inferSelect;
 
 type TopicRow = typeof taxonomyTopics.$inferSelect;
 
+export type PaperPresentationRow = Pick<
+  PaperRow,
+  | "id"
+  | "title"
+  | "abstract"
+  | "year"
+  | "source"
+  | "url"
+  | "pdfUrl"
+  | "venue"
+  | "doi"
+  | "citationCount"
+  | "isClassic"
+  | "access"
+  | "triageSummary"
+>;
+
+export type PaperPresentationTopic = Pick<
+  TopicRow,
+  "id" | "label" | "parentId" | "arxivCategory"
+>;
+
 const SEARCH_QUERY_MAX_LENGTH = 120;
 
 export { SEARCH_PAGE_SIZE };
@@ -27,7 +49,7 @@ export type SearchPapersResult = {
   hasMore: boolean;
 };
 
-function topicFromRow(row: TopicRow): PaperTopic {
+function topicFromRow(row: PaperPresentationTopic): PaperTopic {
   return {
     id: row.id,
     label: topicDisplayLabel({
@@ -41,9 +63,9 @@ function topicFromRow(row: TopicRow): PaperTopic {
 
 /** @admin */
 export function paperFromRow(
-  row: PaperRow,
+  row: PaperPresentationRow,
   authors: string[] = [],
-  topics: TopicRow[] = [],
+  topics: PaperPresentationTopic[] = [],
 ): Paper {
   const paperTopics = topics.map(topicFromRow);
 

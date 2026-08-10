@@ -8,15 +8,7 @@ import {
 } from "@/components/research-group-controls";
 import { requireOwnerId } from "@/lib/auth/session";
 import { ResearchGroupUnavailableError } from "@/lib/research-groups/permissions";
-import {
-  getResearchGroupPaperNotificationPreference,
-  listResearchGroupPapers,
-} from "@/lib/repositories/research-group-papers";
-import {
-  getResearchGroup,
-  listResearchGroupMembers,
-} from "@/lib/repositories/research-groups";
-import { getReadLaterCount } from "@/lib/repositories/user-data";
+import { loadResearchGroupWorkspace } from "@/lib/repositories/research-group-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -30,16 +22,6 @@ function addedAtLabel(value: string) {
   }).format(new Date(value));
 }
 
-async function loadResearchGroupPage(ownerId: string, groupId: string) {
-  return Promise.all([
-    getResearchGroup(ownerId, groupId),
-    listResearchGroupPapers(ownerId, groupId),
-    listResearchGroupMembers(ownerId, groupId),
-    getResearchGroupPaperNotificationPreference(ownerId, groupId),
-    getReadLaterCount(ownerId),
-  ]);
-}
-
 export default async function ResearchGroupPage({
   params,
 }: {
@@ -49,11 +31,11 @@ export default async function ResearchGroupPage({
   const { groupId } = await params;
   if (!uuidPattern.test(groupId)) notFound();
 
-  const data = await loadResearchGroupPage(ownerId, groupId).catch((error) => {
-    if (error instanceof ResearchGroupUnavailableError) notFound();
-    throw error;
-  });
-  const [group, papers, members, preference, readLaterCount] = data;
+  const { group, papers, members, preference, readLaterCount } =
+    await loadResearchGroupWorkspace(ownerId, groupId).catch((error) => {
+      if (error instanceof ResearchGroupUnavailableError) notFound();
+      throw error;
+    });
 
   return (
       <AppShell

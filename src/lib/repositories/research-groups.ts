@@ -3,8 +3,6 @@ import "server-only";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  collaborationIdentities,
-  profiles,
   researchGroupMembers,
   researchGroups,
 } from "@/db/schema";
@@ -140,110 +138,6 @@ export async function listResearchGroups(
       ),
     )
     .orderBy(desc(researchGroups.updatedAt), desc(researchGroups.id));
-}
-
-// Returns one private group only after the centralized ACL passes.
-/** @user-scoped */
-export async function getResearchGroup(
-  actorOwnerId: string,
-  groupId: string,
-): Promise<ResearchGroupSummary> {
-  const role = await requireResearchGroupPermission(
-    actorOwnerId,
-    groupId,
-    "member",
-    "read",
-  );
-  const rows = await db
-    .select({
-      id: researchGroups.id,
-      name: researchGroups.name,
-      description: researchGroups.description,
-      revision: researchGroups.revision,
-      createdAt: researchGroups.createdAt,
-      updatedAt: researchGroups.updatedAt,
-    })
-    .from(researchGroups)
-    .where(
-      and(
-        eq(researchGroups.id, groupId),
-        eq(researchGroups.state, "active"),
-        sql`exists (
-          select 1
-          from private.research_group_runtime_settings as settings
-          where settings.singleton and settings.reads_enabled
-        )`,
-        sql`exists (
-          select 1
-          from research_group_members as actor_membership
-          where actor_membership.group_id = ${groupId}::uuid
-            and actor_membership.member_id = ${actorOwnerId}
-            and actor_membership.revoked_at is null
-        )`,
-      ),
-    )
-    .limit(1);
-
-  if (!rows[0]) {
-    throw new ResearchGroupUnavailableError();
-  }
-
-  return { ...rows[0], role };
-}
-
-// Lists only public member projections. Clerk ids, email hashes,
-// and email addresses never leave this repository.
-/** @user-scoped */
-export async function listResearchGroupMembers(
-  actorOwnerId: string,
-  groupId: string,
-): Promise<ResearchGroupMemberSummary[]> {
-  await requireResearchGroupPermission(
-    actorOwnerId,
-    groupId,
-    "member",
-    "read",
-  );
-
-  return db
-    .select({
-      publicId: collaborationIdentities.publicId,
-      displayName: profiles.displayName,
-      imageUrl: profiles.imageUrl,
-      role: researchGroupMembers.role,
-      joinedAt: researchGroupMembers.joinedAt,
-      memberOwnerId: researchGroupMembers.memberId,
-    })
-    .from(researchGroupMembers)
-    .innerJoin(
-      collaborationIdentities,
-      eq(collaborationIdentities.ownerId, researchGroupMembers.memberId),
-    )
-    .innerJoin(profiles, eq(profiles.ownerId, researchGroupMembers.memberId))
-    .where(
-      and(
-        eq(researchGroupMembers.groupId, groupId),
-        isNull(researchGroupMembers.revokedAt),
-        sql`exists (
-          select 1
-          from private.research_group_runtime_settings as settings
-          where settings.singleton and settings.reads_enabled
-        )`,
-        sql`exists (
-          select 1
-          from research_group_members as actor_membership
-          where actor_membership.group_id = ${groupId}::uuid
-            and actor_membership.member_id = ${actorOwnerId}
-            and actor_membership.revoked_at is null
-        )`,
-      ),
-    )
-    .then((rows) =>
-      rows.map(({ memberOwnerId, ...row }) => ({
-        ...row,
-        isCurrentUser: memberOwnerId === actorOwnerId,
-      })),
-    );
 }
 
 // Creates the group and its sole owner in one transaction.

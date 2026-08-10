@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Collapsed `/groups/[groupId]` from an approximately 17-statement repository
+  fan-out into one authorized PostgreSQL statement. A materialized group-access
+  CTE now gates correlated paper, contributor, member, notification-preference,
+  and private `Read later` count subqueries, preserving the 500-paper limit and
+  returning no workspace data after membership revocation.
 - Prevented Vercel serverless instances from exhausting Supabase's 15-client
   Session pool: the Drizzle/Postgres.js client now defaults to one connection,
   disables prepared statements for pooler compatibility, and uses bounded
