@@ -22,14 +22,15 @@ function parseArgs() {
 
 async function main() {
   const { days, dryRun } = parseArgs();
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl =
+    process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
 
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required");
+    throw new Error("DATABASE_ADMIN_URL or DATABASE_URL is required");
   }
 
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const sql = postgres(databaseUrl, { max: 1 });
+  const sql = postgres(databaseUrl, { max: 1, prepare: false });
 
   try {
     if (dryRun) {

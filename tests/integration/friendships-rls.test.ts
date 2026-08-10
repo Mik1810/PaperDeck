@@ -32,7 +32,7 @@ async function asUser<T>(
 
 before(async () => {
   if (!databaseUrl) return;
-  sql = postgres(databaseUrl, { max: 1 });
+  sql = postgres(databaseUrl, { max: 1, prepare: false });
   await sql`
     insert into profiles (owner_id, display_name)
     values (${ownerA}, 'Friend A'), (${ownerB}, 'Friend B'), (${ownerC}, 'Friend C')

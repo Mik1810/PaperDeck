@@ -65,7 +65,7 @@ before(async () => {
         username: isolatedUser,
         max: 6,
       })
-    : postgres(databaseUrl, { max: 6 });
+    : postgres(databaseUrl, { max: 6, prepare: false });
 
   await sql`
     update private.research_group_runtime_settings

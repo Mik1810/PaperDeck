@@ -70,7 +70,7 @@ async function createGroup(
 
 before(async () => {
   if (!databaseUrl) return;
-  sql = postgres(databaseUrl, { max: 3 });
+  sql = postgres(databaseUrl, { max: 3, prepare: false });
 
   const settings = await sql<{
     reads_enabled: boolean;

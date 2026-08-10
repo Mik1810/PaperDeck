@@ -103,7 +103,7 @@ run("a signed synthetic user.deleted event runs the atomic Development lifecycle
   assert.ok(databaseUrl);
   assert.ok(supabaseUrl);
   assert.ok(serviceRoleKey);
-  const sql = postgres(databaseUrl, { max: 3 });
+  const sql = postgres(databaseUrl, { max: 3, prepare: false });
   const signingSecret = `whsec_${randomBytes(32).toString("base64")}`;
   const serviceRoleClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: {

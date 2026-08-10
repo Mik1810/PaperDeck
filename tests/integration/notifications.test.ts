@@ -72,7 +72,7 @@ async function cleanupFixtures() {
 
 before(async () => {
   if (!databaseUrl || !enabled) return;
-  sql = postgres(databaseUrl, { max: 4 });
+  sql = postgres(databaseUrl, { max: 4, prepare: false });
   const relation = await sql<{ exists: boolean }[]>`
     select to_regclass('public.notifications') is not null as exists
   `;

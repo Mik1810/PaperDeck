@@ -83,7 +83,11 @@ Run `npm run audit:service-role` to see the breakdown.
 | `@user-scoped` | 32 (at 2026-07-06) | Reads/writes user-owned data (profile, favorites, interactions, playlists) | Drizzle `db` — owner checks in app code |
 | `@admin` | 11 (at 2026-07-06) | Shared catalog reads, ranking, embedding refreshes, topic taxonomy | Drizzle `db` |
 
-**Current state (MVP):** Both `@user-scoped` and `@admin` functions use the Drizzle direct connection via `DATABASE_URL`. Owner-id is validated in application code (`requireOwnerId()`). This is acceptable for MVP because:
+**Current state (MVP):** Both `@user-scoped` and `@admin` functions use the
+Drizzle server-side Transaction-pooler connection via `DATABASE_URL`. Drizzle
+Kit and maintenance commands use the separate Session-pooler
+`DATABASE_ADMIN_URL`. Owner-id is validated in application code
+(`requireOwnerId()`). This is acceptable for MVP because:
 - Every user-scoped query includes `WHERE owner_id = ?` or equivalent
 - The audit script (`scripts/audit-service-role.ts`) verifies no service-role key leaks to client bundles
 - RLS policies in `supabase/schema.sql` are active on the authenticated-client

@@ -161,7 +161,7 @@ run("two Clerk Development test sessions are isolated by Supabase RLS", async ()
 
     if (config.scope === "group-lifecycle") {
       assert.ok(databaseUrl);
-      sql = postgres(databaseUrl, { max: 1 });
+      sql = postgres(databaseUrl, { max: 1, prepare: false });
       const settings = await sql<
         {
           reads_enabled: boolean;

@@ -6,7 +6,7 @@ const seededGroupPath = "/groups/40000000-0000-4000-8000-000000000001";
 
 async function withDatabase<T>(task: (sql: postgres.Sql) => Promise<T>) {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
-  const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+  const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
   try {
     return await task(sql);
   } finally {

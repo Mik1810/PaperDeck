@@ -20,10 +20,11 @@ This project follows Semantic Versioning.
   A read-only Transaction-pooler probe exercises both raw and real `/groups`
   query shapes under concurrency without reporting identifiers. The
   authenticated `/groups` route also remains read-only during rendering instead
-  of updating the profile and provisioning `Read later` on every visit. Vercel
-  Preview and Production now use Transaction mode with three connections per
-  Fluid Compute instance; local development remains on its existing Session
-  connection with a one-connection default.
+  of updating the profile and provisioning `Read later` on every visit. Local
+  development, Preview, and Production now use Transaction mode with a
+  three-connection application pool. Drizzle Kit and maintenance scripts use a
+  separate Session-pooler URL, preventing administrative traffic from weakening
+  runtime parity.
 - Stabilized the research-group loading experience with a route-local retry
   boundary, an AppShell-consistent skeleton, disabled automatic prefetch for
   expensive group workspaces, and an E2E database-client limit matching
