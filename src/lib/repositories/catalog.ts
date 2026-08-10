@@ -11,6 +11,7 @@ import {
   searchPageOffset,
 } from "@/lib/repositories/catalog-search";
 import { PaperAccessSchema, TriageSummarySchema } from "@/lib/schemas/paper-access";
+import { INITIAL_FEED_RECOMMENDATION_COUNT } from "@/lib/recommendation-batches";
 import type { Paper, PaperTopic } from "@/types/paper";
 
 type PaperRow = typeof papers.$inferSelect;
@@ -40,6 +41,47 @@ export type PaperPresentationTopic = Pick<
 >;
 
 const SEARCH_QUERY_MAX_LENGTH = 120;
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const CATALOG_RANKING_CANDIDATE_LIMIT = 300;
+
+const paperPresentationSelection = {
+  id: papers.id,
+  title: papers.title,
+  abstract: papers.abstract,
+  year: papers.year,
+  source: papers.source,
+  url: papers.url,
+  pdfUrl: papers.pdfUrl,
+  venue: papers.venue,
+  doi: papers.doi,
+  citationCount: papers.citationCount,
+  isClassic: papers.isClassic,
+  access: papers.access,
+  triageSummary: papers.triageSummary,
+};
+
+const paperPresentationTopicSelection = {
+  id: taxonomyTopics.id,
+  label: taxonomyTopics.label,
+  parentId: taxonomyTopics.parentId,
+  arxivCategory: taxonomyTopics.arxivCategory,
+};
+
+const paperRankingSelection = {
+  id: papers.id,
+  year: papers.year,
+  citationCount: papers.citationCount,
+  isClassic: papers.isClassic,
+};
+
+export type CatalogRankingCandidate = {
+  id: string;
+  year: number | null;
+  citationCount: number | null;
+  isClassic: boolean;
+  topicIds: string[];
+};
 
 export { SEARCH_PAGE_SIZE };
 
@@ -113,8 +155,6 @@ export async function getTopics() {
 export async function getPapersByIds(
   paperIds: string[],
 ) {
-  const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const validPaperIds = paperIds.filter((paperId) => uuidPattern.test(paperId));
 
   if (!validPaperIds.length) {
@@ -122,7 +162,7 @@ export async function getPapersByIds(
   }
 
   const paperRows = await db
-    .select()
+    .select(paperPresentationSelection)
     .from(papers)
     .where(inArray(papers.id, validPaperIds));
 
@@ -133,7 +173,11 @@ export async function getPapersByIds(
   const paperIdsFound = paperRows.map((p) => p.id);
 
   const authorRows = await db
-    .select()
+    .select({
+      paperId: paperAuthors.paperId,
+      name: paperAuthors.name,
+      position: paperAuthors.position,
+    })
     .from(paperAuthors)
     .where(inArray(paperAuthors.paperId, paperIdsFound))
     .orderBy(asc(paperAuthors.position));
@@ -149,13 +193,13 @@ export async function getPapersByIds(
     .select({
       paper_id: paperTopics.paperId,
       topic_id: paperTopics.topicId,
-      topic: taxonomyTopics,
+      topic: paperPresentationTopicSelection,
     })
     .from(paperTopics)
     .leftJoin(taxonomyTopics, eq(paperTopics.topicId, taxonomyTopics.id))
     .where(inArray(paperTopics.paperId, paperIdsFound));
 
-  const topicsByPaper = new Map<string, TopicRow[]>();
+  const topicsByPaper = new Map<string, PaperPresentationTopic[]>();
   for (const t of topicJoinRows) {
     if (!t.topic) continue;
     const list = topicsByPaper.get(t.paper_id) ?? [];
@@ -181,58 +225,189 @@ export async function getPapersByIds(
 }
 
 /** @admin */
-export async function getAllPapers() {
-  const paperRows = await db
-    .select()
-    .from(papers)
-    .orderBy(desc(papers.year));
+export async function getRankingCandidatesByIds(
+  paperIds: string[],
+): Promise<CatalogRankingCandidate[]> {
+  const validPaperIds = [
+    ...new Set(paperIds.filter((paperId) => uuidPattern.test(paperId))),
+  ];
 
-  if (!paperRows.length) {
-    return [];
+  if (!validPaperIds.length) return [];
+
+  const [paperRows, topicRows] = await Promise.all([
+    db
+      .select(paperRankingSelection)
+      .from(papers)
+      .where(inArray(papers.id, validPaperIds)),
+    db
+      .select({ paperId: paperTopics.paperId, topicId: paperTopics.topicId })
+      .from(paperTopics)
+      .where(inArray(paperTopics.paperId, validPaperIds)),
+  ]);
+
+  const topicIdsByPaper = new Map<string, string[]>();
+  for (const row of topicRows) {
+    const topicIds = topicIdsByPaper.get(row.paperId) ?? [];
+    topicIds.push(row.topicId);
+    topicIdsByPaper.set(row.paperId, topicIds);
   }
 
-  const paperIdsFound = paperRows.map((p) => p.id);
-
-  const authorRows = await db
-    .select()
-    .from(paperAuthors)
-    .where(inArray(paperAuthors.paperId, paperIdsFound))
-    .orderBy(asc(paperAuthors.position));
-
-  const authorsByPaper = new Map<string, string[]>();
-  for (const a of authorRows) {
-    const list = authorsByPaper.get(a.paperId) ?? [];
-    list.push(a.name);
-    authorsByPaper.set(a.paperId, list);
-  }
-
-  const topicJoinRows = await db
-    .select({
-      paper_id: paperTopics.paperId,
-      topic_id: paperTopics.topicId,
-      topic: taxonomyTopics,
-    })
-    .from(paperTopics)
-    .leftJoin(taxonomyTopics, eq(paperTopics.topicId, taxonomyTopics.id))
-    .where(inArray(paperTopics.paperId, paperIdsFound));
-
-  const topicsByPaper = new Map<string, TopicRow[]>();
-  for (const t of topicJoinRows) {
-    if (!t.topic) continue;
-    const list = topicsByPaper.get(t.paper_id) ?? [];
-    list.push(t.topic);
-    topicsByPaper.set(t.paper_id, list);
-  }
-
-  return Promise.all(
-    paperRows.map((row) =>
-      paperFromRow(
-        row,
-        authorsByPaper.get(row.id) ?? [],
-        topicsByPaper.get(row.id) ?? [],
-      ),
-    ),
+  const candidatesById = new Map(
+    paperRows.map((row) => [
+      row.id,
+      { ...row, topicIds: topicIdsByPaper.get(row.id) ?? [] },
+    ]),
   );
+
+  return validPaperIds.flatMap((paperId) => {
+    const candidate = candidatesById.get(paperId);
+    return candidate ? [candidate] : [];
+  });
+}
+
+type CatalogCandidateQueryRow = {
+  id: string;
+  year: number | null;
+  citation_count: number | null;
+  is_classic: boolean;
+  topic_id: string | null;
+};
+
+function uuidSqlArray(values: string[]) {
+  const validValues = [...new Set(values.filter((value) => uuidPattern.test(value)))];
+
+  if (!validValues.length) return sql`array[]::uuid[]`;
+
+  return sql`array[${sql.join(
+    validValues.map((value) => sql`${value}::uuid`),
+    sql`, `,
+  )}]::uuid[]`;
+}
+
+function topicWeightSqlRows(topicWeights: Map<string, number>) {
+  const validEntries = [...topicWeights]
+    .filter(([topicId, weight]) => uuidPattern.test(topicId) && Number.isFinite(weight));
+
+  if (!validEntries.length) {
+    return sql`select null::uuid as topic_id, null::real as weight where false`;
+  }
+
+  return sql`values ${sql.join(
+    validEntries.map(
+      ([topicId, weight]) => sql`(${topicId}::uuid, ${weight}::real)`,
+    ),
+    sql`, `,
+  )}`;
+}
+
+/** @admin */
+export async function getCatalogRankingCandidates({
+  excludedPaperIds,
+  topicWeights,
+  limit = CATALOG_RANKING_CANDIDATE_LIMIT,
+}: {
+  excludedPaperIds: string[];
+  topicWeights: Map<string, number>;
+  limit?: number;
+}): Promise<CatalogRankingCandidate[]> {
+  const boundedLimit = Math.min(
+    Math.max(Math.trunc(limit), INITIAL_FEED_RECOMMENDATION_COUNT),
+    500,
+  );
+  const topicLimit = Math.ceil(boundedLimit * 0.5);
+  const recentLimit = Math.ceil(boundedLimit * 0.35);
+  const citedLimit = Math.ceil(boundedLimit * 0.25);
+  const classicLimit = Math.ceil(boundedLimit * 0.1);
+  const excludedIds = uuidSqlArray(excludedPaperIds);
+  const weightedTopics = topicWeightSqlRows(topicWeights);
+
+  const result = await db.execute<CatalogCandidateQueryRow>(sql`
+    with topic_weights(topic_id, weight) as (${weightedTopics}),
+    personalized_candidates as (
+      select p.id, p.year, p.citation_count,
+        sum(weights.weight) + ln(1 + greatest(coalesce(p.citation_count, 0), 0)) * 2
+          + greatest(0, coalesce(p.year, 2020) - 2020) * 0.4
+          + case when p.is_classic then 2 else 0 end as candidate_score
+      from ${papers} p
+      join ${paperTopics} pt on pt.paper_id = p.id
+      join topic_weights weights on weights.topic_id = pt.topic_id
+      where not (p.id = any(${excludedIds}))
+      group by p.id, p.year, p.citation_count, p.is_classic
+      having sum(weights.weight) > 0
+      order by candidate_score desc, p.id
+      limit ${topicLimit}
+    ),
+    recent_candidates as (
+      select p.id, p.year, p.citation_count,
+        ln(1 + greatest(coalesce(p.citation_count, 0), 0)) * 2
+          + greatest(0, coalesce(p.year, 2020) - 2020) * 0.4
+          + case when p.is_classic then 2 else 0 end as candidate_score
+      from ${papers} p
+      where not (p.id = any(${excludedIds}))
+      order by p.year desc nulls last, p.published_at desc nulls last, p.id
+      limit ${recentLimit}
+    ),
+    cited_candidates as (
+      select p.id, p.year, p.citation_count,
+        ln(1 + greatest(coalesce(p.citation_count, 0), 0)) * 2
+          + greatest(0, coalesce(p.year, 2020) - 2020) * 0.4
+          + case when p.is_classic then 2 else 0 end as candidate_score
+      from ${papers} p
+      where not (p.id = any(${excludedIds}))
+      order by p.citation_count desc nulls last, p.year desc nulls last, p.id
+      limit ${citedLimit}
+    ),
+    classic_candidates as (
+      select p.id, p.year, p.citation_count,
+        ln(1 + greatest(coalesce(p.citation_count, 0), 0)) * 2
+          + greatest(0, coalesce(p.year, 2020) - 2020) * 0.4
+          + 2 as candidate_score
+      from ${papers} p
+      where p.is_classic
+        and not (p.id = any(${excludedIds}))
+      order by p.citation_count desc nulls last, p.year desc nulls last, p.id
+      limit ${classicLimit}
+    ),
+    union_candidates as (
+      select * from personalized_candidates
+      union all
+      select * from recent_candidates
+      union all
+      select * from cited_candidates
+      union all
+      select * from classic_candidates
+    ),
+    selected_candidates as (
+      select id, max(candidate_score) as candidate_score, max(year) as year,
+        max(citation_count) as citation_count
+      from union_candidates
+      group by id
+      order by candidate_score desc, year desc nulls last,
+        citation_count desc nulls last, id
+      limit ${boundedLimit}
+    )
+    select p.id, p.year, p.citation_count, p.is_classic, pt.topic_id
+    from selected_candidates selected
+    join ${papers} p on p.id = selected.id
+    left join ${paperTopics} pt on pt.paper_id = p.id
+    order by selected.candidate_score desc, selected.year desc nulls last,
+      selected.citation_count desc nulls last, p.id, pt.topic_id
+  `);
+
+  const candidatesById = new Map<string, CatalogRankingCandidate>();
+  for (const row of result.rows) {
+    const candidate = candidatesById.get(row.id) ?? {
+      id: row.id,
+      year: row.year,
+      citationCount: row.citation_count,
+      isClassic: row.is_classic,
+      topicIds: [],
+    };
+    if (row.topic_id) candidate.topicIds.push(row.topic_id);
+    candidatesById.set(row.id, candidate);
+  }
+
+  return [...candidatesById.values()];
 }
 
 function normalizeCatalogSearchQuery(query: string) {
@@ -297,7 +472,7 @@ export async function searchPapers(
 /** @admin */
 export async function getPaperById(paperId: string) {
   const paperRows = await db
-    .select()
+    .select(paperPresentationSelection)
     .from(papers)
     .where(eq(papers.id, paperId))
     .limit(1);
@@ -307,14 +482,17 @@ export async function getPaperById(paperId: string) {
   const row = paperRows[0];
 
   const authorRows = await db
-    .select()
+    .select({
+      name: paperAuthors.name,
+      position: paperAuthors.position,
+    })
     .from(paperAuthors)
     .where(eq(paperAuthors.paperId, row.id))
     .orderBy(asc(paperAuthors.position));
 
   const topicJoinRows = await db
     .select({
-      topic: taxonomyTopics,
+      topic: paperPresentationTopicSelection,
     })
     .from(paperTopics)
     .leftJoin(taxonomyTopics, eq(paperTopics.topicId, taxonomyTopics.id))
@@ -322,7 +500,7 @@ export async function getPaperById(paperId: string) {
 
   const topics = topicJoinRows
     .map((t) => t.topic)
-    .filter((t): t is TopicRow => t !== null);
+    .filter((t): t is PaperPresentationTopic => t !== null);
 
   return paperFromRow(
     row,

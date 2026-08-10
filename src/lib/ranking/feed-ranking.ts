@@ -12,6 +12,11 @@ export type RankingInteraction = {
   action: InteractionType;
 };
 
+export type RankingPaperCandidate = Pick<
+  Paper,
+  "id" | "year" | "citationCount" | "isClassic" | "topics"
+>;
+
 export type UserPaperRankingState = {
   seenIds: Set<string>;
   interactions: RankingInteraction[];
@@ -72,8 +77,17 @@ const feedHiddenActions = new Set<InteractionType>([
   "favorite",
 ]);
 
+const TOPIC_AFFINITY_SCORE_MULTIPLIER = 90;
+const FEEDBACK_SCORE_MULTIPLIER = 6;
+
 export function isFeedHiddenAction(action: InteractionType) {
   return feedHiddenActions.has(action);
+}
+
+export function isRankingFeedbackAction(action: InteractionType) {
+  return Boolean(
+    positiveInteractionWeights[action] ?? negativeInteractionWeights[action],
+  );
 }
 
 export function buildSeenPaperIds(
@@ -107,7 +121,7 @@ function getAncestorIds(
   return ancestors;
 }
 
-function buildTopicAffinity(
+export function buildTopicAffinity(
   selectedTopicIds: Set<string>,
   topics: RankingTopic[],
 ) {
@@ -140,8 +154,8 @@ function clampScore(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function buildFeedbackTopicWeights(
-  papers: Paper[],
+export function buildFeedbackTopicWeights(
+  papers: RankingPaperCandidate[],
   interactions: RankingInteraction[],
 ) {
   const papersById = new Map(papers.map((paper) => [paper.id, paper]));
@@ -172,15 +186,42 @@ function buildFeedbackTopicWeights(
   return weights;
 }
 
-function scorePaper(paper: Paper, context: RankingContext): RankingScoreComponents {
+export function buildCandidateTopicWeights(
+  papers: RankingPaperCandidate[],
+  topics: RankingTopic[],
+  selectedTopicIds: Set<string>,
+  interactions: RankingInteraction[],
+) {
+  const affinity = buildTopicAffinity(selectedTopicIds, topics);
+  const feedback = buildFeedbackTopicWeights(papers, interactions);
+  const topicIds = new Set([...affinity.keys(), ...feedback.keys()]);
+
+  return new Map(
+    [...topicIds].map((topicId) => [
+      topicId,
+      (affinity.get(topicId) ?? 0) * TOPIC_AFFINITY_SCORE_MULTIPLIER
+        + (feedback.get(topicId) ?? 0) * FEEDBACK_SCORE_MULTIPLIER,
+    ]),
+  );
+}
+
+function scorePaper(
+  paper: RankingPaperCandidate,
+  context: RankingContext,
+): RankingScoreComponents {
   const semanticScore = (context.semanticScores?.get(paper.id) ?? 0) * 120;
   const topicScore = paper.topics.reduce(
-    (score, topic) => score + (context.topicAffinity.get(topic.id) ?? 0) * 90,
+    (score, topic) =>
+      score
+      + (context.topicAffinity.get(topic.id) ?? 0)
+        * TOPIC_AFFINITY_SCORE_MULTIPLIER,
     0,
   );
   const feedbackScore = paper.topics.reduce(
     (score, topic) =>
-      score + (context.feedbackTopicWeights.get(topic.id) ?? 0) * 6,
+      score
+      + (context.feedbackTopicWeights.get(topic.id) ?? 0)
+        * FEEDBACK_SCORE_MULTIPLIER,
     0,
   );
   const citationScore = Math.log1p(paper.citationCount ?? 0) * 2;
@@ -208,7 +249,10 @@ function scorePaper(paper: Paper, context: RankingContext): RankingScoreComponen
   };
 }
 
-function buildPersonalizedReason(paper: Paper, context: RankingContext) {
+function buildPersonalizedReason(
+  paper: RankingPaperCandidate,
+  context: RankingContext,
+) {
   const semanticScore = context.semanticScores?.get(paper.id) ?? 0;
   const affinityTopics = paper.topics.filter((topic) =>
     context.topicAffinity.has(topic.id),
@@ -240,13 +284,19 @@ function buildPersonalizedReason(paper: Paper, context: RankingContext) {
   return "Exploratory recommendation from the current CS catalog.";
 }
 
-export function rankFeedPapers(
-  papers: Paper[],
+export type RankedPaperCandidate<TPaper extends RankingPaperCandidate> = TPaper & {
+  recommendationReason: string;
+  rankingScore: number;
+  rankingScoreComponents: RankingScoreComponents;
+};
+
+export function rankFeedCandidates<TPaper extends RankingPaperCandidate>(
+  papers: TPaper[],
   topics: RankingTopic[],
   selectedTopicIds: Set<string>,
   state: UserPaperRankingState,
   semanticScores?: Map<string, number>,
-) {
+): Array<RankedPaperCandidate<TPaper>> {
   const context: RankingContext = {
     topicAffinity: buildTopicAffinity(selectedTopicIds, topics),
     feedbackTopicWeights: buildFeedbackTopicWeights(papers, state.interactions),
@@ -256,7 +306,7 @@ export function rankFeedPapers(
   return papers
     .filter((paper) => !state.seenIds.has(paper.id))
     .map(
-      (paper): RankedPaper => {
+      (paper): RankedPaperCandidate<TPaper> => {
         const scoreComponents = scorePaper(paper, context);
 
         return {
@@ -268,4 +318,20 @@ export function rankFeedPapers(
       },
     )
     .sort((a, b) => b.rankingScore - a.rankingScore);
+}
+
+export function rankFeedPapers(
+  papers: Paper[],
+  topics: RankingTopic[],
+  selectedTopicIds: Set<string>,
+  state: UserPaperRankingState,
+  semanticScores?: Map<string, number>,
+): RankedPaper[] {
+  return rankFeedCandidates(
+    papers,
+    topics,
+    selectedTopicIds,
+    state,
+    semanticScores,
+  );
 }

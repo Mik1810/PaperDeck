@@ -3,15 +3,13 @@ import "server-only";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { userProfileEmbeddings } from "@/db/schema";
-import { getPapersByIds } from "@/lib/repositories/catalog";
 import {
   SemanticMatchRowArraySchema,
   type SemanticMatchRow,
 } from "@/lib/schemas/semantic-match";
-import type { Paper } from "@/types/paper";
 
 export type SemanticPaperCandidates = {
-  papers: Paper[];
+  paperIds: string[];
   semanticScores: Map<string, number>;
   diagnostics: SemanticRetrievalDiagnostics;
 };
@@ -39,7 +37,7 @@ function emptyResult(
   diagnostics: Partial<SemanticRetrievalDiagnostics>,
 ): SemanticPaperCandidates {
   return {
-    papers: [],
+    paperIds: [],
     semanticScores: new Map(),
     diagnostics: {
       requestedCount: 100,
@@ -118,28 +116,16 @@ export async function getSemanticPaperCandidates(
     semanticMatches.map((match) => [match.paper_id, match.semantic_score]),
   );
 
-  const papers = await getPapersByIds(
-    semanticMatches.map((match) => match.paper_id),
-  );
-
-  if (!papers.length) {
-    return emptyResult({
-      requestedCount: matchCount,
-      rpcAttempted: true,
-      matchedCount: semanticMatches.length,
-      model,
-      fallbackReason: "no_papers_loaded",
-    });
-  }
+  const paperIds = semanticMatches.map((match) => match.paper_id);
 
   return {
-    papers,
+    paperIds,
     semanticScores,
     diagnostics: {
       requestedCount: matchCount,
       rpcAttempted: true,
       matchedCount: semanticMatches.length,
-      candidateCount: papers.length,
+      candidateCount: paperIds.length,
       model,
       fallbackReason: null,
       profileRefreshStatus: null,
