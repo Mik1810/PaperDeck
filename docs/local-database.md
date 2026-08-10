@@ -20,8 +20,8 @@ checkout. Then keep the remote Session-pooler URL in `DATABASE_ADMIN_URL` and
 point the normal local runtime at Docker:
 
 ```dotenv
-DATABASE_URL=postgresql://paperdeck:paperdeck_local_only@127.0.0.1:55432/paperdeck_test
-PAPERDECK_LOCAL_DATABASE_URL=postgresql://paperdeck:paperdeck_local_only@127.0.0.1:55432/paperdeck_test
+DATABASE_URL=postgresql://paperdeck:paperdeck_local_only@127.0.0.1:55432/paperdeck_local
+PAPERDECK_LOCAL_DATABASE_URL=postgresql://paperdeck:paperdeck_local_only@127.0.0.1:55432/paperdeck_local
 ```
 
 `DATABASE_ADMIN_URL` is read only by the catalog refresh command. Neither URL
@@ -33,7 +33,7 @@ is exposed to browser code.
 npm run db:local:refresh
 ```
 
-This command resets only `localhost/paperdeck_test`, then copies these public
+This command resets only `localhost/paperdeck_local`, then copies these public
 catalog tables from `DATABASE_ADMIN_URL`:
 
 - `taxonomy_topics`
@@ -59,11 +59,11 @@ Supabase.
 npm run test:e2e
 ```
 
-The command starts the container when not running in CI, resets the disposable
-database, loads `tests/fixtures/app-e2e.sql`, and starts Playwright. The fixture
+The command starts the container when not running in CI, resets the separate
+`localhost/paperdeck_test` database, loads `tests/fixtures/app-e2e.sql`, and starts Playwright. The fixture
 contains synthetic topics, embeddings, papers, authors, and external IDs. Test
-profiles and other private rows are created and deleted only inside this local
-database.
+profiles and other private rows are created and deleted only inside this test
+database. The `paperdeck_local` development snapshot is left untouched.
 
 CI uses the same engine and fixture without Supabase database or API secrets.
 Use the explicitly named live integration scripts only when validating a real

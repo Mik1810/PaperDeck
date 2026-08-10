@@ -29,6 +29,8 @@ printed or stored in this session file.
   database or API secrets.
 - Standard Playwright is guarded to refuse non-loopback databases and any
   database not named `paperdeck_test`.
+- The development snapshot lives in `paperdeck_local`, while Playwright resets
+  the separate `paperdeck_test` database in the same container.
 - Live Clerk Development and Supavisor probes remain explicit, separate tests.
 
 ## Implementation
@@ -59,5 +61,11 @@ printed or stored in this session file.
 - `npm run lint`: passed.
 - `npm run test:unit`: 123/123 passed.
 - `bash -n scripts/run-e2e-local.sh`: passed.
-- Docker-backed schema/bootstrap and Playwright validation: pending Docker
-  Desktop WSL integration on this machine.
+- Docker PostgreSQL 17 plus pgvector 0.8.0 catalog refresh: passed with 3,261
+  papers, 14,339 author rows, 69 topics, and zero copied profiles.
+- Targeted settings-interest Playwright regression: 2/2 passed across desktop
+  and mobile.
+- Full isolated `npm run test:e2e`: 74 passed and 6 expected Clerk-live skips
+  across desktop and mobile.
+- The separate `paperdeck_local` snapshot retained its catalog counts after
+  Playwright reset and exercised `paperdeck_test`.

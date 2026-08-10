@@ -11,6 +11,8 @@ const { loadEnvConfig } = require("@next/env") as typeof import("@next/env");
 const { Client } = pg;
 
 export const DEFAULT_LOCAL_DATABASE_URL =
+  "postgresql://paperdeck:paperdeck_local_only@127.0.0.1:55432/paperdeck_local";
+export const DEFAULT_TEST_DATABASE_URL =
   "postgresql://paperdeck:paperdeck_local_only@127.0.0.1:55432/paperdeck_test";
 
 const CATALOG_TABLES = [
@@ -23,7 +25,10 @@ const CATALOG_TABLES = [
   "public.topic_embeddings",
 ] as const;
 
-export function assertDisposableLocalDatabase(databaseUrl: string) {
+export function assertDisposableLocalDatabase(
+  databaseUrl: string,
+  expectedDatabase = "paperdeck_test",
+) {
   let parsed: URL;
 
   try {
@@ -40,10 +45,35 @@ export function assertDisposableLocalDatabase(databaseUrl: string) {
     );
   }
 
-  if (parsed.pathname !== "/paperdeck_test") {
+  if (parsed.pathname !== `/${expectedDatabase}`) {
     throw new Error(
-      "Refusing destructive database setup unless the database is named paperdeck_test.",
+      `Refusing destructive database setup unless the database is named ${expectedDatabase}.`,
     );
+  }
+
+  return parsed;
+}
+
+async function ensureLocalDatabase(databaseUrl: string, expectedDatabase: string) {
+  const parsed = assertDisposableLocalDatabase(databaseUrl, expectedDatabase);
+  const adminUrl = new URL(databaseUrl);
+  adminUrl.pathname = "/postgres";
+
+  const client = new Client({ connectionString: adminUrl.toString() });
+  await client.connect();
+  try {
+    const result = await client.query<{ exists: boolean }>(
+      "select exists(select 1 from pg_database where datname = $1) as exists",
+      [expectedDatabase],
+    );
+    if (!result.rows[0]?.exists) {
+      if (!["paperdeck_local", "paperdeck_test"].includes(expectedDatabase)) {
+        throw new Error("Refusing to create an unexpected local database.");
+      }
+      await client.query(`create database ${expectedDatabase}`);
+    }
+  } finally {
+    await client.end();
   }
 
   return parsed;
@@ -52,6 +82,9 @@ export function assertDisposableLocalDatabase(databaseUrl: string) {
 function connectionEnvironment(databaseUrl: string) {
   const parsed = new URL(databaseUrl);
   const sslMode = parsed.searchParams.get("sslmode");
+  const isLoopback = ["127.0.0.1", "localhost", "[::1]"].includes(
+    parsed.hostname,
+  );
 
   return {
     ...process.env,
@@ -59,7 +92,7 @@ function connectionEnvironment(databaseUrl: string) {
     PGHOST: parsed.hostname.replace(/^\[|\]$/g, ""),
     PGPASSWORD: decodeURIComponent(parsed.password),
     PGPORT: parsed.port || "5432",
-    PGSSLMODE: sslMode ?? (parsed.hostname === "localhost" ? "disable" : "require"),
+    PGSSLMODE: sslMode ?? (isLoopback ? "disable" : "require"),
     PGUSER: decodeURIComponent(parsed.username),
   };
 }
@@ -75,8 +108,8 @@ async function run(command: string, args: string[], env = process.env) {
   });
 }
 
-async function resetSchema(databaseUrl: string) {
-  assertDisposableLocalDatabase(databaseUrl);
+async function resetSchema(databaseUrl: string, expectedDatabase: string) {
+  assertDisposableLocalDatabase(databaseUrl, expectedDatabase);
 
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
@@ -141,6 +174,7 @@ async function applyFixture(databaseUrl: string) {
 }
 
 async function reportCatalog(databaseUrl: string, source: "synthetic" | "snapshot") {
+  const databaseName = new URL(databaseUrl).pathname.slice(1);
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
   try {
@@ -164,7 +198,7 @@ async function reportCatalog(databaseUrl: string, source: "synthetic" | "snapsho
     }
     console.log(
       JSON.stringify({
-        database: "paperdeck_test@localhost",
+        database: `${databaseName}@localhost`,
         source,
         papers: Number(counts.papers),
         authors: Number(counts.authors),
@@ -178,7 +212,7 @@ async function reportCatalog(databaseUrl: string, source: "synthetic" | "snapsho
 }
 
 async function prepareSynthetic(databaseUrl: string) {
-  await resetSchema(databaseUrl);
+  await resetSchema(databaseUrl, "paperdeck_test");
   await applyFixture(databaseUrl);
   await reportCatalog(databaseUrl, "synthetic");
 }
@@ -195,11 +229,12 @@ async function refreshCatalog(databaseUrl: string) {
   }
 
   const source = new URL(sourceUrl);
+  const localDatabaseName = new URL(databaseUrl).pathname.slice(1);
   if (["127.0.0.1", "localhost", "[::1]"].includes(source.hostname)) {
     throw new Error("The catalog snapshot source must be a remote database.");
   }
 
-  await resetSchema(databaseUrl);
+  await resetSchema(databaseUrl, "paperdeck_local");
 
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), "paperdeck-catalog-snapshot-"),
@@ -224,7 +259,7 @@ async function refreshCatalog(databaseUrl: string) {
       "pg_restore",
       [
         "--dbname",
-        "paperdeck_test",
+        localDatabaseName,
         "--data-only",
         "--no-owner",
         "--no-privileges",
@@ -244,15 +279,18 @@ async function refreshCatalog(databaseUrl: string) {
 async function main() {
   loadEnvConfig(process.cwd());
   const command = process.argv[2];
-  const databaseUrl =
-    process.env.PAPERDECK_LOCAL_DATABASE_URL ?? DEFAULT_LOCAL_DATABASE_URL;
-  assertDisposableLocalDatabase(databaseUrl);
 
   if (command === "prepare-test") {
+    const databaseUrl =
+      process.env.PAPERDECK_TEST_DATABASE_URL ?? DEFAULT_TEST_DATABASE_URL;
+    await ensureLocalDatabase(databaseUrl, "paperdeck_test");
     await prepareSynthetic(databaseUrl);
     return;
   }
   if (command === "refresh-catalog") {
+    const databaseUrl =
+      process.env.PAPERDECK_LOCAL_DATABASE_URL ?? DEFAULT_LOCAL_DATABASE_URL;
+    await ensureLocalDatabase(databaseUrl, "paperdeck_local");
     await refreshCatalog(databaseUrl);
     return;
   }

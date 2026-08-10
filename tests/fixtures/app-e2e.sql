@@ -7,7 +7,8 @@ values
   ('10000000-0000-4000-8000-000000000001', 'computer-science', 'Computer Science', null, 'fixture', null, 0, 1),
   ('10000000-0000-4000-8000-000000000002', 'artificial-intelligence', 'Artificial Intelligence', '10000000-0000-4000-8000-000000000001', 'fixture', 'cs.AI', 1, 2),
   ('10000000-0000-4000-8000-000000000003', 'machine-learning', 'Machine Learning', '10000000-0000-4000-8000-000000000002', 'fixture', 'cs.LG', 2, 3),
-  ('10000000-0000-4000-8000-000000000004', 'computer-vision', 'Computer Vision', '10000000-0000-4000-8000-000000000001', 'fixture', 'cs.CV', 1, 4);
+  ('10000000-0000-4000-8000-000000000004', 'computer-vision', 'Computer Vision', '10000000-0000-4000-8000-000000000001', 'fixture', 'cs.CV', 1, 4),
+  ('10000000-0000-4000-8000-000000000005', 'synthetic-methods', 'Synthetic Methods', '10000000-0000-4000-8000-000000000001', 'fixture', null, 2, 5);
 
 insert into public.topic_relations
   (source_topic_id, target_topic_id, relation_type, weight)

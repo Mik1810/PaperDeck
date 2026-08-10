@@ -13,6 +13,12 @@ test("accepts only the disposable local PaperDeck database", () => {
       "postgresql://paperdeck:local@localhost:55432/paperdeck_test",
     ),
   );
+  assert.doesNotThrow(() =>
+    assertDisposableLocalDatabase(
+      "postgresql://paperdeck:local@localhost:55432/paperdeck_local",
+      "paperdeck_local",
+    ),
+  );
 });
 
 test("rejects remote hosts and non-disposable database names", () => {
