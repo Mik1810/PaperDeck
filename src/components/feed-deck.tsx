@@ -160,20 +160,23 @@ export function FeedDeck({
   }, [queueSignature]);
 
   useEffect(() => {
-    const openedPaperId = sessionStorage.getItem(
-      OPENED_FEED_PAPER_STORAGE_KEY,
-    );
+    function dismissOpenedPaper() {
+      const openedPaperId = sessionStorage.getItem(
+        OPENED_FEED_PAPER_STORAGE_KEY,
+      );
 
-    if (!openedPaperId) {
-      return;
-    }
+      if (!openedPaperId) return;
 
-    const frameId = requestAnimationFrame(() => {
       sessionStorage.removeItem(OPENED_FEED_PAPER_STORAGE_KEY);
       setPaperDismissed(openedPaperId, true);
-    });
+    }
 
-    return () => cancelAnimationFrame(frameId);
+    dismissOpenedPaper();
+    window.addEventListener("pageshow", dismissOpenedPaper);
+
+    return () => {
+      window.removeEventListener("pageshow", dismissOpenedPaper);
+    };
   }, [setPaperDismissed]);
 
   const handleOpen = useCallback((paperId: string) => {

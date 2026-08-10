@@ -8,6 +8,16 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Replaced the live feed's unbounded full-catalog fallback with a bounded
+  two-phase ranking pipeline. Semantic and catalog retrieval now transfer only
+  lightweight score inputs for at most 300 catalog candidates, preserve topic
+  and interaction feedback, and hydrate authors, abstracts, summaries, and
+  presentation metadata only for the final 50 papers. Explicit Drizzle
+  projections also prevent paper embeddings and ingestion metadata from being
+  transferred by ordinary catalog and detail reads.
+- Made the feed consume its optimistic opened-paper marker on browser
+  `pageshow` as well as initial mount, so an instant mobile Back restoration
+  from the browser's page cache cannot briefly restore the paper just opened.
 - Upgraded Next.js from 16.2.9 to 16.3.0 and `fast-xml-parser` from 5.9.3
   to 5.10.1, removing all known vulnerabilities from the production dependency
   tree. The refreshed lockfile also resolves the affected nested Sharp,

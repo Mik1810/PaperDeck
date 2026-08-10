@@ -17,13 +17,22 @@ import {
   userPaperInteractions,
 } from "@/db/schema";
 import {
+  buildCandidateTopicWeights,
   buildSeenPaperIds,
   isRecommendationCandidateSource,
-  rankFeedPapers,
+  isRankingFeedbackAction,
+  rankFeedCandidates,
   type RankedPaper,
   type RankingInteraction,
+  type RankingPaperCandidate,
 } from "@/lib/ranking/feed-ranking";
-import { getAllPapers, getPapersByIds, getTopics } from "@/lib/repositories/catalog";
+import {
+  getCatalogRankingCandidates,
+  getPapersByIds,
+  getRankingCandidatesByIds,
+  getTopics,
+  type CatalogRankingCandidate,
+} from "@/lib/repositories/catalog";
 import { topicDisplayLabel } from "@/lib/arxiv-categories";
 import { isDefaultOnboardingTopic } from "@/lib/topic-taxonomy";
 import {
@@ -370,6 +379,67 @@ type LiveRankedFeedResult = {
     | null;
 };
 
+function mergeCatalogRankingCandidates(
+  ...candidateGroups: CatalogRankingCandidate[][]
+) {
+  const candidatesById = new Map<string, CatalogRankingCandidate>();
+
+  for (const candidate of candidateGroups.flat()) {
+    candidatesById.set(candidate.id, candidate);
+  }
+
+  return [...candidatesById.values()];
+}
+
+function toRankingCandidates(
+  candidates: CatalogRankingCandidate[],
+  topics: TopicRow[],
+): RankingPaperCandidate[] {
+  const topicsById = new Map(topics.map((topic) => [topic.id, topic]));
+
+  return candidates.map((candidate) => ({
+    id: candidate.id,
+    year: candidate.year ?? undefined,
+    citationCount: candidate.citationCount ?? undefined,
+    isClassic: candidate.isClassic,
+    topics: candidate.topicIds.flatMap((topicId) => {
+      const topic = topicsById.get(topicId);
+      if (!topic) return [];
+
+      return [{
+        id: topic.id,
+        label: topicDisplayLabel({
+          arxivCategory: topic.arxivCategory,
+          label: topic.label,
+        }),
+        parentId: topic.parentId ?? undefined,
+        arxivCategory: topic.arxivCategory ?? undefined,
+      }];
+    }),
+  }));
+}
+
+function hydrateRankedCandidates(
+  papersToHydrate: Paper[],
+  rankedCandidates: ReturnType<typeof rankFeedCandidates>,
+): RankedPaper[] {
+  const rankingByPaperId = new Map(
+    rankedCandidates.map((candidate) => [candidate.id, candidate]),
+  );
+
+  return papersToHydrate.flatMap((paper) => {
+    const ranking = rankingByPaperId.get(paper.id);
+    if (!ranking) return [];
+
+    return [{
+      ...paper,
+      recommendationReason: ranking.recommendationReason,
+      rankingScore: ranking.rankingScore,
+      rankingScoreComponents: ranking.rankingScoreComponents,
+    }];
+  });
+}
+
 async function getFeedState(ownerId: string): Promise<FeedState> {
   const [
     interests,
@@ -435,14 +505,50 @@ async function buildLiveRankedFeed(
     "semantic_retrieval",
     getSemanticPaperCandidates(ownerId),
   );
-  const hasSemanticCandidates = semanticCandidates.papers.length > 0;
-  const papers = hasSemanticCandidates
-    ? semanticCandidates.papers
-    : await measureAsync(timings, "paper_loading", getAllPapers());
+  const interactionPaperIds = state.interactions
+    .filter((interaction) => isRankingFeedbackAction(interaction.action))
+    .map((interaction) => interaction.paperId);
+  const initialCandidateRows = await measureAsync(
+    timings,
+    "candidate_loading",
+    getRankingCandidatesByIds([
+      ...semanticCandidates.paperIds,
+      ...interactionPaperIds,
+    ]),
+  );
+  const hasSemanticCandidates = initialCandidateRows.some((candidate) =>
+    semanticCandidates.semanticScores.has(candidate.id),
+  );
+  const initialRankingCandidates = toRankingCandidates(
+    initialCandidateRows,
+    topics,
+  );
+  const topicWeights = buildCandidateTopicWeights(
+    initialRankingCandidates,
+    topics,
+    selectedTopicIds,
+    state.interactions,
+  );
+  let catalogCandidates: CatalogRankingCandidate[] = [];
 
-  let rankedPapers = measureSync(timings, "ranking", () =>
-    rankFeedPapers(
-      papers,
+  if (!hasSemanticCandidates) {
+    catalogCandidates = await measureAsync(
+      timings,
+      "catalog_candidate_loading",
+      getCatalogRankingCandidates({
+        excludedPaperIds: [...state.seenIds],
+        topicWeights,
+      }),
+    );
+  }
+
+  let rankingCandidates = toRankingCandidates(
+    mergeCatalogRankingCandidates(initialCandidateRows, catalogCandidates),
+    topics,
+  );
+  let rankedCandidates = measureSync(timings, "ranking", () =>
+    rankFeedCandidates(
+      rankingCandidates,
       topics,
       selectedTopicIds,
       state,
@@ -453,21 +559,32 @@ async function buildLiveRankedFeed(
   let semanticFallbackReason: LiveRankedFeedResult["semanticFallbackReason"] =
     semanticCandidates.diagnostics.fallbackReason;
 
+  if (semanticCandidates.paperIds.length && !hasSemanticCandidates) {
+    semanticFallbackReason = "no_papers_loaded";
+  }
+
   if (
     hasSemanticCandidates &&
-    needsCatalogRecommendationFill(rankedPapers.length)
+    needsCatalogRecommendationFill(rankedCandidates.length)
   ) {
-    semanticFallbackReason = rankedPapers.length
+    semanticFallbackReason = rankedCandidates.length
       ? "insufficient_unseen_candidates"
       : "ranker_filtered_all";
-    const fallbackPapers = await measureAsync(
+    catalogCandidates = await measureAsync(
       timings,
-      "fallback_paper_loading",
-      getAllPapers(),
+      "catalog_candidate_loading",
+      getCatalogRankingCandidates({
+        excludedPaperIds: [...state.seenIds],
+        topicWeights,
+      }),
     );
-    rankedPapers = measureSync(timings, "fallback_ranking", () =>
-      rankFeedPapers(
-        fallbackPapers,
+    rankingCandidates = toRankingCandidates(
+      mergeCatalogRankingCandidates(initialCandidateRows, catalogCandidates),
+      topics,
+    );
+    rankedCandidates = measureSync(timings, "fallback_ranking", () =>
+      rankFeedCandidates(
+        rankingCandidates,
         topics,
         selectedTopicIds,
         state,
@@ -475,6 +592,20 @@ async function buildLiveRankedFeed(
       ),
     );
   }
+
+  const finalistCandidates = rankedCandidates.slice(
+    0,
+    INITIAL_FEED_RECOMMENDATION_COUNT,
+  );
+  const finalistPapers = await measureAsync(
+    timings,
+    "paper_hydration",
+    getPapersByIds(finalistCandidates.map((candidate) => candidate.id)),
+  );
+  const rankedPapers = hydrateRankedCandidates(
+    finalistPapers,
+    finalistCandidates,
+  );
 
   return {
     catalogFillCount: rankedPapers

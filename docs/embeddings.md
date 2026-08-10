@@ -322,8 +322,8 @@ Current TypeScript integration:
 src/lib/repositories/semantic-retrieval.ts
   -> loads latest user_profile_embeddings row
   -> calls match_papers_by_embedding
-  -> loads matched Paper rows
-  -> returns semantic scores and retrieval diagnostics to the existing reranker
+  -> returns matched paper IDs, semantic scores, and retrieval diagnostics
+  -> loads only lightweight ranking fields before the existing reranker
 ```
 
 The IVFFlat RPC uses ten probes for its 100-list index. The pgvector default of
@@ -332,9 +332,11 @@ has enough matching embeddings.
 
 If no user profile embedding exists, PaperDeck falls back to topic/feedback
 ranking over the shared catalog. If semantic retrieval succeeds but fewer than
-50 unseen candidates remain, PaperDeck reranks the full catalog with semantic
-scores retained for matched papers and fills the remaining deck from
-deduplicated catalog candidates. Each live score records `semantic` or
+50 unseen candidates remain, PaperDeck adds at most 300 lightweight catalog
+candidates selected from weighted personalized, recent, cited, and classic
+branches. The TypeScript reranker retains semantic scores for matched papers,
+then full presentation data is loaded only for its final 50 IDs. Each live
+score records `semantic` or
 `catalog_fallback` provenance, which new recommendation rows persist across
 cache reads. Historical rows without provenance retain their broader batch
 source label. A fresh cached batch with fewer than ten visible papers is treated

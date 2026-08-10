@@ -49,7 +49,7 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
 ## P0 - Mobile Latency And Triage Speed
 
 - [x] Remove `ensureSeedCatalog()` from runtime read paths.
-  - Current bottleneck: `getTopics()`, `getAllPapers()`, `getPaperById()`, and `getPapersByIds()` call `ensureSeedCatalog()`, which performs seed upserts/lookups during normal page loads.
+  - Original bottleneck: catalog read functions called `ensureSeedCatalog()`, which performed seed upserts/lookups during normal page loads.
   - Replace with an explicit seed command/script or migration-only seed step.
   - Success condition: feed/detail/library reads no longer write seed data during user requests.
   - Done 2026-07-02: read paths no longer call `ensureSeedCatalog()`; explicit seed command added as `npm run seed:catalog`.

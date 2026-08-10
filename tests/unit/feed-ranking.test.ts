@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test, { describe } from "node:test";
 import {
+  buildCandidateTopicWeights,
   buildSeenPaperIds,
   isRecommendationCandidateSource,
+  isRankingFeedbackAction,
+  rankFeedCandidates,
   rankFeedPapers,
 } from "../../src/lib/ranking/feed-ranking";
 import type { Paper } from "../../src/types/paper";
@@ -124,11 +127,56 @@ describe("rankFeedPapers score components", () => {
   });
 });
 
+test("lightweight ranking candidates retain feedback from hidden interaction papers", () => {
+  const ranked = rankFeedCandidates(
+    [
+      {
+        id: "already-read",
+        topics: [{ id: "topic-a", label: "Topic A" }],
+      },
+      {
+        id: "candidate",
+        topics: [{ id: "topic-a", label: "Topic A" }],
+        year: 2024,
+      },
+    ],
+    [{ id: "topic-a", parentId: null }],
+    new Set(),
+    {
+      seenIds: new Set(["already-read"]),
+      interactions: [{ action: "already_read", paperId: "already-read" }],
+    },
+  );
+
+  assert.deepEqual(ranked.map((candidate) => candidate.id), ["candidate"]);
+  assert.equal(ranked[0].rankingScoreComponents.feedback, 18);
+});
+
+test("candidate preselection weights match topic and feedback score multipliers", () => {
+  const weights = buildCandidateTopicWeights(
+    [{
+      id: "favorite",
+      topics: [{ id: "topic-a", label: "Topic A" }],
+    }],
+    [{ id: "topic-a", parentId: null }],
+    new Set(["topic-a"]),
+    [{ action: "favorite", paperId: "favorite" }],
+  );
+
+  assert.equal(weights.get("topic-a"), 126);
+});
+
 test("candidate provenance accepts only persisted live ranking sources", () => {
   assert.equal(isRecommendationCandidateSource("semantic"), true);
   assert.equal(isRecommendationCandidateSource("catalog_fallback"), true);
   assert.equal(isRecommendationCandidateSource("live_batch"), false);
   assert.equal(isRecommendationCandidateSource(null), false);
+});
+
+test("impression-only seen events are not loaded as feedback helpers", () => {
+  assert.equal(isRankingFeedbackAction("seen"), false);
+  assert.equal(isRankingFeedbackAction("favorite"), true);
+  assert.equal(isRankingFeedbackAction("not_interested"), true);
 });
 
 test("current favorites and Read later items remain hidden without interaction history", () => {

@@ -98,7 +98,9 @@ Kit and maintenance commands use the separate Session-pooler
 2. Move user-scoped reads (getFeedState, getLibraryPageData, etc.) to Clerk client
 3. Verify every migrated operation through the RLS-backed client before relying
    on it as the authorization boundary
-4. Keep admin functions (getAllPapers, getSemanticPaperCandidates, preloadRecommendations) on service role
+4. Keep shared-catalog and semantic retrieval functions
+   (`getCatalogRankingCandidates`, `getSemanticPaperCandidates`, and
+   `preloadInitialFeedRecommendations`) on the administrative server path
 
 The `requireOwnerId()` utility in `src/lib/repositories/owner-guard.ts` provides defense-in-depth for all service-role operations that touch user-owned data.
 
