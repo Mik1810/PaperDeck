@@ -88,7 +88,12 @@ coverage, and repetition gate; latency is reported separately as documented in
 
 ## Local Environment
 
-Copy `.env.example` to `.env.local` and fill in Clerk and Supabase keys. Set `NEXT_PUBLIC_PAPERDECK_DEV_AUTH=true` to bypass Clerk auth for local UI work (development only).
+Copy `.env.example` to `.env.local` and fill in Clerk and Supabase keys. Local
+application and browser testing use an isolated Docker PostgreSQL database;
+the setup, sanitized catalog refresh, and environment split are documented in
+[`docs/local-database.md`](./docs/local-database.md). Set
+`NEXT_PUBLIC_PAPERDECK_DEV_AUTH=true` to bypass Clerk auth for local UI work
+(development only).
 
 ## Testing
 
@@ -99,7 +104,10 @@ npm run lint
 npm run test:e2e
 ```
 
-The default Playwright run starts Next.js with `PAPERDECK_E2E_DEV_AUTH=true`, renders the core authenticated pages through the local dev-auth bypass, and skips Clerk redirect checks. To smoke-test real Clerk redirects and the sign-in page, run with coherent Clerk development keys and set `PAPERDECK_E2E_DEV_AUTH=false`.
+The default Playwright run starts PostgreSQL 17 with pgvector in Docker, resets
+only `localhost/paperdeck_test`, loads a deterministic synthetic fixture, and
+starts Next.js with `PAPERDECK_E2E_DEV_AUTH=true`. It never reads from or writes
+to Supabase. Live Clerk and Supavisor checks remain explicit integration tests.
 
 ## Database
 

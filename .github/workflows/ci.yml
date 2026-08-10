@@ -18,6 +18,20 @@ jobs:
   app-ci:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg17
+        env:
+          POSTGRES_DB: paperdeck_test
+          POSTGRES_PASSWORD: paperdeck_local_only
+          POSTGRES_USER: paperdeck
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U paperdeck -d paperdeck_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_replace_me' }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_replace_me' }}
@@ -25,11 +39,9 @@ jobs:
       NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
       NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: /feed
       NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: /onboarding
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL || '' }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || '' }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
-      DATABASE_MAX_CONNECTIONS: "1"
+      DATABASE_URL: postgresql://paperdeck:paperdeck_local_only@127.0.0.1:5432/paperdeck_test
+      PAPERDECK_TEST_DATABASE_URL: postgresql://paperdeck:paperdeck_local_only@127.0.0.1:5432/paperdeck_test
+      DATABASE_MAX_CONNECTIONS: "3"
       NEXT_PUBLIC_PAPERDECK_DEV_AUTH: "true"
       PAPERDECK_E2E_DEV_AUTH: "true"
       PAPERDECK_E2E_OWNER_ID: playwright-user-${{ github.run_id }}
@@ -63,20 +75,7 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Report E2E data availability
-        shell: bash
-        run: |
-          is_configured() {
-            [[ -n "$1" && "$1" != "replace_me" && "$1" != "dummy" && "$1" != *"replace-me"* ]]
-          }
-
-          if is_configured "$NEXT_PUBLIC_SUPABASE_URL" && is_configured "$SUPABASE_SERVICE_ROLE_KEY"; then
-            echo "Supabase-backed Playwright smoke tests will run."
-          else
-            echo "::notice::Supabase secrets are not configured; Supabase-backed Playwright smoke tests will be skipped by test guards."
-          fi
-
-      - name: Playwright smoke tests
+      - name: Isolated Playwright smoke tests
         run: npm run test:e2e
 
       - name: Summary

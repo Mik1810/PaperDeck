@@ -40,7 +40,10 @@
     "test:e2e:group-workspace": "bash scripts/test-research-group-workspace.sh",
     "test:migration:rls-auto-enable": "bash scripts/test-rls-auto-enable-migration.sh",
     "test:unit": "node --conditions react-server --import tsx --test tests/unit/*.test.ts",
-    "test:e2e": "playwright test",
+    "db:local:start": "docker compose up -d --wait database",
+    "db:local:refresh": "npm run db:local:start && TMPDIR=/tmp tsx scripts/local-database.ts refresh-catalog",
+    "db:test:prepare": "TMPDIR=/tmp tsx scripts/local-database.ts prepare-test",
+    "test:e2e": "bash scripts/run-e2e-local.sh",
     "test:e2e:clerk-cache": "playwright test --config=playwright.clerk-cache.config.ts",
     "typecheck": "tsc --noEmit"
   },

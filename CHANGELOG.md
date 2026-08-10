@@ -55,6 +55,13 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Isolated local development and standard Playwright CI from the shared
+  Supabase project. PostgreSQL 17 plus pgvector 0.8.0 now runs in Docker with a
+  loopback-only destructive guard; CI uses a deterministic synthetic catalog
+  without Supabase secrets, while an explicit catalog-only refresh copies no
+  profiles, collaboration hashes, interactions, playlists, groups, or
+  notifications from Production.
+
 - Defined the #99 shared-list contract: groups may be empty; papers are
   chronological without manual positions, reorder, or list revisions; members
   remove only their own additions while owner/admin may moderate any; and

@@ -9,6 +9,24 @@ const baseURL =
 const devAuth = process.env.PAPERDECK_E2E_DEV_AUTH ?? "true";
 const devOwnerId = process.env.PAPERDECK_E2E_OWNER_ID ?? "playwright-user";
 
+if (devAuth !== "false") {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("Dev-auth Playwright requires a local DATABASE_URL.");
+  }
+
+  const parsedDatabaseUrl = new URL(databaseUrl);
+  const localDatabaseHosts = new Set(["127.0.0.1", "localhost", "[::1]"]);
+  if (
+    !localDatabaseHosts.has(parsedDatabaseUrl.hostname) ||
+    parsedDatabaseUrl.pathname !== "/paperdeck_test"
+  ) {
+    throw new Error(
+      "Standard Playwright tests may only use localhost/paperdeck_test. Use an explicit live integration test for remote services.",
+    );
+  }
+}
+
 process.env.PAPERDECK_E2E_DEV_AUTH = devAuth;
 process.env.PAPERDECK_DEV_OWNER_ID = devOwnerId;
 
