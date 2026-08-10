@@ -51,7 +51,7 @@ After configuration:
 
 ```
 Scripts → createServiceRoleClient() → Supabase (RLS bypassed)
-App   → drizzle-orm → postgres-js → DATABASE_URL → Supabase Postgres
+App   → drizzle-orm → node-postgres → DATABASE_URL → Supabase Postgres
               |
         requireOwnerId() → filters owner_id manually
 ```

@@ -14,13 +14,13 @@ This project follows Semantic Versioning.
   and private `Read later` count subqueries, preserving the 500-paper limit and
   returning no workspace data after membership revocation.
 - Prevented Vercel serverless instances from exhausting Supabase's 15-client
-  Session pool: the Drizzle/Postgres.js client now defaults to one connection,
-  disables prepared statements for pooler compatibility, and uses bounded
-  connect/idle timeouts. The authenticated `/groups` route is now read-only
-  during rendering instead of updating the profile and provisioning `Read
-  later` on every visit. Production uses the authenticated, verified Session-pooler
-  recovery configuration; Transaction mode remains isolated to Preview until
-  an authenticated concurrency gate passes.
+  Session pool. The Drizzle runtime now uses a bounded node-postgres pool, which
+  queues excess work instead of protocol-pipelining multiple statements over a
+  Supavisor Transaction connection, and retains bounded connect/idle timeouts.
+  A read-only Transaction-pooler probe exercises both raw and real `/groups`
+  query shapes under concurrency without reporting identifiers. The
+  authenticated `/groups` route also remains read-only during rendering instead
+  of updating the profile and provisioning `Read later` on every visit.
 - Stabilized the research-group loading experience with a route-local retry
   boundary, an AppShell-consistent skeleton, disabled automatic prefetch for
   expensive group workspaces, and an E2E database-client limit matching

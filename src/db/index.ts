@@ -1,5 +1,5 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import * as schema from "./schema";
 import * as relations from "./relations";
 
@@ -22,14 +22,14 @@ function createDb() {
     throw new Error("DATABASE_URL is required for Drizzle client");
   }
 
-  const client = postgres(process.env.DATABASE_URL, {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
     max: databaseMaxConnections(),
-    prepare: false,
-    idle_timeout: 5,
-    connect_timeout: 10,
+    idleTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 10_000,
   });
 
-  return drizzle(client, { schema: { ...schema, ...relations } });
+  return drizzle(pool, { schema: { ...schema, ...relations } });
 }
 
 export const db = globalForDb.db ?? createDb();

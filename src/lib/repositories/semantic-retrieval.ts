@@ -69,7 +69,7 @@ async function matchPapersByEmbedding(
     sql`SELECT * FROM match_papers_by_embedding(${embeddingStr}::vector, ${matchCount}, ${embeddingModelFilter})`,
   );
 
-  return SemanticMatchRowArraySchema.parse(result);
+  return SemanticMatchRowArraySchema.parse(result.rows);
 }
 
 /** @admin */
