@@ -89,7 +89,7 @@ async function cleanupFixtures() {
 
 before(async () => {
   if (!databaseUrl) return;
-  sql = postgres(databaseUrl, { max: 3 });
+  sql = postgres(databaseUrl, { max: 3, prepare: false });
   await sql`
     insert into profiles (owner_id, display_name)
     values

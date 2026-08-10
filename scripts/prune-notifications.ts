@@ -31,13 +31,14 @@ function parseArgs() {
 }
 
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl =
+    process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required");
+    throw new Error("DATABASE_ADMIN_URL or DATABASE_URL is required");
   }
 
   const { batchSize, dryRun, maxBatches } = parseArgs();
-  const sql = postgres(databaseUrl, { max: 1 });
+  const sql = postgres(databaseUrl, { max: 1, prepare: false });
 
   try {
     if (dryRun) {

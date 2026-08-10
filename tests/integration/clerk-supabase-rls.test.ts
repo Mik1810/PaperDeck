@@ -31,7 +31,7 @@ async function asRole<T>(
 before(async () => {
   if (!databaseUrl) return;
 
-  sql = postgres(databaseUrl, { max: 1 });
+  sql = postgres(databaseUrl, { max: 1, prepare: false });
   await sql`
     insert into profiles (owner_id, display_name)
     values (${ownerA}, 'RLS owner A'), (${ownerB}, 'RLS owner B')
