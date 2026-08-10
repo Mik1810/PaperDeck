@@ -38,6 +38,20 @@ test("member permissions, preference, and leave flow", async ({ page }) => {
   await page.getByRole("button", { name: "Leave group" }).click();
   await expect(page).toHaveURL(/\/groups$/);
   await expect(page.getByText("Local research group")).toHaveCount(0);
+
+  await page.goto(seededGroupPath, {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(page.getByRole("heading", { level: 1, name: "404" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 2,
+      name: "This page could not be found.",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Local research group" }),
+  ).toHaveCount(0);
 });
 
 test("owner workspace operations preserve personal ranking isolation", async ({ page }) => {
