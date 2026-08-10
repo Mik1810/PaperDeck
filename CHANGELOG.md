@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Upgraded Next.js from 16.2.9 to 16.3.0 and `fast-xml-parser` from 5.9.3
+  to 5.10.1, removing all known vulnerabilities from the production dependency
+  tree. The refreshed lockfile also resolves the affected nested Sharp,
+  PostCSS, Nano ID, brace-expansion, and JS-YAML versions without forced or
+  breaking dependency changes.
 - Collapsed `/groups/[groupId]` from an approximately 17-statement repository
   fan-out into one authorized PostgreSQL statement. A materialized group-access
   CTE now gates correlated paper, contributor, member, notification-preference,
