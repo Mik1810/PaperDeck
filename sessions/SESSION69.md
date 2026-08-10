@@ -80,5 +80,17 @@
   loads, with zero failures, zero mutations, and p95 1.675 seconds.
 - Sanitized Preview runtime-log inspection found zero error events after the
   deployment and smoke request.
-- Production promotion remains pending; the existing Session-pooler deployment
-  remains the rollback target until final verification completes.
+- PR #135 was merged to `main` as `98876ae` without waiting for queued CI; all
+  local and Preview gates had already passed.
+- Vercel Production received the Transaction-pooler connection and
+  `DATABASE_MAX_CONNECTIONS=3`. Deployment
+  `dpl_AqgQrcspz3ArbgEmH5fUHV4oS6kk` reached Ready and the custom domain was
+  confirmed to resolve to it. The previous Ready Session deployment
+  `dpl_Csn4aprcRvcZ1uGZYAysYoieTJQ3` remains the immediate rollback target.
+- Public Production smoke checks returned HTTP 200 for the root and `/groups`.
+  The read-only gate executed with the actual Production environment completed
+  60/60 `/groups` loads, with zero failures, zero mutations, and p95 1.915
+  seconds.
+- Sanitized Production runtime logs contained zero error events. The final
+  PostgreSQL activity audit found zero active queries, zero active queries older
+  than ten seconds, and zero active `ClientRead` waits.

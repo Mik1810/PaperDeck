@@ -91,14 +91,14 @@ LOG_LEVEL=info
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
 Local development may keep the Supabase Session pooler on port `5432` and omit
 `DATABASE_MAX_CONNECTIONS`; the application default remains one connection, so
-no `.env.local` change is required. Vercel Preview is the promotion gate for the
-Supabase Transaction pooler on port `6543`; set
-`DATABASE_MAX_CONNECTIONS=3` there so a Fluid Compute instance can serve
-concurrent work while node-postgres queues excess queries safely. After the
-read-only concurrency probe and Preview runtime checks pass, Production can use
-the same port and limit. Drizzle uses node-postgres without named prepared
-statements, which is compatible with Transaction mode. Both modes retain a
-five-second idle timeout and ten-second connection timeout. The Supabase role
+no `.env.local` change is required. Vercel Preview and Production use the
+Supabase Transaction pooler on port `6543` with
+`DATABASE_MAX_CONNECTIONS=3`, so a Fluid Compute instance can serve concurrent
+work while node-postgres queues excess queries safely. Drizzle uses
+node-postgres without named prepared statements, which is compatible with
+Transaction mode. Both connection modes retain a five-second idle timeout and
+ten-second connection timeout. Keep the last Ready Session-pooler Production
+deployment recorded as the immediate rollback target. The Supabase role
 currently enforces its existing two-minute statement timeout; lowering that
 shared setting requires a separate workload audit because ingestion and
 maintenance queries use the same database role.
