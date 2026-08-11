@@ -276,7 +276,6 @@ export const userPaperInteractions = pgTable("user_paper_interactions", {
 	index("user_paper_interactions_owner_created_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.createdAt.desc().nullsFirst().op("text_ops")),
 	index("user_paper_interactions_owner_paper_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.paperId.asc().nullsLast().op("uuid_ops")),
 	index("user_paper_interactions_recommendation_impression_idx").using("btree", table.recommendationImpressionId.asc().nullsLast().op("uuid_ops")),
-	uniqueIndex("user_paper_interactions_owner_paper_action_key").on(table.ownerId, table.paperId, table.action),
 	foreignKey({
 			columns: [table.ownerId],
 			foreignColumns: [profiles.ownerId],

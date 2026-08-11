@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assertDisposableLocalDatabase } from "../../scripts/local-database";
+import {
+  assertDisposableLocalDatabase,
+  orderedMigrationNames,
+} from "../../scripts/local-database";
 
 test("accepts only the disposable local PaperDeck database", () => {
   assert.doesNotThrow(() =>
@@ -35,5 +38,20 @@ test("rejects remote hosts and non-disposable database names", () => {
         "postgresql://paperdeck:local@127.0.0.1:55432/postgres",
       ),
     /database is named paperdeck_test/,
+  );
+});
+
+test("applies only timestamped SQL migrations in deterministic order", () => {
+  assert.deepEqual(
+    orderedMigrationNames([
+      "README.md",
+      "20260714210105_add_search_indexes.sql",
+      "20260701181000_add_ingestion_cursors.sql",
+      "draft.sql",
+    ]),
+    [
+      "20260701181000_add_ingestion_cursors.sql",
+      "20260714210105_add_search_indexes.sql",
+    ],
   );
 });

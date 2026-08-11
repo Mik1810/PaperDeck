@@ -68,3 +68,17 @@ database. The `paperdeck_local` development snapshot is left untouched.
 CI uses the same engine and fixture without Supabase database or API secrets.
 Use the explicitly named live integration scripts only when validating a real
 Clerk Development or Supavisor boundary.
+
+## Schema history and parity gate
+
+`supabase/schema.sql` is the immutable initial PaperDeck schema, not a current
+schema dump. Every local and CI reset applies that baseline first and then every
+timestamped SQL file in `supabase/migrations/`, in lexical order. This mirrors
+the migration history used by the hosted database and prevents a later feature
+from existing remotely while being absent from Docker.
+
+`npm run db:test:prepare` is also an explicit CI gate. It rebuilds only the
+guarded loopback database named `paperdeck_test`, verifies the catalog-search
+extension, generated column and indexes, and executes the real full-text/fuzzy
+search expression before loading the synthetic fixture. A missing or invalid
+migration fails the job before the application build and Playwright suite.
