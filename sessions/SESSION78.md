@@ -33,13 +33,13 @@ ranking-relevant collection state is removed.
 
 ## Safety
 
-The new migration was created through the Supabase CLI and applied only to the
-disposable local Docker test database. Its eventual hosted execution will
-increment the generation of profiles that already have an embedding, without
-deleting user or application data. A hosted read-only audit counted 144
-affected profiles and confirmed that the migration is not applied; no user
-identifiers, embeddings, credentials, or personal data were read or reported.
-Hosted migration remains pending explicit approval.
+The new migration was created through the Supabase CLI and first applied to the
+disposable local Docker test database. A hosted read-only audit counted 144
+affected profiles without reading or reporting user identifiers, embeddings,
+credentials, or personal data. After explicit approval, the migration was
+applied to the hosted Production database without seeds, roles, row deletion,
+or collection-data changes. It incremented only the profile input-generation
+counter for the 144 profiles with an existing embedding.
 
 ## Validation
 
@@ -55,4 +55,12 @@ Hosted migration remains pending explicit approval.
   Chrome (2 passed).
 - Targeted playlist-picker retry after making database completion explicit:
   passed on Chromium and mobile Chrome (2 passed).
+- Hosted migration dry-run proposed exactly
+  `20260811225018_all_playlists_profile_generation.sql`, with zero seeds and
+  zero roles.
+- Post-deploy read-only verification: one migration-history record, both
+  functions remain security-invoker with an empty `search_path`, all three
+  triggers are enabled, and 144 of 144 existing embeddings are stale as
+  intended.
+- Post-deploy migration dry-run: zero pending migrations.
 - `git diff --check`: passed.
