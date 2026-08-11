@@ -35,11 +35,10 @@ This project follows Semantic Versioning.
   A read-only Transaction-pooler probe exercises both raw and real `/groups`
   query shapes under concurrency without reporting identifiers. The
   authenticated `/groups` route also remains read-only during rendering instead
-  of updating the profile and provisioning `Read later` on every visit. Local
-  development, Preview, and Production now use Transaction mode with a
-  three-connection application pool. Drizzle Kit and maintenance scripts use a
-  separate Session-pooler URL, preventing administrative traffic from weakening
-  runtime parity.
+  of updating the profile and provisioning `Read later` on every visit. Preview
+  and Production use Transaction mode with a three-connection application pool;
+  isolated local development and CI use Docker PostgreSQL. Drizzle Kit and
+  maintenance scripts use a separate Session-pooler URL.
 - Stabilized the research-group loading experience with a route-local retry
   boundary, an AppShell-consistent skeleton, disabled automatic prefetch for
   expensive group workspaces, and an E2E database-client limit matching
@@ -65,6 +64,11 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Added a secret-safe hosted database configuration gate: Vercel Preview and
+  Production builds now fail before deployment unless the runtime uses the
+  Supabase shared Transaction pooler on port 6543 with a three-connection
+  application pool. Local development and standard CI remain on their isolated
+  Docker databases.
 - Isolated local development and standard Playwright CI from the shared
   Supabase project. PostgreSQL 17 plus pgvector 0.8.0 now runs in Docker with a
   loopback-only destructive guard; CI uses a deterministic synthetic catalog

@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node --import tsx scripts/validate-hosted-database-config.ts",
     "build": "next build",
     "ingest:arxiv": "tsx scripts/ingest-arxiv.ts",
     "enrich:semantic-scholar": "tsx scripts/enrich-semantic-scholar.ts",

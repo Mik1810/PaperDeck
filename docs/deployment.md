@@ -90,21 +90,27 @@ LOG_LEVEL=info
   Production-only custom-domain value blindly into Preview.
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` in client-side code.
-The Next.js runtime uses the Supabase Transaction pooler on port `6543` with
-`DATABASE_MAX_CONNECTIONS=3` in local development, Vercel Preview, and Vercel
-Production. This keeps pooling semantics consistent while node-postgres queues
-work beyond the local pool limit. Drizzle Kit and maintenance scripts prefer
-`DATABASE_ADMIN_URL`, which uses the Session pooler on port `5432`; they fall
-back to `DATABASE_URL` only for compatibility with environments that have not
-yet added the administrative variable. Drizzle uses node-postgres without named
-prepared statements, and direct Postgres.js test clients explicitly disable
-prepared statements, so Transaction mode remains supported. The application
-pool retains its five-second idle and ten-second connection timeouts, while
-maintenance scripts explicitly close their one-connection clients. Keep the
-last Ready Session-pooler Production deployment recorded as the immediate
-rollback target. The Supabase role currently enforces its existing two-minute
-statement timeout; lowering that shared setting requires a separate workload
-audit because ingestion and maintenance queries use the same database role.
+The hosted Next.js runtime uses the Supabase Transaction pooler on port `6543`
+with `DATABASE_MAX_CONNECTIONS=3` in Vercel Preview and Production.
+Node-postgres queues work beyond that application-pool limit. A build-time and
+runtime guard rejects a hosted Session-pooler URL, a non-Supabase shared-pooler
+host, or a different connection limit without printing the configured URL.
+Local development and standard CI intentionally use the isolated Docker
+databases described in [`local-database.md`](./local-database.md), rather than
+the shared Supabase project.
+
+Drizzle Kit and maintenance scripts prefer `DATABASE_ADMIN_URL`, which uses the
+Session pooler on port `5432`; they fall back to `DATABASE_URL` only for
+compatibility with environments that have not yet added the administrative
+variable. Drizzle uses node-postgres without named prepared statements, and
+direct Postgres.js test clients explicitly disable prepared statements, so
+Transaction mode remains supported. The application pool retains its
+five-second idle and ten-second connection timeouts, while maintenance scripts
+explicitly close their one-connection clients. Keep the last Ready
+Session-pooler Production deployment recorded as the immediate rollback target.
+The Supabase role currently enforces its existing two-minute statement timeout;
+lowering that shared setting requires a separate workload audit because
+ingestion and maintenance queries use the same database role.
 
 Run the secret-safe, read-only Transaction gate from a configured local
 checkout with:
