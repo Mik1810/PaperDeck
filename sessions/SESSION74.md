@@ -56,3 +56,6 @@
 - `npm run lint`: passed.
 - `npm run typecheck`: passed.
 - `npm run build`: passed against the isolated local database.
+- Vercel Preview deployment: Ready. The hosted prebuild gate accepted the
+  encrypted Preview configuration, confirming shared Transaction port 6543 and
+  a three-connection application pool without reporting the connection URL.
