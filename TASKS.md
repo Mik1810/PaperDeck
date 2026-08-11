@@ -391,7 +391,7 @@ Sources: `sessions/SESSION2.md`, `sessions/SESSION3.md`, `sessions/SESSION4.md`,
   - Do not ingest publisher PDFs or copyrighted full text by default.
   - Start from metadata and abstract RAG before full text.
 
-- [ ] Add personal notes on papers.
+- [x] Add personal notes on papers.
   - Private by default.
   - Attach notes to a paper and optionally to a playlist.
 
