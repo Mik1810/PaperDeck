@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { HeartOff, Layers } from "lucide-react";
-import { toggleFavoriteAction } from "@/app/actions";
+import { removeFavoriteAction } from "@/app/actions";
 import { PaperListItem } from "@/components/paper-list-item";
 import { PlaylistPapers } from "@/components/playlist-papers";
 import {
@@ -213,7 +213,7 @@ export function LibraryWorkspace({
 
   async function removeFavorite(formData: FormData) {
     const paperId = String(formData.get("paperId") ?? "");
-    await toggleFavoriteAction(formData);
+    await removeFavoriteAction(formData);
     setBackgroundData((current) =>
       current
         ? {

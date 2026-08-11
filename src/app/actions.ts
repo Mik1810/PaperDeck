@@ -8,8 +8,7 @@ import {
   ensureUserProfile,
   recordPaperInteraction,
   saveSelectedTopics,
-  toggleReadLater,
-  toggleFavorite,
+  setFavoriteState,
   createPlaylist,
   createPlaylistWithPaper,
   renamePlaylist,
@@ -494,20 +493,11 @@ export async function dismissPaperAction(formData: FormData) {
   revalidatePath(sourcePathFrom(formData, "/feed"));
 }
 
-export async function toggleFavoriteAction(formData: FormData) {
+export async function removeFavoriteAction(formData: FormData) {
   const ownerId = await requireOwnerId();
   const paperId = requirePaperId(formData);
 
-  await toggleFavorite(ownerId, paperId);
-
-  revalidatePath(sourcePathFrom(formData, "/feed"));
-}
-
-export async function toggleReadLaterAction(formData: FormData) {
-  const ownerId = await requireOwnerId();
-  const paperId = requirePaperId(formData);
-
-  await toggleReadLater(ownerId, paperId);
+  await setFavoriteState(ownerId, paperId, false);
 
   revalidatePath(sourcePathFrom(formData, "/feed"));
 }

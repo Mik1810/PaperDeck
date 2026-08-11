@@ -1448,71 +1448,133 @@ export async function recordPaperInteraction(
 }
 
 /** @user-scoped */
-export async function toggleFavorite(
+export async function setFavoriteState(
   ownerId: string,
   paperId: string,
+  selected: boolean,
   options: InteractionRecordOptions = {},
 ) {
-  const [created] = await db
-    .insert(favorites)
-    .values({ ownerId, paperId })
-    .onConflictDoNothing({ target: [favorites.ownerId, favorites.paperId] })
-    .returning({ paperId: favorites.paperId });
+  return db.transaction(async (tx) => {
+    if (!selected) {
+      const removed = await tx
+        .delete(favorites)
+        .where(
+          and(
+            eq(favorites.ownerId, ownerId),
+            eq(favorites.paperId, paperId),
+          ),
+        )
+        .returning({ paperId: favorites.paperId });
+      return { changed: removed.length > 0, selected: false };
+    }
 
-  if (created) {
-    await recordPaperInteraction(ownerId, paperId, "favorite", "feed", options);
-    return;
-  }
+    const [created] = await tx
+      .insert(favorites)
+      .values({ ownerId, paperId })
+      .onConflictDoNothing({ target: [favorites.ownerId, favorites.paperId] })
+      .returning({ paperId: favorites.paperId });
 
-  await db
-    .delete(favorites)
-    .where(
-      and(
-        eq(favorites.ownerId, ownerId),
-        eq(favorites.paperId, paperId),
-      ),
-    );
+    if (created) {
+      await tx.insert(userPaperInteractions).values({
+        ownerId,
+        paperId,
+        recommendationImpressionId: options.recommendationImpressionId ?? null,
+        action: "favorite",
+        context: "feed",
+      });
+    }
+
+    return { changed: Boolean(created), selected: true };
+  });
 }
 
 /** @user-scoped */
-export async function toggleReadLater(
+export async function setReadLaterState(
   ownerId: string,
   paperId: string,
+  selected: boolean,
   options: InteractionRecordOptions = {},
 ) {
-  const playlistId = await ensureReadLaterPlaylist(ownerId);
+  return db.transaction(async (tx) => {
+    if (!selected) {
+      const existingPlaylist = await tx
+        .select({ id: playlists.id })
+        .from(playlists)
+        .where(
+          and(
+            eq(playlists.ownerId, ownerId),
+            eq(playlists.name, "Read later"),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      const playlistId = existingPlaylist[0]?.id;
 
-  const [created] = await db
-    .insert(playlistItems)
-    .values({
-      playlistId,
-      paperId,
-      position: 0,
-    })
-    .onConflictDoNothing({
-      target: [playlistItems.playlistId, playlistItems.paperId],
-    })
-    .returning({ paperId: playlistItems.paperId });
+      if (!playlistId) {
+        return { changed: false, selected: false };
+      }
 
-  if (created) {
-    await recordPaperInteraction(
-      ownerId,
-      paperId,
-      "save_to_playlist",
-      "feed",
-      options,
-    );
-    return;
-  }
+      const removed = await tx
+        .delete(playlistItems)
+        .where(
+          and(
+            eq(playlistItems.playlistId, playlistId),
+            eq(playlistItems.paperId, paperId),
+          ),
+        )
+        .returning({ paperId: playlistItems.paperId });
+      return { changed: removed.length > 0, selected: false };
+    }
 
-  await db
-    .delete(playlistItems)
-    .where(
-      and(
-        eq(playlistItems.playlistId, playlistId),
-        eq(playlistItems.paperId, paperId),
-      ),
-    );
+    const [createdPlaylist] = await tx
+      .insert(playlists)
+      .values({
+        ownerId,
+        name: "Read later",
+        description: "Default private queue for papers to revisit.",
+        isDefault: true,
+      })
+      .onConflictDoNothing({ target: [playlists.ownerId, playlists.name] })
+      .returning({ id: playlists.id });
+    const existingPlaylist = createdPlaylist
+      ? null
+      : await tx
+          .select({ id: playlists.id })
+          .from(playlists)
+          .where(
+            and(
+              eq(playlists.ownerId, ownerId),
+              eq(playlists.name, "Read later"),
+            ),
+          )
+          .limit(1)
+          .for("update");
+    const playlistId = createdPlaylist?.id ?? existingPlaylist?.[0]?.id;
+
+    if (!playlistId) {
+      throw new Error("Find Read later playlist after conflict: missing saved row");
+    }
+
+    const [created] = await tx
+      .insert(playlistItems)
+      .values({ playlistId, paperId, position: 0 })
+      .onConflictDoNothing({
+        target: [playlistItems.playlistId, playlistItems.paperId],
+      })
+      .returning({ paperId: playlistItems.paperId });
+
+    if (created) {
+      await tx.insert(userPaperInteractions).values({
+        ownerId,
+        paperId,
+        recommendationImpressionId: options.recommendationImpressionId ?? null,
+        action: "save_to_playlist",
+        context: "feed",
+      });
+    }
+
+    return { changed: Boolean(created), selected: true };
+  });
 }
 
 /** @user-scoped */
@@ -1600,33 +1662,13 @@ export async function setPaperPlaylistMembership(
       .returning({ paperId: playlistItems.paperId });
 
     if (created) {
-      await tx
-        .select({ ownerId: profiles.ownerId })
-        .from(profiles)
-        .where(eq(profiles.ownerId, ownerId))
-        .limit(1)
-        .for("update");
-      const existingSave = await tx
-        .select({ id: userPaperInteractions.id })
-        .from(userPaperInteractions)
-        .where(
-          and(
-            eq(userPaperInteractions.ownerId, ownerId),
-            eq(userPaperInteractions.paperId, paperId),
-            eq(userPaperInteractions.action, "save_to_playlist"),
-          ),
-        )
-        .limit(1);
-      if (!existingSave.length) {
-        await tx.insert(userPaperInteractions).values({
-          ownerId,
-          paperId,
-          recommendationImpressionId:
-            options.recommendationImpressionId ?? null,
-          action: "save_to_playlist",
-          context,
-        });
-      }
+      await tx.insert(userPaperInteractions).values({
+        ownerId,
+        paperId,
+        recommendationImpressionId: options.recommendationImpressionId ?? null,
+        action: "save_to_playlist",
+        context,
+      });
     }
 
     return { created: Boolean(created), selected: true };
@@ -1642,12 +1684,6 @@ export async function createPlaylistWithPaper(
   options: InteractionRecordOptions = {},
 ) {
   return db.transaction(async (tx) => {
-    await tx
-      .select({ ownerId: profiles.ownerId })
-      .from(profiles)
-      .where(eq(profiles.ownerId, ownerId))
-      .limit(1)
-      .for("update");
     const [playlist] = await tx
       .insert(playlists)
       .values({ ownerId, name, isDefault: false })
@@ -1658,26 +1694,13 @@ export async function createPlaylistWithPaper(
       paperId,
       position: 0,
     });
-    const existingSave = await tx
-      .select({ id: userPaperInteractions.id })
-      .from(userPaperInteractions)
-      .where(
-        and(
-          eq(userPaperInteractions.ownerId, ownerId),
-          eq(userPaperInteractions.paperId, paperId),
-          eq(userPaperInteractions.action, "save_to_playlist"),
-        ),
-      )
-      .limit(1);
-    if (!existingSave.length) {
-      await tx.insert(userPaperInteractions).values({
-        ownerId,
-        paperId,
-        recommendationImpressionId: options.recommendationImpressionId ?? null,
-        action: "save_to_playlist",
-        context,
-      });
-    }
+    await tx.insert(userPaperInteractions).values({
+      ownerId,
+      paperId,
+      recommendationImpressionId: options.recommendationImpressionId ?? null,
+      action: "save_to_playlist",
+      context,
+    });
 
     return {
       id: playlist.id,

@@ -8,6 +8,10 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made Favorite and Read later mutations atomic and retry-safe. Clients now
+  send an explicit ON/OFF target instead of a toggle, collection state and its
+  append-only interaction event commit in one transaction, duplicate retries
+  are no-ops, and profile refreshes are skipped when state did not change.
 - Made local Docker and CI database resets apply the immutable initial schema
   followed by the complete ordered Supabase migration history. The CI parity
   gate now verifies the full-text/trigram search column, extension, indexes and

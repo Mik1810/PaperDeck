@@ -16,7 +16,12 @@ describe("submitDeckAction", () => {
       return Response.json({ action: "favorite", ok: true });
     };
 
-    await submitDeckAction("favorite", "paper-1", {}, fetchImpl);
+    await submitDeckAction(
+      "favorite",
+      "paper-1",
+      { selected: true },
+      fetchImpl,
+    );
 
     assert.equal(calls.length, 1);
     assert.equal(calls[0].input, "/api/deck");
@@ -24,6 +29,7 @@ describe("submitDeckAction", () => {
     assert.deepEqual(JSON.parse(calls[0].init?.body as string), {
       action: "favorite",
       paperId: "paper-1",
+      selected: true,
     });
   });
 
@@ -51,7 +57,7 @@ describe("submitDeckAction", () => {
   test("rejects failed API responses", async () => {
     await assert.rejects(
       () =>
-        submitDeckAction("read_later", "paper-1", {}, async () =>
+        submitDeckAction("read_later", "paper-1", { selected: true }, async () =>
           Response.json(
             { error: "Persistence failed", ok: false },
             { status: 500 },
@@ -73,10 +79,17 @@ describe("submitDeckAction", () => {
   test("throws on network error", async () => {
     await assert.rejects(
       () =>
-        submitDeckAction("favorite", "paper-1", {}, async () => {
+        submitDeckAction("favorite", "paper-1", { selected: true }, async () => {
           throw new TypeError("fetch failed");
         }),
       /fetch failed/,
+    );
+  });
+
+  test("rejects collection mutations without an explicit target state", async () => {
+    await assert.rejects(
+      () => submitDeckAction("favorite", "paper-1"),
+      /requires an explicit target state/,
     );
   });
 });

@@ -150,6 +150,21 @@ test.describe("deck API mutations", () => {
     expect(body.error).toContain("Unknown action");
   });
 
+  test("requires an explicit target state for collection mutations", async ({
+    request,
+  }) => {
+    test.skip(!devAuthEnabled, "Requires dev auth.");
+    test.skip(!hasDb, "Requires DATABASE_URL.");
+
+    const paperId = await withDb(getSeedPaperId);
+    const response = await request.post("/api/deck", {
+      data: { action: "favorite", paperId },
+    });
+
+    expect(response.status()).toBe(400);
+    expect((await response.json()).error).toContain("Missing selected state");
+  });
+
   test("accepts dismiss action", async ({ request }) => {
     test.skip(!devAuthEnabled, "Requires dev auth.");
     test.skip(!hasDb, "Requires DATABASE_URL.");
@@ -165,42 +180,114 @@ test.describe("deck API mutations", () => {
     expect(body.action).toBe("dismiss");
   });
 
-  test("toggles favorite", async ({ request }) => {
+  test("sets favorite idempotently across ON, OFF, and retry", async ({
+    request,
+  }) => {
     test.skip(!devAuthEnabled, "Requires dev auth.");
     test.skip(!hasDb, "Requires DATABASE_URL.");
 
     const paperId = await withDb(getSeedPaperId);
-
-    const fav1 = await request.post("/api/deck", {
-      data: { action: "favorite", paperId },
+    await withDb(async (sql) => {
+      await sql`delete from favorites where owner_id = ${devOwnerId} and paper_id = ${paperId}`;
+      await sql`delete from user_paper_interactions where owner_id = ${devOwnerId} and paper_id = ${paperId} and action = 'favorite'`;
     });
-    expect(fav1.status()).toBe(200);
-    expect((await fav1.json()).ok).toBe(true);
 
-    const fav2 = await request.post("/api/deck", {
-      data: { action: "favorite", paperId },
-    });
-    expect(fav2.status()).toBe(200);
-    expect((await fav2.json()).ok).toBe(true);
+    const expectedChanges = [true, false, true, false, true];
+    for (const [index, selected] of [true, true, false, false, true].entries()) {
+      const response = await request.post("/api/deck", {
+        data: { action: "favorite", paperId, selected },
+      });
+      expect(response.status()).toBe(200);
+      expect(await response.json()).toMatchObject({
+        changed: expectedChanges[index],
+        ok: true,
+        selected,
+      });
+    }
+
+    const state = await withDb(async (sql) => sql<{
+      favorites: number;
+      interactions: number;
+    }[]>`
+      select
+        (select count(*)::int from favorites where owner_id = ${devOwnerId} and paper_id = ${paperId}) as favorites,
+        (select count(*)::int from user_paper_interactions where owner_id = ${devOwnerId} and paper_id = ${paperId} and action = 'favorite') as interactions
+    `);
+    expect(state[0]).toEqual({ favorites: 1, interactions: 2 });
   });
 
-  test("toggles read later", async ({ request }) => {
+  test("sets Read later idempotently across ON, OFF, and retry", async ({
+    request,
+  }) => {
     test.skip(!devAuthEnabled, "Requires dev auth.");
     test.skip(!hasDb, "Requires DATABASE_URL.");
 
     const paperId = await withDb(getSeedPaperId);
-
-    const rl1 = await request.post("/api/deck", {
-      data: { action: "read_later", paperId },
+    await withDb(async (sql) => {
+      await sql`delete from playlist_items where paper_id = ${paperId} and playlist_id in (select id from playlists where owner_id = ${devOwnerId} and name = 'Read later')`;
+      await sql`delete from user_paper_interactions where owner_id = ${devOwnerId} and paper_id = ${paperId} and action = 'save_to_playlist'`;
     });
-    expect(rl1.status()).toBe(200);
-    expect((await rl1.json()).ok).toBe(true);
 
-    const rl2 = await request.post("/api/deck", {
-      data: { action: "read_later", paperId },
+    const expectedChanges = [true, false, true, false, true];
+    for (const [index, selected] of [true, true, false, false, true].entries()) {
+      const response = await request.post("/api/deck", {
+        data: { action: "read_later", paperId, selected },
+      });
+      expect(response.status()).toBe(200);
+      expect(await response.json()).toMatchObject({
+        changed: expectedChanges[index],
+        ok: true,
+        selected,
+      });
+    }
+
+    const state = await withDb(async (sql) => sql<{
+      interactions: number;
+      read_later: number;
+    }[]>`
+      select
+        (select count(*)::int from playlist_items where paper_id = ${paperId} and playlist_id in (select id from playlists where owner_id = ${devOwnerId} and name = 'Read later')) as read_later,
+        (select count(*)::int from user_paper_interactions where owner_id = ${devOwnerId} and paper_id = ${paperId} and action = 'save_to_playlist') as interactions
+    `);
+    expect(state[0]).toEqual({ interactions: 2, read_later: 1 });
+  });
+
+  test("rolls back collection state when interaction recording fails", async ({
+    request,
+  }) => {
+    test.skip(!devAuthEnabled, "Requires dev auth.");
+    test.skip(!hasDb, "Requires DATABASE_URL.");
+
+    const paperId = await withDb(getSeedPaperId);
+    await withDb(async (sql) => {
+      await sql`delete from favorites where owner_id = ${devOwnerId} and paper_id = ${paperId}`;
+      await sql`delete from playlist_items where paper_id = ${paperId} and playlist_id in (select id from playlists where owner_id = ${devOwnerId} and name = 'Read later')`;
+      await sql`alter table user_paper_interactions drop constraint if exists paperdeck_test_fail_feed_interaction`;
+      await sql`alter table user_paper_interactions add constraint paperdeck_test_fail_feed_interaction check (context <> 'feed') not valid`;
     });
-    expect(rl2.status()).toBe(200);
-    expect((await rl2.json()).ok).toBe(true);
+
+    try {
+      for (const action of ["favorite", "read_later"]) {
+        const response = await request.post("/api/deck", {
+          data: { action, paperId, selected: true },
+        });
+        expect(response.status()).toBe(500);
+      }
+    } finally {
+      await withDb(async (sql) => {
+        await sql`alter table user_paper_interactions drop constraint if exists paperdeck_test_fail_feed_interaction`;
+      });
+    }
+
+    const state = await withDb(async (sql) => sql<{
+      favorites: number;
+      read_later: number;
+    }[]>`
+      select
+        (select count(*)::int from favorites where owner_id = ${devOwnerId} and paper_id = ${paperId}) as favorites,
+        (select count(*)::int from playlist_items where paper_id = ${paperId} and playlist_id in (select id from playlists where owner_id = ${devOwnerId} and name = 'Read later')) as read_later
+    `);
+    expect(state[0]).toEqual({ favorites: 0, read_later: 0 });
   });
 });
 
@@ -327,6 +414,12 @@ test.describe("playlist authorization", () => {
     await readLaterCheckbox.check();
     await expect(readLaterCheckbox).toBeChecked();
     await expect(readLaterCheckbox).toBeEnabled();
+    await readLaterCheckbox.uncheck();
+    await expect(readLaterCheckbox).not.toBeChecked();
+    await expect(readLaterCheckbox).toBeEnabled();
+    await readLaterCheckbox.check();
+    await expect(readLaterCheckbox).toBeChecked();
+    await expect(readLaterCheckbox).toBeEnabled();
 
     const created = await withDb(async (sql) => {
       const rows = await sql<{ id: string }[]>`
@@ -352,7 +445,7 @@ test.describe("playlist authorization", () => {
           and pi.paper_id = ${paper.id}::uuid
       `;
       expect(memberships[0].count).toBe(2);
-      expect(interactions[0].count).toBe(1);
+      expect(interactions[0].count).toBe(3);
       return rows[0] ?? null;
     });
     expect(created).not.toBeNull();
@@ -594,6 +687,7 @@ test.describe("recommendation analytics", () => {
         action: "favorite",
         paperId: impressions[0].paper_id,
         recommendationImpressionId: "not-a-uuid",
+        selected: true,
       },
     });
     expect(invalid.status()).toBe(200);

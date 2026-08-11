@@ -218,6 +218,7 @@ export function FeedDeck({
     try {
       await submitDeckAction("read_later", paperId, {
         recommendationImpressionId,
+        selected: true,
       });
     } catch {
       setPaperDismissed(paperId, false);

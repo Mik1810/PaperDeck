@@ -60,6 +60,7 @@ export function PaperCard({
   async function commitDeckMutation(
     action: DeckMutationAction,
     rollback: () => void,
+    selected?: boolean,
   ) {
     setMutationErrorMessage(null);
     setPendingAction(action);
@@ -67,6 +68,7 @@ export function PaperCard({
     try {
       await submitDeckAction(action, paper.id, {
         recommendationImpressionId: paper.recommendationImpressionId,
+        selected,
       });
     } catch (error) {
       console.error(`Deck mutation ${action} failed:`, error);
@@ -185,8 +187,10 @@ export function PaperCard({
           onClick={() => {
             const previousFavorite = optimisticFavorite;
             setOptimisticFavorite(!previousFavorite);
-            void commitDeckMutation("favorite", () =>
-              setOptimisticFavorite(previousFavorite),
+            void commitDeckMutation(
+              "favorite",
+              () => setOptimisticFavorite(previousFavorite),
+              !previousFavorite,
             );
           }}
           type="button"

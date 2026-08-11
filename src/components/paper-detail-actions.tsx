@@ -36,12 +36,13 @@ export function PaperDetailActions({
   async function commitDeckMutation(
     action: DeckMutationAction,
     rollback: () => void,
+    selected?: boolean,
   ) {
     setMutationErrorMessage(null);
     setPendingAction(action);
 
     try {
-      await submitDeckAction(action, paperId);
+      await submitDeckAction(action, paperId, { selected });
     } catch {
       rollback();
       setMutationErrorMessage(deckMutationErrorMessage(action));
@@ -65,8 +66,10 @@ export function PaperDetailActions({
           onClick={() => {
             const previousFavorite = optimisticFavorite;
             setOptimisticFavorite(!previousFavorite);
-            void commitDeckMutation("favorite", () =>
-              setOptimisticFavorite(previousFavorite),
+            void commitDeckMutation(
+              "favorite",
+              () => setOptimisticFavorite(previousFavorite),
+              !previousFavorite,
             );
           }}
           type="button"
