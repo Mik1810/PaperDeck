@@ -51,6 +51,7 @@ import {
   reorderOwnedPlaylistItems,
 } from "@/lib/repositories/playlist-items";
 import { logger } from "@/lib/logging/logger";
+import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import {
   getSemanticPaperCandidates,
   type SemanticRetrievalDiagnostics,
@@ -88,6 +89,16 @@ type RankedFeedData = {
 };
 
 const ignoredInteractionActions = ["dismiss", "not_interested"] as const;
+
+function scheduleProfileEmbeddingRefresh(ownerId: string) {
+  after(async () => {
+    try {
+      await refreshUserProfileEmbedding(ownerId);
+    } catch (error) {
+      logger.error("user_profile_embedding_refresh_failed", { ownerId, error });
+    }
+  });
+}
 
 type IgnoredInteractionAction = (typeof ignoredInteractionActions)[number];
 
@@ -1445,6 +1456,7 @@ export async function recordPaperInteraction(
     action,
     context,
   });
+  scheduleProfileEmbeddingRefresh(ownerId);
 }
 
 /** @user-scoped */
@@ -1454,7 +1466,7 @@ export async function setFavoriteState(
   selected: boolean,
   options: InteractionRecordOptions = {},
 ) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     if (!selected) {
       const removed = await tx
         .delete(favorites)
@@ -1486,6 +1498,9 @@ export async function setFavoriteState(
 
     return { changed: Boolean(created), selected: true };
   });
+
+  if (result.changed) scheduleProfileEmbeddingRefresh(ownerId);
+  return result;
 }
 
 /** @user-scoped */
@@ -1495,7 +1510,7 @@ export async function setReadLaterState(
   selected: boolean,
   options: InteractionRecordOptions = {},
 ) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     if (!selected) {
       const existingPlaylist = await tx
         .select({ id: playlists.id })
@@ -1575,6 +1590,9 @@ export async function setReadLaterState(
 
     return { changed: Boolean(created), selected: true };
   });
+
+  if (result.changed) scheduleProfileEmbeddingRefresh(ownerId);
+  return result;
 }
 
 /** @user-scoped */
@@ -1617,7 +1635,7 @@ export async function setPaperPlaylistMembership(
   context: PlaylistSaveContext,
   options: InteractionRecordOptions = {},
 ) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const ownedPlaylist = await tx
       .select({ id: playlists.id })
       .from(playlists)
@@ -1632,15 +1650,20 @@ export async function setPaperPlaylistMembership(
     }
 
     if (!selected) {
-      await tx
+      const removed = await tx
         .delete(playlistItems)
         .where(
           and(
             eq(playlistItems.playlistId, playlistId),
             eq(playlistItems.paperId, paperId),
           ),
-        );
-      return { created: false, selected: false };
+        )
+        .returning({ paperId: playlistItems.paperId });
+      return {
+        changed: removed.length > 0,
+        created: false,
+        selected: false,
+      };
     }
 
     const maxRows = await tx
@@ -1671,8 +1694,15 @@ export async function setPaperPlaylistMembership(
       });
     }
 
-    return { created: Boolean(created), selected: true };
+    return {
+      changed: Boolean(created),
+      created: Boolean(created),
+      selected: true,
+    };
   });
+
+  if (result.changed) scheduleProfileEmbeddingRefresh(ownerId);
+  return result;
 }
 
 /** @user-scoped */
@@ -1683,7 +1713,7 @@ export async function createPlaylistWithPaper(
   context: PlaylistSaveContext,
   options: InteractionRecordOptions = {},
 ) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [playlist] = await tx
       .insert(playlists)
       .values({ ownerId, name, isDefault: false })
@@ -1709,6 +1739,9 @@ export async function createPlaylistWithPaper(
       selected: true,
     } satisfies PaperPlaylistOption;
   });
+
+  scheduleProfileEmbeddingRefresh(ownerId);
+  return result;
 }
 
 /** @user-scoped */
@@ -1741,7 +1774,7 @@ export async function renamePlaylist(
 
 /** @user-scoped */
 export async function deletePlaylist(ownerId: string, playlistId: string) {
-  await db
+  const deleted = await db
     .delete(playlists)
     .where(
       and(
@@ -1749,7 +1782,10 @@ export async function deletePlaylist(ownerId: string, playlistId: string) {
         eq(playlists.ownerId, ownerId),
         ne(playlists.isDefault, true),
       ),
-    );
+    )
+    .returning({ id: playlists.id });
+
+  if (deleted.length) scheduleProfileEmbeddingRefresh(ownerId);
 }
 
 /** @user-scoped */
@@ -1759,6 +1795,7 @@ export async function addToPlaylist(
   paperId: string,
 ) {
   await addToOwnedPlaylist(ownerId, playlistId, paperId);
+  scheduleProfileEmbeddingRefresh(ownerId);
 }
 
 /** @user-scoped */
@@ -1768,6 +1805,7 @@ export async function removeFromPlaylist(
   paperId: string,
 ) {
   await removeFromOwnedPlaylist(ownerId, playlistId, paperId);
+  scheduleProfileEmbeddingRefresh(ownerId);
 }
 
 /** @user-scoped */

@@ -81,6 +81,29 @@ async function getSeedPaperId(sql: postgres.Sql) {
   return rows[0].id;
 }
 
+async function getCurrentProfileEmbeddingSignature(ownerId: string) {
+  return withDb(async (sql) => {
+    const rows = await sql<{
+      current: boolean;
+      input_signature: string;
+    }[]>`
+      select
+        e.input_generation = p.embedding_input_generation as current,
+        e.input_signature
+      from profiles p
+      join user_profile_embeddings e on e.owner_id = p.owner_id
+      where p.owner_id = ${ownerId}
+        and e.embedding_model = 'sentence-transformers/all-MiniLM-L6-v2'
+      limit 1
+    `;
+
+    if (!rows[0]?.current) return null;
+    return JSON.parse(rows[0].input_signature) as {
+      papers?: Array<{ id?: string }>;
+    };
+  });
+}
+
 async function seedTestProfile() {
   await withDb(async (sql) => {
     const topicId = await getSeedTopicId(sql);
@@ -417,9 +440,44 @@ test.describe("playlist authorization", () => {
     await readLaterCheckbox.uncheck();
     await expect(readLaterCheckbox).not.toBeChecked();
     await expect(readLaterCheckbox).toBeEnabled();
+    const customCheckbox = dialog.getByRole("checkbox", {
+      name: /Picker Playlist/,
+    });
+    await expect
+      .poll(async () => {
+        const signature = await getCurrentProfileEmbeddingSignature(devOwnerId);
+        return signature?.papers?.some((input) => input.id === paper.id) ?? false;
+      })
+      .toBe(true);
+
+    await customCheckbox.uncheck();
+    await expect(customCheckbox).not.toBeChecked();
+    await expect
+      .poll(async () => {
+        const signature = await getCurrentProfileEmbeddingSignature(devOwnerId);
+        return signature?.papers?.some((input) => input.id === paper.id) ?? false;
+      })
+      .toBe(false);
+
+    await customCheckbox.check();
+    await expect(customCheckbox).toBeChecked();
     await readLaterCheckbox.check();
     await expect(readLaterCheckbox).toBeChecked();
-    await expect(readLaterCheckbox).toBeEnabled();
+
+    await expect
+      .poll(() =>
+        withDb(async (sql) => {
+          const [row] = await sql<{ count: number }[]>`
+            select count(*)::integer as count
+            from playlist_items pi
+            join playlists p on p.id = pi.playlist_id
+            where p.owner_id = ${devOwnerId}
+              and pi.paper_id = ${paper.id}::uuid
+          `;
+          return row.count;
+        }),
+      )
+      .toBe(2);
 
     const created = await withDb(async (sql) => {
       const rows = await sql<{ id: string }[]>`
@@ -437,15 +495,7 @@ test.describe("playlist authorization", () => {
           and paper_id = ${paper.id}::uuid
           and action = 'save_to_playlist'
       `;
-      const memberships = await sql<{ count: number }[]>`
-        select count(*)::integer as count
-        from playlist_items pi
-        join playlists p on p.id = pi.playlist_id
-        where p.owner_id = ${devOwnerId}
-          and pi.paper_id = ${paper.id}::uuid
-      `;
-      expect(memberships[0].count).toBe(2);
-      expect(interactions[0].count).toBe(3);
+      expect(interactions[0].count).toBe(4);
       return rows[0] ?? null;
     });
     expect(created).not.toBeNull();

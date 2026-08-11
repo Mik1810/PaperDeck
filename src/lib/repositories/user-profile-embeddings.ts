@@ -1,6 +1,14 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  notInArray,
+} from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -16,11 +24,11 @@ import {
 } from "@/db/schema";
 import {
   addWeightedEmbeddingVector,
+  buildProfilePaperWeights,
   createEmbeddingAccumulator,
   l2NormalizeEmbedding,
   parseEmbeddingVector,
   PROFILE_EMBEDDING_DIMENSION,
-  PROFILE_PAPER_INTERACTION_WEIGHTS,
   vectorToPgLiteral,
 } from "@/lib/profile-embedding-utils";
 import {
@@ -82,38 +90,17 @@ function stableSignature(payload: unknown) {
   return JSON.stringify(payload);
 }
 
-function accumulateWeights(
-  weights: Map<string, number>,
-  paperId: string,
-  weight: number,
-) {
-  if (!weight) {
-    return;
-  }
-
-  weights.set(paperId, (weights.get(paperId) ?? 0) + weight);
-}
-
-async function getReadLaterPaperIds(ownerId: string) {
-  const playlistRows = await db
-    .select({ id: playlists.id })
-    .from(playlists)
-    .where(
-      and(
-        eq(playlists.ownerId, ownerId),
-        eq(playlists.name, "Read later"),
-      ),
-    )
-    .limit(1);
-
-  if (!playlistRows.length) {
-    return [];
-  }
-
+async function getPlaylistPaperIds(ownerId: string) {
   const items = await db
-    .select({ paperId: playlistItems.paperId })
+    .selectDistinct({ paperId: playlistItems.paperId })
     .from(playlistItems)
-    .where(eq(playlistItems.playlistId, playlistRows[0].id));
+    .innerJoin(
+      playlists,
+      and(
+        eq(playlists.id, playlistItems.playlistId),
+        eq(playlists.ownerId, ownerId),
+      ),
+    );
 
   return items.map((r) => r.paperId);
 }
@@ -213,7 +200,7 @@ async function refreshUserProfileEmbeddingOnce(
     return { committed: false };
   }
 
-  const [interests, favRows, interactionRows, readLaterPaperIds] =
+  const [interests, favRows, interactionRows, playlistPaperIds] =
     await Promise.all([
       db
         .select({
@@ -235,27 +222,26 @@ async function refreshUserProfileEmbeddingOnce(
           createdAt: userPaperInteractions.createdAt,
         })
         .from(userPaperInteractions)
-        .where(eq(userPaperInteractions.ownerId, ownerId))
+        .where(
+          and(
+            eq(userPaperInteractions.ownerId, ownerId),
+            notInArray(userPaperInteractions.action, [
+              "favorite",
+              "save_to_playlist",
+            ]),
+          ),
+        )
         .orderBy(desc(userPaperInteractions.createdAt))
         .limit(MAX_INTERACTIONS),
-      getReadLaterPaperIds(ownerId),
+      getPlaylistPaperIds(ownerId),
     ]);
 
   const selectedTopicIds = [...new Set(interests.map((r) => r.topicId))].sort();
-  const paperWeights = new Map<string, number>();
-
-  for (const fav of favRows) {
-    accumulateWeights(paperWeights, fav.paperId, 6);
-  }
-
-  for (const paperId of readLaterPaperIds) {
-    accumulateWeights(paperWeights, paperId, 5);
-  }
-
-  for (const interaction of interactionRows) {
-    const weight = PROFILE_PAPER_INTERACTION_WEIGHTS[interaction.action] ?? 0;
-    accumulateWeights(paperWeights, interaction.paperId, weight);
-  }
+  const paperWeights = buildProfilePaperWeights({
+    favoritePaperIds: favRows.map((favorite) => favorite.paperId),
+    playlistPaperIds,
+    interactions: interactionRows,
+  });
 
   const [topicEmbRows, paperEmbRows] = await Promise.all([
     selectedTopicIds.length

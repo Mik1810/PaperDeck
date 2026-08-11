@@ -2,7 +2,7 @@ import "server-only";
 
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { userProfileEmbeddings } from "@/db/schema";
+import { profiles, userProfileEmbeddings } from "@/db/schema";
 import {
   SemanticMatchRowArraySchema,
   type SemanticMatchRow,
@@ -16,6 +16,7 @@ export type SemanticPaperCandidates = {
 
 export type SemanticRetrievalFallbackReason =
   | "profile_missing"
+  | "profile_stale"
   | "profile_refresh_failed"
   | "no_matches"
   | "no_papers_loaded"
@@ -79,11 +80,12 @@ export async function getSemanticPaperCandidates(
     .select({
       embedding: userProfileEmbeddings.embedding,
       embeddingModel: userProfileEmbeddings.embeddingModel,
+      inputGeneration: userProfileEmbeddings.inputGeneration,
+      currentGeneration: profiles.embeddingInputGeneration,
     })
     .from(userProfileEmbeddings)
-    .where(
-      eq(userProfileEmbeddings.ownerId, ownerId),
-    )
+    .innerJoin(profiles, eq(profiles.ownerId, userProfileEmbeddings.ownerId))
+    .where(eq(userProfileEmbeddings.ownerId, ownerId))
     .orderBy(desc(userProfileEmbeddings.generatedAt))
     .limit(1);
 
@@ -95,6 +97,13 @@ export async function getSemanticPaperCandidates(
   }
 
   const profileRow = profileRows[0];
+  if (profileRow.inputGeneration !== profileRow.currentGeneration) {
+    return emptyResult({
+      requestedCount: matchCount,
+      fallbackReason: "profile_stale",
+    });
+  }
+
   const model = profileRow.embeddingModel;
 
   const semanticMatches = await matchPapersByEmbedding(
