@@ -4,8 +4,8 @@ import { requireOwnerId } from "@/lib/auth/session";
 import {
   recordPaperInteraction,
   resolveRecommendationImpressionId,
-  toggleFavorite,
-  toggleReadLater,
+  setFavoriteState,
+  setReadLaterState,
 } from "@/lib/repositories/user-data";
 import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import { logger } from "@/lib/logging/logger";
@@ -26,6 +26,7 @@ export async function POST(request: Request) {
 
   try {
     let response: NextResponse;
+    let shouldRefreshProfile = true;
     const resolvedRecommendationImpressionId =
       await resolveRecommendationImpressionId(
         ownerId,
@@ -38,13 +39,41 @@ export async function POST(request: Request) {
 
     switch (action) {
       case "favorite": {
-        await toggleFavorite(ownerId, paperId, interactionOptions);
-        response = NextResponse.json({ ok: true, action: "favorite" });
+        if (typeof body.selected !== "boolean") {
+          return NextResponse.json(
+            { ok: false, error: "Missing selected state" },
+            { status: 400 },
+          );
+        }
+        const result = await setFavoriteState(
+          ownerId,
+          paperId,
+          body.selected,
+          interactionOptions,
+        );
+        shouldRefreshProfile = result.changed;
+        response = NextResponse.json({ ok: true, action: "favorite", ...result });
         break;
       }
       case "read_later": {
-        await toggleReadLater(ownerId, paperId, interactionOptions);
-        response = NextResponse.json({ ok: true, action: "read_later" });
+        if (typeof body.selected !== "boolean") {
+          return NextResponse.json(
+            { ok: false, error: "Missing selected state" },
+            { status: 400 },
+          );
+        }
+        const result = await setReadLaterState(
+          ownerId,
+          paperId,
+          body.selected,
+          interactionOptions,
+        );
+        shouldRefreshProfile = result.changed;
+        response = NextResponse.json({
+          ok: true,
+          action: "read_later",
+          ...result,
+        });
         break;
       }
       case "dismiss": {
@@ -73,13 +102,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
 
-    after(async () => {
-      try {
-        await refreshUserProfileEmbedding(ownerId);
-      } catch (error) {
-        logger.error("deck_profile_refresh_failed", { ownerId, error });
-      }
-    });
+    if (shouldRefreshProfile) {
+      after(async () => {
+        try {
+          await refreshUserProfileEmbedding(ownerId);
+        } catch (error) {
+          logger.error("deck_profile_refresh_failed", { ownerId, error });
+        }
+      });
+    }
 
     return response;
   } catch (error) {

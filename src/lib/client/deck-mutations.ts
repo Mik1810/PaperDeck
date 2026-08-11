@@ -18,6 +18,7 @@ type BeaconLike = Pick<Navigator, "sendBeacon">;
 
 type DeckMutationOptions = {
   recommendationImpressionId?: string;
+  selected?: boolean;
 };
 
 type RecordOpenDetailOptions = {
@@ -47,10 +48,20 @@ export async function submitDeckAction(
   options: DeckMutationOptions = {},
   fetchImpl: FetchLike = fetch,
 ) {
+  if (
+    (action === "favorite" || action === "read_later") &&
+    typeof options.selected !== "boolean"
+  ) {
+    throw new Error(`Deck action requires an explicit target state: ${action}`);
+  }
+
   const response = await fetchImpl("/api/deck", {
     body: JSON.stringify({
       action,
       paperId,
+      ...(typeof options.selected === "boolean"
+        ? { selected: options.selected }
+        : {}),
       ...(options.recommendationImpressionId
         ? { recommendationImpressionId: options.recommendationImpressionId }
         : {}),
