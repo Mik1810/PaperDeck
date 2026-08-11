@@ -534,16 +534,6 @@ function revalidatePlaylistPickerPaths(
   );
 }
 
-function schedulePlaylistProfileRefresh(ownerId: string) {
-  after(async () => {
-    try {
-      await refreshUserProfileEmbedding(ownerId);
-    } catch (error) {
-      logger.error("playlist_profile_refresh_failed", { ownerId, error });
-    }
-  });
-}
-
 export async function setPaperPlaylistMembershipAction(
   input: PlaylistPickerMutationInput & {
     playlistId: string;
@@ -574,7 +564,6 @@ export async function setPaperPlaylistMembershipAction(
       { recommendationImpressionId },
     );
     revalidatePlaylistPickerPaths(input.paperId, input.context);
-    if (result.created) schedulePlaylistProfileRefresh(ownerId);
     return { ok: true, created: result.created };
   } catch {
     return {
@@ -609,7 +598,6 @@ export async function createPlaylistWithPaperAction(
       { recommendationImpressionId },
     );
     revalidatePlaylistPickerPaths(input.paperId, input.context);
-    schedulePlaylistProfileRefresh(ownerId);
     return { ok: true, created: true, option };
   } catch {
     return {

@@ -6,13 +6,33 @@ export const PROFILE_PAPER_INTERACTION_WEIGHTS: Partial<
   Record<InteractionType, number>
 > = {
   open_detail: 2,
-  favorite: 6,
-  save_to_playlist: 5,
   read: 3,
   already_read: 3,
   not_interested: -5,
   dismiss: -4,
 };
+
+export function buildProfilePaperWeights(input: {
+  favoritePaperIds: string[];
+  playlistPaperIds: string[];
+  interactions: Array<{ action: InteractionType; paperId: string }>;
+}) {
+  const weights = new Map<string, number>();
+  const add = (paperId: string, weight: number) => {
+    if (weight) weights.set(paperId, (weights.get(paperId) ?? 0) + weight);
+  };
+
+  for (const paperId of new Set(input.favoritePaperIds)) add(paperId, 6);
+  for (const paperId of new Set(input.playlistPaperIds)) add(paperId, 5);
+  for (const interaction of input.interactions) {
+    add(
+      interaction.paperId,
+      PROFILE_PAPER_INTERACTION_WEIGHTS[interaction.action] ?? 0,
+    );
+  }
+
+  return weights;
+}
 
 export type EmbeddingVectorInput = string | number[];
 

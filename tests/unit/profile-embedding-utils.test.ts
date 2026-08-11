@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addWeightedEmbeddingVector,
+  buildProfilePaperWeights,
   createEmbeddingAccumulator,
   l2NormalizeEmbedding,
   parseEmbeddingVector,
@@ -40,4 +41,31 @@ test("already_read has the same positive profile weight as read", () => {
     PROFILE_PAPER_INTERACTION_WEIGHTS.read,
   );
   assert.equal(PROFILE_PAPER_INTERACTION_WEIGHTS.already_read, 3);
+});
+
+test("current collection state, not append-only collection events, owns profile weight", () => {
+  assert.equal(PROFILE_PAPER_INTERACTION_WEIGHTS.favorite, undefined);
+  assert.equal(PROFILE_PAPER_INTERACTION_WEIGHTS.save_to_playlist, undefined);
+});
+
+test("profile collection weights deduplicate playlists and disappear after removal", () => {
+  const saved = buildProfilePaperWeights({
+    favoritePaperIds: [],
+    playlistPaperIds: ["paper-a", "paper-a"],
+    interactions: [
+      { action: "save_to_playlist", paperId: "paper-a" },
+      { action: "favorite", paperId: "paper-a" },
+    ],
+  });
+  const removed = buildProfilePaperWeights({
+    favoritePaperIds: [],
+    playlistPaperIds: [],
+    interactions: [
+      { action: "save_to_playlist", paperId: "paper-a" },
+      { action: "favorite", paperId: "paper-a" },
+    ],
+  });
+
+  assert.equal(saved.get("paper-a"), 5);
+  assert.equal(removed.has("paper-a"), false);
 });

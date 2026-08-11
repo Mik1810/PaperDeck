@@ -468,7 +468,9 @@ Stato attuale:
 
 - `src/lib/ranking/feed-ranking.ts` calcola il ranking lato server come modulo puro riusabile.
 - I topic selezionati hanno peso principale.
-- I feedback positivi su paper gia' aperti, preferiti o salvati aumentano il peso dei topic correlati.
+- I feedback positivi su paper gia' aperti aumentano il peso dei topic
+  correlati; preferiti e appartenenza corrente a qualsiasi playlist privata
+  alimentano direttamente il profilo senza duplicare il peso per piu' playlist.
 - `dismiss`, `not_interested`, `read`, `already_read` e `open_detail` rimuovono il paper dal deck attivo, cosi' il feed avanza dopo l'apertura dettaglio.
 - Retrieval semantico via pgvector e profilo utente attivi; i batch feed salvati in `recommendations` evitano reranking completo a ogni refresh.
 
@@ -541,12 +543,14 @@ Strategia:
 6. Mantenere benchmark offline ripetibili con interessi reali e 50-100 paper valutati manualmente.
 7. Valutare un modello diverso solo dopo aver misurato qualita', tempo batch e costi.
 8. Versionare monotonicamente gli input del profilo utente: interessi,
-   preferiti, interazioni e contenuto di `Read later` incrementano una
+   preferiti, interazioni e contenuto di tutte le playlist private incrementano una
    generazione per-user, e un refresh puo' scrivere solo se la generazione
    letta e' ancora corrente.
 9. Accorpare le richieste concorrenti dello stesso utente nella singola
    istanza applicativa e usare il controllo generazionale nel database come
    garanzia tra istanze diverse.
+10. Non usare nel retrieval semantico un profilo con generazione diversa da
+    quella corrente; durante il refresh usare il ranking non semantico.
 
 Specifica operativa: `docs/embeddings.md`.
 

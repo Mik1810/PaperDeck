@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import postgres from "postgres";
 
 const ownerId = "playwright-profile-generation-user";
@@ -45,7 +47,7 @@ test("ranking inputs advance the profile embedding generation", async () => {
       select embedding_input_generation::text as generation
       from profiles where owner_id = ${ownerId}
     `;
-    expect(Number(profile.generation)).toBe(0);
+    expect(Number(profile.generation)).toBe(1);
 
     const [readLater] = await sql<{ id: string }[]>`
       insert into playlists (owner_id, name, is_default)
@@ -74,6 +76,108 @@ test("ranking inputs advance the profile embedding generation", async () => {
     `;
     expect(Number(profile.generation)).toBe(5);
   } finally {
+    await sql.end();
+  }
+});
+
+test("removing a custom-playlist paper makes the stored embedding unusable", async () => {
+  const sql = database();
+  try {
+    const [paper] = await sql<{ id: string }[]>`
+      select id from papers order by created_at limit 1
+    `;
+    if (!paper) throw new Error("Local catalog fixture is incomplete");
+
+    await sql`insert into profiles (owner_id) values (${ownerId})`;
+    const [playlist] = await sql<{ id: string }[]>`
+      insert into playlists (owner_id, name)
+      values (${ownerId}, 'Custom') returning id
+    `;
+    await sql`
+      insert into playlist_items (playlist_id, paper_id)
+      values (${playlist.id}, ${paper.id})
+    `;
+    const [current] = await sql<{ generation: string }[]>`
+      select embedding_input_generation::text as generation
+      from profiles where owner_id = ${ownerId}
+    `;
+    await sql`
+      insert into user_profile_embeddings (
+        owner_id, embedding, embedding_model, embedding_dimension,
+        input_signature, input_generation
+      ) values (
+        ${ownerId}, array_fill(0.1::real, array[384])::vector,
+        ${embeddingModel}, 384, 'custom-playlist', ${Number(current.generation)}
+      )
+    `;
+
+    await sql`
+      delete from playlist_items
+      where playlist_id = ${playlist.id} and paper_id = ${paper.id}
+    `;
+
+    const [state] = await sql<{
+      current_generation: string;
+      stored_generation: string;
+      usable_count: string;
+    }[]>`
+      select
+        p.embedding_input_generation::text as current_generation,
+        e.input_generation::text as stored_generation,
+        (
+          select count(*)::text
+          from user_profile_embeddings current_embedding
+          where current_embedding.owner_id = p.owner_id
+            and current_embedding.input_generation = p.embedding_input_generation
+        ) as usable_count
+      from profiles p
+      join user_profile_embeddings e on e.owner_id = p.owner_id
+      where p.owner_id = ${ownerId}
+        and e.embedding_model = ${embeddingModel}
+    `;
+    expect(Number(state.current_generation)).toBe(
+      Number(state.stored_generation) + 1,
+    );
+    expect(Number(state.usable_count)).toBe(0);
+  } finally {
+    await sql.end();
+  }
+});
+
+test("the collection-policy migration invalidates existing embeddings once", async () => {
+  const sql = database();
+  let transactionOpen = false;
+  try {
+    await sql`insert into profiles (owner_id) values (${ownerId})`;
+    await sql`
+      insert into user_profile_embeddings (
+        owner_id, embedding, embedding_model, embedding_dimension,
+        input_signature, input_generation
+      ) values (
+        ${ownerId}, array_fill(0.1::real, array[384])::vector,
+        ${embeddingModel}, 384, 'old-policy', 0
+      )
+    `;
+    const migration = await readFile(
+      path.join(
+        process.cwd(),
+        "supabase/migrations/20260811225018_all_playlists_profile_generation.sql",
+      ),
+      "utf8",
+    );
+
+    await sql`begin`;
+    transactionOpen = true;
+    await sql.unsafe(migration);
+    const [profile] = await sql<{ generation: string }[]>`
+      select embedding_input_generation::text as generation
+      from profiles where owner_id = ${ownerId}
+    `;
+    expect(Number(profile.generation)).toBe(1);
+    await sql`rollback`;
+    transactionOpen = false;
+  } finally {
+    if (transactionOpen) await sql`rollback`;
     await sql.end();
   }
 });

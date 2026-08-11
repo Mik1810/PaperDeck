@@ -8,6 +8,13 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made profile embeddings follow current collection state on both additions
+  and removals. Favorites and deduplicated membership in any private playlist
+  are now authoritative signals, append-only collection events no longer add a
+  duplicate weight, dirty generations are excluded from semantic retrieval,
+  and mutation repositories consistently schedule a guarded refresh. Existing
+  embeddings are invalidated once during migration so the old weighting cannot
+  survive the rollout.
 - Prevented older concurrent profile-embedding refreshes from overwriting newer
   user state. Ranking-relevant mutations now advance a per-user input
   generation, refresh writes conditionally lock and verify that generation,

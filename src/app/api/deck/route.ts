@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { after } from "next/server";
 import { requireOwnerId } from "@/lib/auth/session";
 import {
   recordPaperInteraction,
@@ -7,7 +6,6 @@ import {
   setFavoriteState,
   setReadLaterState,
 } from "@/lib/repositories/user-data";
-import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import { logger } from "@/lib/logging/logger";
 
 export async function POST(request: Request) {
@@ -26,7 +24,6 @@ export async function POST(request: Request) {
 
   try {
     let response: NextResponse;
-    let shouldRefreshProfile = true;
     const resolvedRecommendationImpressionId =
       await resolveRecommendationImpressionId(
         ownerId,
@@ -51,7 +48,6 @@ export async function POST(request: Request) {
           body.selected,
           interactionOptions,
         );
-        shouldRefreshProfile = result.changed;
         response = NextResponse.json({ ok: true, action: "favorite", ...result });
         break;
       }
@@ -68,7 +64,6 @@ export async function POST(request: Request) {
           body.selected,
           interactionOptions,
         );
-        shouldRefreshProfile = result.changed;
         response = NextResponse.json({
           ok: true,
           action: "read_later",
@@ -100,16 +95,6 @@ export async function POST(request: Request) {
       }
       default:
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
-    }
-
-    if (shouldRefreshProfile) {
-      after(async () => {
-        try {
-          await refreshUserProfileEmbedding(ownerId);
-        } catch (error) {
-          logger.error("deck_profile_refresh_failed", { ownerId, error });
-        }
-      });
     }
 
     return response;

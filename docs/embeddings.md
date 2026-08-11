@@ -197,7 +197,7 @@ Initial weights:
 ```text
 selected topic       4.0
 favorite paper       6.0
-read later paper     5.0
+paper in any playlist 5.0 (once across playlists)
 read / already read   3.0
 open detail paper    2.0
 not interested      -5.0
@@ -207,6 +207,12 @@ dismiss             -4.0
 `read` is the legacy generic completion signal. `already_read` is the current
 detail-page action; both have the same positive weight and hide the exact paper
 from the active deck.
+
+Favorites and playlist membership are current-state signals. Their append-only
+`favorite` and `save_to_playlist` interaction events remain available for
+analytics but do not add another profile weight. Removing the final current
+membership therefore removes the playlist contribution even though historical
+events remain stored.
 
 The vector should be normalized after aggregation.
 
@@ -235,7 +241,7 @@ Current implementation:
 
 ```text
 src/lib/repositories/user-profile-embeddings.ts
-  -> reads selected topics, favorites, Read later, and recent interactions
+  -> reads selected topics, favorites, all private playlists, and recent behavioral interactions
   -> computes one normalized weighted vector for every refresh source
   -> verifies the input generation before and during the database write
   -> retries superseded work and coalesces concurrent same-instance requests
@@ -248,6 +254,16 @@ guarantee; in-memory coalescing only avoids redundant work inside one running
 application instance. If no weighted source vectors exist yet, the refresh
 removes the stored vector only when its captured generation is still current,
 and the feed keeps using the non-semantic fallback ranking.
+
+Semantic retrieval joins the stored embedding to the current profile
+generation. A mismatch is treated as `profile_stale`: the old vector is not
+sent to pgvector and the feed uses its non-semantic fallback until the mutation-
+scheduled refresh catches up.
+
+When collection-weight semantics change, the migration increments the input
+generation once for profiles that already have an embedding. This deliberately
+invalidates the old vectors without deleting them; normal post-mutation refresh
+replaces them with the new weighting.
 
 ## Paper Batch Selection
 
