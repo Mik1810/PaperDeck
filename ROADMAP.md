@@ -42,8 +42,9 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Embeddings MVP: modello open-source locale, con `sentence-transformers/all-MiniLM-L6-v2` come default corrente dopo benchmark offline; BGE-small resta baseline storica.
 - Worker batch online MVP: GitHub Actions giornaliero e avviabile manualmente.
 - Database online MVP: Supabase Postgres + pgvector.
-- Connessioni database: runtime locale, Preview e Production allineati sul
-  Transaction pooler; Drizzle Kit e manutenzione usano un URL Session separato.
+- Connessioni database: Preview e Production usano il Transaction pooler;
+  sviluppo locale e CI usano PostgreSQL isolato in Docker. Drizzle Kit e
+  manutenzione remota usano un URL Session separato.
 - Supabase region: preferire `eu-central-2` Zurich se disponibile, fallback `eu-central-1` Frankfurt.
 - Paper classici: massimo indicativo 10-15% del feed.
 - Digest: solo in-app nella prima versione.

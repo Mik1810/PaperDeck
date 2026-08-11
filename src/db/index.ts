@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
 import * as relations from "./relations";
+import { validateHostedDatabaseConfiguration } from "./runtime-config";
 
 const globalForDb = globalThis as unknown as {
   db: ReturnType<typeof drizzle> | undefined;
@@ -18,6 +19,8 @@ function databaseMaxConnections() {
 }
 
 function createDb() {
+  validateHostedDatabaseConfiguration();
+
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is required for Drizzle client");
   }
