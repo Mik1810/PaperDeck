@@ -183,10 +183,12 @@ La prima tranche della #97 rende durevoli le notifiche di amicizia, invito e
 membership con retention di 90 giorni. Le righe sorgente restano autorevoli e i
 trigger inseriscono l'evento nella stessa transazione. Realtime non e' un
 requisito di correttezza: il client deve sempre poter rifare il fetch dopo una
-disconnessione. La #98 usa polling leggero e refetch su focus/reconnect; il
-segnale privato Realtime resta un'ottimizzazione separata. Le preferenze per
-gruppo vengono implementate con la #99, insieme agli eventi paper non critici e
-all'aggregazione dei burst, invece di aggiungere configurazione inutilizzata.
+disconnessione. Il notification center usa polling del solo conteggio mentre e'
+chiuso, carica la prima pagina solo all'apertura e accorpa i refetch ravvicinati
+su focus/reconnect/visibility; il segnale privato Realtime resta
+un'ottimizzazione separata. Le preferenze per gruppo vengono implementate con la
+#99, insieme agli eventi paper non critici e all'aggregazione dei burst, invece
+di aggiungere configurazione inutilizzata.
 
 ## 5. Roadmap dalla A alla Z
 

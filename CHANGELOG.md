@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Reduced background notification work: the closed header bell now polls only
+  the unread count, loads the latest notification page on demand when opened,
+  cancels or shares overlapping requests, and debounces browser lifecycle
+  refresh bursts. The full notification-history route remains independently
+  paginated.
 - Made profile embeddings follow current collection state on both additions
   and removals. Favorites and deduplicated membership in any private playlist
   are now authoritative signals, append-only collection events no longer add a
