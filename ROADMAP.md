@@ -471,7 +471,13 @@ Stato attuale:
 - I feedback positivi su paper gia' aperti aumentano il peso dei topic
   correlati; preferiti e appartenenza corrente a qualsiasi playlist privata
   alimentano direttamente il profilo senza duplicare il peso per piu' playlist.
-- `dismiss`, `not_interested`, `read`, `already_read` e `open_detail` rimuovono il paper dal deck attivo, cosi' il feed avanza dopo l'apertura dettaglio.
+- `dismiss`, `not_interested`, `read`, `already_read` e `open_detail` rimuovono
+  il paper dal deck attivo e dai feed futuri tramite uno stato durevole separato
+  dalla finestra limitata usata per il ranking. L'apertura resta un segnale
+  positivo, ma non equivale a marcare il paper come letto.
+- Preferiti e appartenenza corrente a qualsiasi playlist privata escludono il
+  paper finche' la raccolta lo contiene; dopo la rimozione il paper torna
+  eleggibile se non possiede anche un'esclusione durevole.
 - Retrieval semantico via pgvector e profilo utente attivi; i batch feed salvati in `recommendations` evitano reranking completo a ogni refresh.
 
 ### Ranking MVP

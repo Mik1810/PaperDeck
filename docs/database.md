@@ -88,6 +88,7 @@ Note: Supabase/Postgres warns that creating the `ivfflat` index on an empty `pap
 - `playlist_items`
 - `favorites`
 - `user_paper_interactions`
+- `user_paper_feed_exclusions`
 - `user_profile_embeddings`
 - `recommendations`
 - `digests`
@@ -298,7 +299,8 @@ Inputs:
 - selected `user_interests`;
 - hierarchy from `taxonomy_topics.parent_id`;
 - recent `user_paper_interactions`;
-- favorites and `Read later` state;
+- favorites and membership in any private playlist;
+- durable `user_paper_feed_exclusions`;
 - paper metadata such as citation count, year, and classic flag.
 
 Current behavior:
@@ -307,10 +309,22 @@ Current behavior:
 - child/parent topic matches still count with lower weight;
 - `open_detail`, `favorite`, `save_to_playlist`, `read`, and `already_read` add positive topic feedback;
 - `dismiss` and `not_interested` add negative topic feedback;
-- papers with `open_detail`, `dismiss`, `favorite`, `save_to_playlist`, `not_interested`, `read`, or `already_read` are hidden from the active deck;
-- current favorites and `Read later` items are also authoritative hidden state, so pruning or resetting interaction history cannot make them reappear.
+- `open_detail`, `dismiss`, `not_interested`, `read`, and `already_read`
+  materialize an idempotent durable exclusion in the same transaction as the
+  interaction, so pruning or bounding interaction history cannot make the
+  paper reappear;
+- current favorites and membership in any private playlist are authoritative,
+  reversible hidden state; append-only `favorite` and `save_to_playlist`
+  events do not keep a paper hidden after collection removal.
 
-`Already read` and `Not interested` are recorded from the paper detail page. `already_read` has the same positive weight as the legacy `read` signal. Removing a paper from `Read later` deletes the playlist item but does not add negative feedback.
+`user_paper_feed_exclusions` stores one row per owner and paper, including the
+latest durable cause and timestamp. A trigger on interaction insertion performs
+the atomic upsert, while the migration backfills the latest durable historical
+action per paper. The table uses owner-scoped RLS and persists independently of
+interaction-retention work. `Already read` and `Not interested` are recorded
+from the paper detail page; `already_read` has the same positive weight as the
+legacy `read` signal. Removing a paper from a playlist deletes only the
+membership and does not add negative feedback.
 
 Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
 

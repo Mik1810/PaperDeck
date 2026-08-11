@@ -14,6 +14,7 @@ import {
   recommendations,
   userInterests,
   favorites,
+  userPaperFeedExclusions,
   userPaperInteractions,
 } from "@/db/schema";
 import {
@@ -455,7 +456,8 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
   const [
     interests,
     favRows,
-    rlPlaylist,
+    playlistRows,
+    durableExclusionRows,
     interactionRows,
   ] = await Promise.all([
     db
@@ -466,14 +468,23 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
       .select({ paperId: favorites.paperId })
       .from(favorites)
       .where(eq(favorites.ownerId, ownerId)),
-    (async () => {
-      const playlistId = await findReadLaterPlaylistId(ownerId);
-      if (!playlistId) return [] as Array<{ paperId: string }>;
-      return db
-        .select({ paperId: playlistItems.paperId })
-        .from(playlistItems)
-        .where(eq(playlistItems.playlistId, playlistId));
-    })(),
+    db
+      .selectDistinct({
+        isDefault: playlists.isDefault,
+        paperId: playlistItems.paperId,
+      })
+      .from(playlistItems)
+      .innerJoin(
+        playlists,
+        and(
+          eq(playlists.id, playlistItems.playlistId),
+          eq(playlists.ownerId, ownerId),
+        ),
+      ),
+    db
+      .select({ paperId: userPaperFeedExclusions.paperId })
+      .from(userPaperFeedExclusions)
+      .where(eq(userPaperFeedExclusions.ownerId, ownerId)),
     db
       .select({
         paperId: userPaperInteractions.paperId,
@@ -486,7 +497,10 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
   ]);
 
   const favoriteIds = new Set(favRows.map((r) => r.paperId));
-  const readLaterIds = new Set(rlPlaylist.map((r) => r.paperId));
+  const playlistPaperIds = new Set(playlistRows.map((r) => r.paperId));
+  const readLaterIds = new Set(
+    playlistRows.filter((row) => row.isDefault).map((row) => row.paperId),
+  );
 
   return {
     selectedTopicIds: new Set(interests.map((r) => r.topicId)),
@@ -495,8 +509,8 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
       readLaterIds,
       seenIds: buildSeenPaperIds(
         favoriteIds,
-        readLaterIds,
-        interactionRows,
+        playlistPaperIds,
+        durableExclusionRows.map((row) => row.paperId),
       ),
       interactions: interactionRows,
     },
