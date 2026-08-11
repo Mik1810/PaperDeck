@@ -59,6 +59,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild and verify migration-complete test schema
+        id: schema_parity
+        run: npm run db:test:prepare
+
       - name: Audit service-role boundaries
         run: npm run audit:service-role
 
@@ -86,6 +90,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| migration-complete schema | \`${{ steps.schema_parity.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| service-role audit | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| lint | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| deterministic recommendation stability | \`${{ steps.recommendation_stability.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"

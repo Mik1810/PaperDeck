@@ -360,6 +360,23 @@ test.describe("dev-auth app smoke", () => {
     await expect(discoveryToggle).not.toBeChecked();
   });
 
+  test("search returns fixture papers through the migrated search schema", async ({
+    page,
+  }) => {
+    test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
+
+    await seedCompletedDevOwner();
+    const response = await page.goto("/search?q=Synthetic%20research%20paper");
+
+    expect(response?.status()).toBeLessThan(500);
+    await expect(
+      page.getByRole("heading", {
+        exact: true,
+        name: "Synthetic research paper 1",
+      }),
+    ).toBeVisible();
+  });
+
   for (const { path, heading } of [
     { path: "/feed", heading: "Today" },
     { path: "/digest", heading: "Digest" },

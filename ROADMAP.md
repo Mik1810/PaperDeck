@@ -45,6 +45,9 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Connessioni database: Preview e Production usano il Transaction pooler;
   sviluppo locale e CI usano PostgreSQL isolato in Docker. Drizzle Kit e
   manutenzione remota usano un URL Session separato.
+- Parita' schema: Docker locale e CI ricostruiscono sempre il database dalla
+  baseline iniziale piu' tutte le migrazioni Supabase ordinate; un gate CI
+  verifica anche la superficie full-text/trigram usata dalla ricerca.
 - Supabase region: preferire `eu-central-2` Zurich se disponibile, fallback `eu-central-1` Frankfurt.
 - Paper classici: massimo indicativo 10-15% del feed.
 - Digest: solo in-app nella prima versione.

@@ -8,6 +8,12 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made local Docker and CI database resets apply the immutable initial schema
+  followed by the complete ordered Supabase migration history. The CI parity
+  gate now verifies the full-text/trigram search column, extension, indexes and
+  query shape, preventing hosted-only schema features from escaping local tests.
+- Removed a stale generated uniqueness declaration for paper interactions that
+  was absent from both the migration-built and hosted schemas.
 - Replaced the live feed's unbounded full-catalog fallback with a bounded
   two-phase ranking pipeline. Semantic and catalog retrieval now transfer only
   lightweight score inputs for at most 300 catalog candidates, preserve topic

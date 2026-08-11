@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -24,6 +24,14 @@ const CATALOG_TABLES = [
   "public.paper_external_ids",
   "public.topic_embeddings",
 ] as const;
+
+const MIGRATION_FILENAME = /^\d{14}_[a-z0-9_]+\.sql$/;
+
+export function orderedMigrationNames(entries: string[]) {
+  return entries
+    .filter((entry) => MIGRATION_FILENAME.test(entry))
+    .sort((left, right) => left.localeCompare(right));
+}
 
 export function assertDisposableLocalDatabase(
   databaseUrl: string,
@@ -154,9 +162,96 @@ async function resetSchema(databaseUrl: string, expectedDatabase: string) {
       "utf8",
     );
     await client.query(schema);
+
+    const migrationsDirectory = path.join(
+      process.cwd(),
+      "supabase",
+      "migrations",
+    );
+    const migrationNames = orderedMigrationNames(
+      await readdir(migrationsDirectory),
+    );
+
+    if (!migrationNames.length) {
+      throw new Error("No ordered Supabase migrations were found.");
+    }
+
+    for (const migrationName of migrationNames) {
+      const migration = await readFile(
+        path.join(migrationsDirectory, migrationName),
+        "utf8",
+      );
+      await client.query("begin");
+      try {
+        await client.query(migration);
+        await client.query("commit");
+      } catch (error) {
+        await client.query("rollback");
+        throw new Error(`Migration ${migrationName} failed.`, { cause: error });
+      }
+    }
+
+    await verifyCurrentSchema(client, migrationNames.length);
   } finally {
     await client.end();
   }
+}
+
+async function verifyCurrentSchema(client: InstanceType<typeof Client>, migrationCount: number) {
+  const result = await client.query<{
+    has_pg_trgm: boolean;
+    has_search_vector: boolean;
+    search_index_count: string;
+  }>(`
+    select
+      exists(
+        select 1 from pg_extension where extname = 'pg_trgm'
+      ) as has_pg_trgm,
+      exists(
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'papers'
+          and column_name = 'search_vector'
+      ) as has_search_vector,
+      (
+        select count(*)::text
+        from pg_indexes
+        where schemaname = 'public'
+          and indexname in (
+            'papers_search_vector_gin_idx',
+            'papers_title_trgm_idx',
+            'paper_authors_name_trgm_idx'
+          )
+      ) as search_index_count
+  `);
+  const schema = result.rows[0];
+
+  if (
+    !schema?.has_pg_trgm ||
+    !schema.has_search_vector ||
+    Number(schema.search_index_count) !== 3
+  ) {
+    throw new Error(
+      "The rebuilt local schema is missing the catalog search migration.",
+    );
+  }
+
+  await client.query(`
+    select id
+    from public.papers
+    where search_vector @@ plainto_tsquery('english', 'paper')
+       or title % 'paper'
+    limit 1
+  `);
+
+  console.log(
+    JSON.stringify({
+      schema: "baseline-plus-migrations",
+      migrations: migrationCount,
+      search: "verified",
+    }),
+  );
 }
 
 async function applyFixture(databaseUrl: string) {
