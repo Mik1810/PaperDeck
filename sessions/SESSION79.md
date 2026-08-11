@@ -37,11 +37,12 @@ after their interaction rows fall outside the bounded ranking-history window.
 
 ## Safety
 
-The migration has been applied only to the disposable local Docker database.
-A hosted read-only audit confirmed that it is not applied and that the backfill
-would create 367 derived owner-paper rows; no identifiers or individual actions
-were read or reported. No hosted schema or production data has been changed.
-Hosted rollout remains pending a migration dry-run and explicit approval.
+After explicit approval, the migration was applied to Supabase Production with
+the pinned Supabase CLI. The preflight proposed exactly this migration, with no
+seed or role changes. The backfill created 367 derived owner-paper rows without
+deleting or rewriting any of the 528 interaction-history rows. Only aggregate
+counts were inspected or reported; no identifiers or individual actions were
+read or exposed.
 
 ## Validation
 
@@ -57,3 +58,8 @@ Hosted rollout remains pending a migration dry-run and explicit approval.
 - Supabase `db lint` could not run because the dedicated PaperDeck PostgreSQL
   image does not include the optional `plpgsql_check` extension; direct schema,
   privilege, query-plan, migration, and runtime checks passed instead.
+- Production post-deploy verification passed: one migration-history row, RLS
+  enabled, one owner policy, security-invoker trigger function with hardened
+  search path, active trigger, expected grants, zero invalid causes, zero
+  duplicate owner-paper pairs, zero backfill mismatches, and no pending
+  migrations.
