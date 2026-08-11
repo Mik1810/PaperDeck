@@ -540,6 +540,13 @@ Strategia:
 5. Considerare stale le righe con `embedding_model` diverso dal default corrente.
 6. Mantenere benchmark offline ripetibili con interessi reali e 50-100 paper valutati manualmente.
 7. Valutare un modello diverso solo dopo aver misurato qualita', tempo batch e costi.
+8. Versionare monotonicamente gli input del profilo utente: interessi,
+   preferiti, interazioni e contenuto di `Read later` incrementano una
+   generazione per-user, e un refresh puo' scrivere solo se la generazione
+   letta e' ancora corrente.
+9. Accorpare le richieste concorrenti dello stesso utente nella singola
+   istanza applicativa e usare il controllo generazionale nel database come
+   garanzia tra istanze diverse.
 
 Specifica operativa: `docs/embeddings.md`.
 

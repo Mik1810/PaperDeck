@@ -1,7 +1,6 @@
 import type { InteractionType } from "@/types/paper";
 
 export const PROFILE_EMBEDDING_DIMENSION = 384;
-export const SELECTED_TOPIC_EMBEDDING_WEIGHT = 4;
 
 export const PROFILE_PAPER_INTERACTION_WEIGHTS: Partial<
   Record<InteractionType, number>
@@ -69,16 +68,4 @@ export function l2NormalizeEmbedding(vector: number[]) {
 
 export function vectorToPgLiteral(vector: number[]) {
   return `[${vector.join(",")}]`;
-}
-
-export function topicSelectionInputSignature(
-  model: string,
-  topicIds: string[],
-  embeddedAtByTopicId: Map<string, string | null> = new Map(),
-) {
-  const topicInputs = [...new Set(topicIds)]
-    .sort()
-    .map((topicId) => `${topicId}:${embeddedAtByTopicId.get(topicId) ?? "missing"}`);
-
-  return `topic-selection:${model}:${topicInputs.join("|")}`;
 }

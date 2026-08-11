@@ -219,24 +219,35 @@ user_profile_embeddings (
   embedding_model text not null,
   embedding_dimension integer not null,
   input_signature text not null,
+  input_generation bigint not null,
   generated_at timestamptz not null default now(),
   primary key (owner_id, embedding_model)
 )
 ```
 
-`input_signature` should represent selected topic IDs and recent interaction IDs/timestamps. If it changes, the profile vector is stale.
+`input_signature` represents selected topic IDs, weighted paper inputs, and
+recent interaction IDs/timestamps. `profiles.embedding_input_generation`
+advances whenever a ranking-relevant user row changes. A refresh captures that
+generation and can update or delete the stored vector only while the same
+generation is still current.
 
 Current implementation:
 
 ```text
 src/lib/repositories/user-profile-embeddings.ts
-  -> reads topic_embeddings for selected onboarding/settings topics
-  -> computes a normalized weighted topic vector
-  -> upserts user_profile_embeddings during onboarding/settings writes
-  -> clears stale user_profile_embeddings if no source vectors are available
+  -> reads selected topics, favorites, Read later, and recent interactions
+  -> computes one normalized weighted vector for every refresh source
+  -> verifies the input generation before and during the database write
+  -> retries superseded work and coalesces concurrent same-instance requests
+  -> conditionally clears stale vectors if no weighted sources are available
 ```
 
-The older interaction-aware refresh path can still aggregate selected topics, favorites, Read later, and recent paper interactions for a future background refresh. If no weighted source vectors exist yet, the refresh removes any stale stored vector and the feed keeps using the non-semantic fallback ranking.
+Onboarding, settings, feedback, deck actions, and playlist changes all use this
+same aggregation path. The generation check is the cross-instance correctness
+guarantee; in-memory coalescing only avoids redundant work inside one running
+application instance. If no weighted source vectors exist yet, the refresh
+removes the stored vector only when its captured generation is still current,
+and the feed keeps using the non-semantic fallback ranking.
 
 ## Paper Batch Selection
 
