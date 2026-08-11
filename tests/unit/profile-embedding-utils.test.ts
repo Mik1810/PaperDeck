@@ -6,7 +6,6 @@ import {
   l2NormalizeEmbedding,
   parseEmbeddingVector,
   PROFILE_PAPER_INTERACTION_WEIGHTS,
-  topicSelectionInputSignature,
 } from "../../src/lib/profile-embedding-utils";
 
 test("parseEmbeddingVector accepts pgvector literals and arrays", () => {
@@ -41,24 +40,4 @@ test("already_read has the same positive profile weight as read", () => {
     PROFILE_PAPER_INTERACTION_WEIGHTS.read,
   );
   assert.equal(PROFILE_PAPER_INTERACTION_WEIGHTS.already_read, 3);
-});
-
-test("topicSelectionInputSignature is order-insensitive and not hashed", () => {
-  const embeddedAtByTopicId = new Map([
-    ["topic-a", "2026-07-03T10:00:00.000Z"],
-    ["topic-b", "2026-07-03T11:00:00.000Z"],
-  ]);
-  const first = topicSelectionInputSignature("model", [
-    "topic-b",
-    "topic-a",
-  ], embeddedAtByTopicId);
-  const second = topicSelectionInputSignature("model", [
-    "topic-a",
-    "topic-b",
-  ], embeddedAtByTopicId);
-
-  assert.equal(first, second);
-  assert.match(first, /^topic-selection:model:/);
-  assert.match(first, /topic-a:2026-07-03T10:00:00.000Z/);
-  assert.match(first, /topic-b:2026-07-03T11:00:00.000Z/);
 });

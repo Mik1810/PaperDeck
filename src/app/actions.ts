@@ -28,10 +28,7 @@ import {
   deletePaperNote,
   PAPER_NOTE_MAX_LENGTH,
 } from "@/lib/repositories/user-data";
-import {
-  refreshUserProfileEmbedding,
-  writeTopicSelectionProfileEmbedding,
-} from "@/lib/repositories/user-profile-embeddings";
+import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import { logger } from "@/lib/logging/logger";
 import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
 import { emailLookupHash } from "@/lib/collaboration/email-lookup";
@@ -109,17 +106,11 @@ function sourcePathFrom(formData: FormData, fallback: string) {
 
 function scheduleOnboardingPersonalization(
   ownerId: string,
-  topicIds: string[],
   source: OnboardingPersonalizationSource,
 ) {
-  const selectedTopicIds = [...new Set(topicIds)];
-
   after(async () => {
     try {
-      const profileEmbedding = await writeTopicSelectionProfileEmbedding(
-        ownerId,
-        selectedTopicIds,
-      );
+      const profileEmbedding = await refreshUserProfileEmbedding(ownerId);
       const recommendationBatch = await preloadInitialFeedRecommendations(ownerId);
 
       logger.info("onboarding_personalization_completed", {
@@ -152,7 +143,7 @@ export async function saveOnboardingInterestsAction(formData: FormData) {
     .filter((topicId): topicId is string => typeof topicId === "string");
 
   await saveSelectedTopics(user.ownerId, topicIds);
-  scheduleOnboardingPersonalization(user.ownerId, topicIds, "save");
+  scheduleOnboardingPersonalization(user.ownerId, "save");
 
   revalidatePath("/feed");
   revalidatePath("/onboarding");
@@ -172,7 +163,7 @@ export async function skipOnboardingAction(formData: FormData) {
   const topicIds = await getDefaultOnboardingTopicIds();
 
   await saveSelectedTopics(user.ownerId, topicIds);
-  scheduleOnboardingPersonalization(user.ownerId, topicIds, "skip");
+  scheduleOnboardingPersonalization(user.ownerId, "skip");
 
   revalidatePath("/feed");
   revalidatePath("/onboarding");
@@ -478,7 +469,7 @@ export async function saveSettingsInterestsAction(topicIds: string[]) {
   const ownerId = await requireOwnerId();
 
   await saveSelectedTopics(ownerId, topicIds);
-  await writeTopicSelectionProfileEmbedding(ownerId, topicIds);
+  await refreshUserProfileEmbedding(ownerId);
   await clearFeedRecommendations(ownerId);
 
   revalidatePath("/feed");

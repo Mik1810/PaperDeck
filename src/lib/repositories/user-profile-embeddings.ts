@@ -12,6 +12,7 @@ import {
   userPaperInteractions,
   playlists,
   playlistItems,
+  profiles,
 } from "@/db/schema";
 import {
   addWeightedEmbeddingVector,
@@ -20,10 +21,12 @@ import {
   parseEmbeddingVector,
   PROFILE_EMBEDDING_DIMENSION,
   PROFILE_PAPER_INTERACTION_WEIGHTS,
-  SELECTED_TOPIC_EMBEDDING_WEIGHT,
-  topicSelectionInputSignature,
   vectorToPgLiteral,
 } from "@/lib/profile-embedding-utils";
+import {
+  createRefreshCoalescer,
+  refreshLatestGeneration,
+} from "@/lib/profile-embedding-refresh-coordinator";
 
 export const EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2";
 const MAX_INTERACTIONS = 100;
@@ -53,6 +56,10 @@ export type ProfileEmbeddingRefreshResult =
       status: "skipped";
       reason: "no_weighted_vectors" | "zero_vector";
       vectorCount: number;
+    }
+  | {
+      status: "superseded";
+      vectorCount: 0;
     };
 
 function parseVector(value: string | number[]) {
@@ -73,18 +80,6 @@ function addWeightedVector(
 
 function stableSignature(payload: unknown) {
   return JSON.stringify(payload);
-}
-
-/** @user-scoped */
-export async function clearUserProfileEmbedding(ownerId: string) {
-  await db
-    .delete(userProfileEmbeddings)
-    .where(
-      and(
-        eq(userProfileEmbeddings.ownerId, ownerId),
-        eq(userProfileEmbeddings.embeddingModel, EMBEDDING_MODEL),
-      ),
-    );
 }
 
 function accumulateWeights(
@@ -123,124 +118,101 @@ async function getReadLaterPaperIds(ownerId: string) {
   return items.map((r) => r.paperId);
 }
 
-async function upsertUserProfileEmbedding(
+async function currentInputGeneration(ownerId: string) {
+  const rows = await db
+    .select({ generation: profiles.embeddingInputGeneration })
+    .from(profiles)
+    .where(eq(profiles.ownerId, ownerId))
+    .limit(1);
+
+  return rows[0]?.generation ?? null;
+}
+
+async function clearUserProfileEmbeddingIfCurrent(
+  ownerId: string,
+  inputGeneration: number,
+) {
+  const result = await db.execute<{ current: boolean }>(sql`
+    with current_generation as materialized (
+      select 1
+      from public.profiles
+      where owner_id = ${ownerId}
+        and embedding_input_generation = ${inputGeneration}
+      for update
+    ), deleted as (
+      delete from public.user_profile_embeddings
+      where owner_id = ${ownerId}
+        and embedding_model = ${EMBEDDING_MODEL}
+        and exists (select 1 from current_generation)
+      returning 1
+    )
+    select exists(select 1 from current_generation) as current
+  `);
+
+  return result.rows[0]?.current ?? false;
+}
+
+async function upsertUserProfileEmbeddingIfCurrent(
   ownerId: string,
   normalized: number[],
   inputSignature: string,
+  inputGeneration: number,
 ) {
-  const embedding = sql`${vectorToPgLiteral(normalized)}::vector`;
+  const embeddingLiteral = vectorToPgLiteral(normalized);
 
-  await db
-    .insert(userProfileEmbeddings)
-    .values({
-      ownerId,
+  const result = await db.execute<{ input_generation: number }>(sql`
+    with current_generation as materialized (
+      select 1
+      from public.profiles
+      where owner_id = ${ownerId}
+        and embedding_input_generation = ${inputGeneration}
+      for update
+    )
+    insert into public.user_profile_embeddings (
+      owner_id,
       embedding,
-      embeddingModel: EMBEDDING_MODEL,
-      embeddingDimension: PROFILE_EMBEDDING_DIMENSION,
-      inputSignature,
-    })
-    .onConflictDoUpdate({
-      target: [
-        userProfileEmbeddings.ownerId,
-        userProfileEmbeddings.embeddingModel,
-      ],
-      set: {
-        embedding,
-        embeddingDimension: PROFILE_EMBEDDING_DIMENSION,
-        inputSignature,
-        generatedAt: sql`now()`,
-      },
-    });
+      embedding_model,
+      embedding_dimension,
+      input_signature,
+      input_generation,
+      generated_at
+    )
+    select
+      ${ownerId},
+      ${embeddingLiteral}::vector,
+      ${EMBEDDING_MODEL},
+      ${PROFILE_EMBEDDING_DIMENSION},
+      ${inputSignature},
+      ${inputGeneration},
+      now()
+    from current_generation
+    on conflict (owner_id, embedding_model) do update
+    set embedding = excluded.embedding,
+        embedding_dimension = excluded.embedding_dimension,
+        input_signature = excluded.input_signature,
+        input_generation = excluded.input_generation,
+        generated_at = now()
+    where exists (
+      select 1
+      from current_generation
+    )
+    returning input_generation
+  `);
+
+  return result.rows.length > 0;
 }
 
-/** @user-scoped */
-export async function writeTopicSelectionProfileEmbedding(
+async function refreshUserProfileEmbeddingOnce(
   ownerId: string,
-  topicIds: string[],
-): Promise<ProfileEmbeddingRefreshResult> {
-  const selectedTopicIds = [...new Set(topicIds)].sort();
-
-  if (!selectedTopicIds.length) {
-    await clearUserProfileEmbedding(ownerId);
-
-    return {
-      status: "skipped",
-      reason: "no_weighted_vectors",
-      vectorCount: 0,
-    };
+): Promise<
+  | { committed: true; value: ProfileEmbeddingRefreshResult }
+  | { committed: false }
+> {
+  const inputGeneration = await currentInputGeneration(ownerId);
+  if (inputGeneration === null) {
+    return { committed: false };
   }
 
-  const topicEmbRows = await db
-    .select({
-      topicId: topicEmbeddings.topicId,
-      embedding: topicEmbeddings.embedding,
-      embeddedAt: topicEmbeddings.embeddedAt,
-    })
-    .from(topicEmbeddings)
-    .where(
-      and(
-        eq(topicEmbeddings.embeddingModel, EMBEDDING_MODEL),
-        inArray(topicEmbeddings.topicId, selectedTopicIds),
-      ),
-    );
-
-  const accumulator = createEmbeddingAccumulator(PROFILE_EMBEDDING_DIMENSION);
-  let vectorCount = 0;
-  const embeddedTopicsById = new Map(
-    topicEmbRows.map((row) => [row.topicId, row.embeddedAt]),
-  );
-
-  for (const row of topicEmbRows) {
-    addWeightedVector(
-      accumulator,
-      parseVector(row.embedding),
-      SELECTED_TOPIC_EMBEDDING_WEIGHT,
-    );
-    vectorCount += 1;
-  }
-
-  if (!vectorCount) {
-    await clearUserProfileEmbedding(ownerId);
-
-    return {
-      status: "skipped",
-      reason: "no_weighted_vectors",
-      vectorCount,
-    };
-  }
-
-  const normalized = l2Normalize(accumulator);
-
-  if (!normalized) {
-    await clearUserProfileEmbedding(ownerId);
-
-    return {
-      status: "skipped",
-      reason: "zero_vector",
-      vectorCount,
-    };
-  }
-
-  await upsertUserProfileEmbedding(
-    ownerId,
-    normalized,
-    topicSelectionInputSignature(
-      EMBEDDING_MODEL,
-      selectedTopicIds,
-      embeddedTopicsById,
-    ),
-  );
-
-  return {
-    status: "updated",
-    vectorCount,
-  };
-}
-
-/** @user-scoped */
-export async function refreshUserProfileEmbedding(
-  ownerId: string,
-): Promise<ProfileEmbeddingRefreshResult> {
   const [interests, favRows, interactionRows, readLaterPaperIds] =
     await Promise.all([
       db
@@ -319,6 +291,10 @@ export async function refreshUserProfileEmbedding(
       : ([] as PaperEmbeddingRow[]),
   ]);
 
+  if ((await currentInputGeneration(ownerId)) !== inputGeneration) {
+    return { committed: false };
+  }
+
   const accumulator = createEmbeddingAccumulator(PROFILE_EMBEDDING_DIMENSION);
   let vectorCount = 0;
   const embeddedTopicsById = new Map(
@@ -351,24 +327,34 @@ export async function refreshUserProfileEmbedding(
   }
 
   if (!vectorCount) {
-    await clearUserProfileEmbedding(ownerId);
+    if (!(await clearUserProfileEmbeddingIfCurrent(ownerId, inputGeneration))) {
+      return { committed: false };
+    }
 
     return {
-      status: "skipped",
-      reason: "no_weighted_vectors",
-      vectorCount,
+      committed: true,
+      value: {
+        status: "skipped",
+        reason: "no_weighted_vectors",
+        vectorCount,
+      },
     };
   }
 
   const normalized = l2Normalize(accumulator);
 
   if (!normalized) {
-    await clearUserProfileEmbedding(ownerId);
+    if (!(await clearUserProfileEmbeddingIfCurrent(ownerId, inputGeneration))) {
+      return { committed: false };
+    }
 
     return {
-      status: "skipped",
-      reason: "zero_vector",
-      vectorCount,
+      committed: true,
+      value: {
+        status: "skipped",
+        reason: "zero_vector",
+        vectorCount,
+      },
     };
   }
 
@@ -392,6 +378,7 @@ export async function refreshUserProfileEmbedding(
   const existing = await db
     .select({
       inputSignature: userProfileEmbeddings.inputSignature,
+      inputGeneration: userProfileEmbeddings.inputGeneration,
     })
     .from(userProfileEmbeddings)
     .where(
@@ -402,17 +389,51 @@ export async function refreshUserProfileEmbedding(
     )
     .limit(1);
 
-  if (existing[0]?.inputSignature === inputSignature) {
+  if (
+    existing[0]?.inputSignature === inputSignature &&
+    existing[0]?.inputGeneration === inputGeneration
+  ) {
+    if ((await currentInputGeneration(ownerId)) !== inputGeneration) {
+      return { committed: false };
+    }
     return {
-      status: "up_to_date",
-      vectorCount,
+      committed: true,
+      value: { status: "up_to_date", vectorCount },
     };
   }
 
-  await upsertUserProfileEmbedding(ownerId, normalized, inputSignature);
+  if (
+    !(await upsertUserProfileEmbeddingIfCurrent(
+      ownerId,
+      normalized,
+      inputSignature,
+      inputGeneration,
+    ))
+  ) {
+    return { committed: false };
+  }
 
   return {
-    status: "updated",
-    vectorCount,
+    committed: true,
+    value: { status: "updated", vectorCount },
   };
+}
+
+async function refreshUserProfileEmbeddingUntilCurrent(ownerId: string) {
+  const result = await refreshLatestGeneration(() =>
+    refreshUserProfileEmbeddingOnce(ownerId),
+  );
+
+  return result ?? { status: "superseded" as const, vectorCount: 0 as const };
+}
+
+const coalescedRefresh = createRefreshCoalescer(
+  refreshUserProfileEmbeddingUntilCurrent,
+);
+
+/** @user-scoped */
+export async function refreshUserProfileEmbedding(
+  ownerId: string,
+): Promise<ProfileEmbeddingRefreshResult> {
+  return coalescedRefresh(ownerId);
 }

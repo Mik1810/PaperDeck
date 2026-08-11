@@ -8,6 +8,12 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Prevented older concurrent profile-embedding refreshes from overwriting newer
+  user state. Ranking-relevant mutations now advance a per-user input
+  generation, refresh writes conditionally lock and verify that generation,
+  superseded work retries, and same-instance requests share one in-flight queue.
+  Onboarding and settings now use the same complete topic, collection, and
+  interaction aggregation path as every other refresh.
 - Made Favorite and Read later mutations atomic and retry-safe. Clients now
   send an explicit ON/OFF target instead of a toggle, collection state and its
   append-only interaction event commit in one transaction, duplicate retries
