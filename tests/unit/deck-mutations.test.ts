@@ -6,7 +6,7 @@ import {
   recordOpenDetail,
   submitDeckAction,
 } from "../../src/lib/client/deck-mutations";
-import { isFeedHiddenAction } from "../../src/lib/ranking/feed-ranking";
+import { isDurableFeedExclusionAction } from "../../src/lib/ranking/feed-ranking";
 
 describe("submitDeckAction", () => {
   test("posts deck mutations to the API", async () => {
@@ -193,23 +193,22 @@ describe("MutationAlert", () => {
   });
 });
 
-describe("isFeedHiddenAction", () => {
-  test("identifies dismiss, not_interested, and already_read as hidden", () => {
-    assert.equal(isFeedHiddenAction("dismiss"), true);
-    assert.equal(isFeedHiddenAction("not_interested"), true);
-    assert.equal(isFeedHiddenAction("already_read"), true);
+describe("isDurableFeedExclusionAction", () => {
+  test("identifies consumed and rejected actions as durable", () => {
+    assert.equal(isDurableFeedExclusionAction("open_detail"), true);
+    assert.equal(isDurableFeedExclusionAction("dismiss"), true);
+    assert.equal(isDurableFeedExclusionAction("not_interested"), true);
+    assert.equal(isDurableFeedExclusionAction("read"), true);
+    assert.equal(isDurableFeedExclusionAction("already_read"), true);
   });
 
-  test("hides favorite and save_to_playlist after a feed refresh", () => {
-    assert.equal(isFeedHiddenAction("favorite"), true);
-    assert.equal(isFeedHiddenAction("save_to_playlist"), true);
-  });
-
-  test("hides open_detail (feed advances after opening)", () => {
-    assert.equal(isFeedHiddenAction("open_detail"), true);
+  test("keeps collection events out of durable state", () => {
+    assert.equal(isDurableFeedExclusionAction("favorite"), false);
+    assert.equal(isDurableFeedExclusionAction("save_to_playlist"), false);
+    assert.equal(isDurableFeedExclusionAction("seen"), false);
   });
 
   test("returns false for unknown action types", () => {
-    assert.equal(isFeedHiddenAction("unknown" as never), false);
+    assert.equal(isDurableFeedExclusionAction("unknown" as never), false);
   });
 });

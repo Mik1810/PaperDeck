@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Kept consumed or rejected papers out of future feed batches independently of
+  the 200-row ranking-history window. `open_detail`, `dismiss`,
+  `not_interested`, `read`, and `already_read` now materialize one durable,
+  owner-scoped exclusion per paper; current Favorites and membership in any
+  private playlist remain reversible collection exclusions.
 - Made profile embeddings follow current collection state on both additions
   and removals. Favorites and deduplicated membership in any private playlist
   are now authoritative signals, append-only collection events no longer add a

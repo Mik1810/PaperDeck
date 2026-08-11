@@ -67,21 +67,19 @@ const negativeInteractionWeights: Partial<Record<InteractionType, number>> = {
   not_interested: -7,
 };
 
-const feedHiddenActions = new Set<InteractionType>([
+const durableFeedExclusionActions = new Set<InteractionType>([
   "open_detail",
   "dismiss",
   "not_interested",
   "read",
   "already_read",
-  "save_to_playlist",
-  "favorite",
 ]);
 
 const TOPIC_AFFINITY_SCORE_MULTIPLIER = 90;
 const FEEDBACK_SCORE_MULTIPLIER = 6;
 
-export function isFeedHiddenAction(action: InteractionType) {
-  return feedHiddenActions.has(action);
+export function isDurableFeedExclusionAction(action: InteractionType) {
+  return durableFeedExclusionActions.has(action);
 }
 
 export function isRankingFeedbackAction(action: InteractionType) {
@@ -92,18 +90,14 @@ export function isRankingFeedbackAction(action: InteractionType) {
 
 export function buildSeenPaperIds(
   favoriteIds: Iterable<string>,
-  readLaterIds: Iterable<string>,
-  interactions: RankingInteraction[],
+  playlistPaperIds: Iterable<string>,
+  durableExclusionIds: Iterable<string>,
 ) {
-  const seenIds = new Set([...favoriteIds, ...readLaterIds]);
-
-  for (const interaction of interactions) {
-    if (isFeedHiddenAction(interaction.action)) {
-      seenIds.add(interaction.paperId);
-    }
-  }
-
-  return seenIds;
+  return new Set([
+    ...favoriteIds,
+    ...playlistPaperIds,
+    ...durableExclusionIds,
+  ]);
 }
 
 function getAncestorIds(
