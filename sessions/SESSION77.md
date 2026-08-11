@@ -33,9 +33,11 @@ ranking mutations start overlapping refreshes.
 
 ## Safety
 
-The migration was created with the Supabase CLI and applied only to the
-disposable local Docker test database. No hosted database, credential, user,
-or production data was read or changed.
+The migration was created with the Supabase CLI and first applied to the
+disposable local Docker test database. After explicit approval, a remote
+dry-run confirmed that this was the only pending migration, then the same file
+was applied to the hosted PaperDeck database. It added schema metadata only;
+no user or application rows were created, updated, or deleted.
 
 ## Validation
 
@@ -47,3 +49,6 @@ or production data was read or changed.
 - Targeted local Docker E2E: 2 passed, including an uncommitted concurrent
   mutation that blocks and then rejects the stale embedding write.
 - Full Playwright desktop/mobile: 84 passed and 6 expected Clerk-auth skips.
+- Hosted read-only verification found both required `bigint` columns, all six
+  expected triggers, three `SECURITY INVOKER` functions, and the exact remote
+  migration-history entry. A final remote dry-run reported no pending work.
