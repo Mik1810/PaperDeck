@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+if [[ $# -eq 0 ]]; then
+  echo "usage: $0 <command> [args...]" >&2
+  exit 2
+fi
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+log_dir="$root/.codex-logs"
+mkdir -p "$log_dir"
+
+stamp="$(date +%Y%m%d-%H%M%S)"
+safe_name="$(printf '%s' "$1" | tr -cs 'A-Za-z0-9._-' '_')"
+log="$log_dir/${stamp}-${safe_name}.log"
+
+start="$(date +%s)"
+set +e
+"$@" >"$log" 2>&1
+status=$?
+set -e
+end="$(date +%s)"
+duration=$((end - start))
+
+# Remove ANSI escapes for compact terminal diagnostics while retaining the raw log.
+clean="$(mktemp)"
+trap 'rm -f "$clean"' EXIT
+sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$log" >"$clean" 2>/dev/null || cp "$log" "$clean"
+
+printf 'status: %d\n' "$status"
+printf 'duration_s: %d\n' "$duration"
+printf 'full_log: %s\n' "${log#$root/}"
+
+if [[ $status -eq 0 ]]; then
+  echo "--- compact tail ---"
+  tail -n 30 "$clean"
+else
+  echo "--- likely diagnostics ---"
+  if command -v rg >/dev/null 2>&1; then
+    rg -n -i -m 80 \
+      '(^|[^a-z])(error|failed|failure|exception|fatal|assert|expected|received|TS[0-9]{4})([^a-z]|$)' \
+      "$clean" || true
+  else
+    grep -Ein -m 80 \
+      'error|failed|failure|exception|fatal|assert|expected|received|TS[0-9]{4}' \
+      "$clean" || true
+  fi
+  echo "--- final 60 lines ---"
+  tail -n 60 "$clean"
+fi
+
+exit "$status"
