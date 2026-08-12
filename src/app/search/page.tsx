@@ -10,6 +10,7 @@ import { PaperListItem } from "@/components/paper-list-item";
 import { PeopleEmailSearch } from "@/components/people-email-search";
 import { requireOwnerId } from "@/lib/auth/session";
 import { searchPapers } from "@/lib/repositories/catalog";
+import { InvalidCatalogSearchCursorError } from "@/lib/repositories/catalog-search";
 import {
   getReadLaterCount,
   hasUsableOnboardingState,
@@ -19,23 +20,16 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 type SearchPageProps = {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ cursor?: string; q?: string }>;
 };
 
 function normalizeQueryParam(value?: string) {
   return (value ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
 }
 
-function normalizePageParam(value?: string) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-}
-
-function searchHref(query: string, page: number) {
+function searchHref(query: string, cursor?: string | null) {
   const params = new URLSearchParams({ q: query });
-  if (page > 1) {
-    params.set("page", String(page));
-  }
+  if (cursor) params.set("cursor", cursor);
   return `/search?${params.toString()}`;
 }
 
@@ -46,16 +40,25 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     redirect("/onboarding");
   }
 
-  const { q, page: pageParam } = await searchParams;
+  const { cursor, q } = await searchParams;
   const query = normalizeQueryParam(q);
-  const page = normalizePageParam(pageParam);
   const [readLaterCount, search] = await Promise.all([
     getReadLaterCount(ownerId),
     query
-      ? searchPapers(query, page)
-      : Promise.resolve({ results: [], page: 1, hasMore: false }),
+      ? searchPapers(query, cursor).catch((error) => {
+          if (error instanceof InvalidCatalogSearchCursorError) {
+            return searchPapers(query);
+          }
+          throw error;
+        })
+      : Promise.resolve({
+          results: [],
+          nextCursor: null,
+          page: 1,
+          previousCursor: null,
+        }),
   ]);
-  const { results, hasMore } = search;
+  const { results, nextCursor, page, previousCursor } = search;
 
   return (
     <AppShell
@@ -132,15 +135,15 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         ) : null}
 
-        {query && results.length && (page > 1 || hasMore) ? (
+        {query && results.length && (previousCursor || nextCursor) ? (
           <nav
             aria-label="Search results pages"
             className="flex items-center justify-between gap-3"
           >
-            {page > 1 ? (
+            {previousCursor ? (
               <Link
                 className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.99]"
-                href={searchHref(query, page - 1)}
+                href={searchHref(query, previousCursor)}
                 rel="prev"
               >
                 <ArrowLeft aria-hidden="true" size={17} strokeWidth={2.5} />
@@ -149,10 +152,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             ) : (
               <span />
             )}
-            {hasMore ? (
+            {nextCursor ? (
               <Link
                 className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.99]"
-                href={searchHref(query, page + 1)}
+                href={searchHref(query, nextCursor)}
                 rel="next"
               >
                 Next
@@ -174,10 +177,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                 ? "You have reached the end of the results."
                 : "Try a paper title, author, topic, or arXiv category."}
             </p>
-            {page > 1 ? (
+            {previousCursor ? (
               <Link
                 className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.99]"
-                href={searchHref(query, page - 1)}
+                href={searchHref(query, previousCursor)}
                 rel="prev"
               >
                 <ArrowLeft aria-hidden="true" size={17} strokeWidth={2.5} />

@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Completed catalog-search access paths for substring DOI and arXiv-ID
+  matching, removed index-defeating identifier wrappers, and split full-text,
+  paper, author, and topic matches into planner-friendly branches. Search now
+  uses query-bound bidirectional keyset cursors on `(rank, year, id)` instead of
+  increasingly expensive deep `OFFSET` pages.
 - Made arXiv paper ingestion atomic and revision-aware. One service-role-only
   database RPC now commits the paper, versioned identifier, ordered authors,
   and category links together; transient retries repeat the whole bundle,
