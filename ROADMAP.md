@@ -41,6 +41,9 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Mutazioni collezioni: Favorite e Read later ricevono uno stato finale
   esplicito ON/OFF e lo applicano in modo idempotente; ogni reale transizione
   OFF verso ON registra un evento append-only nella stessa transazione.
+- Membership playlist: Read later rapido, picker, Library e salvataggio privato
+  dai gruppi usano un unico servizio owner-scoped; lock, posizione, evento e
+  invalidazione del profilo seguono le stesse regole transazionali.
 - Preview abstract: circa 10 righe su mobile, adattiva su desktop.
 - Embeddings MVP: modello open-source locale, con `sentence-transformers/all-MiniLM-L6-v2` come default corrente dopo benchmark offline; BGE-small resta baseline storica.
 - Worker batch online MVP: GitHub Actions giornaliero e avviabile manualmente.

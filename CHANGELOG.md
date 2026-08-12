@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Consolidated every private-playlist membership mutation behind one
+  owner-scoped transaction. Quick Read later saves, the multi-playlist picker,
+  Library removal, inline playlist creation, and group private saves now share
+  playlist-row serialization, duplicate-safe `max(position) + 1` ordering,
+  append-only interaction recording, and profile-refresh scheduling.
 - Bounded private research-group workspaces to 40 shared papers per response.
   Later papers now load through authenticated private no-store keyset pages on
   `(added_at, paper_id)`, while group controls and membership remain eager and

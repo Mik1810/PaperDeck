@@ -52,11 +52,7 @@ import {
   recommendationModelVersionForFeedSource,
   type RecommendationFeedSource,
 } from "@/lib/recommendation-batches";
-import {
-  addToOwnedPlaylist,
-  removeFromOwnedPlaylist,
-  reorderOwnedPlaylistItems,
-} from "@/lib/repositories/playlist-items";
+import { reorderOwnedPlaylistItems } from "@/lib/repositories/playlist-items";
 import { logger } from "@/lib/logging/logger";
 import type {
   LibraryCollectionItem,
@@ -135,6 +131,12 @@ export type PaperPlaylistOption = {
 };
 
 export type PlaylistSaveContext = "feed" | "digest" | "paper_detail" | "group";
+export type PlaylistMutationContext = PlaylistSaveContext | "library";
+
+export type PlaylistMembershipTarget =
+  | { kind: "playlist"; playlistId: string }
+  | { kind: "read_later" }
+  | { kind: "new_playlist"; name: string };
 
 async function measureAsync<T>(
   timings: Record<string, number>,
@@ -1811,98 +1813,6 @@ export async function setFavoriteState(
 }
 
 /** @user-scoped */
-export async function setReadLaterState(
-  ownerId: string,
-  paperId: string,
-  selected: boolean,
-  options: InteractionRecordOptions = {},
-) {
-  const result = await db.transaction(async (tx) => {
-    if (!selected) {
-      const existingPlaylist = await tx
-        .select({ id: playlists.id })
-        .from(playlists)
-        .where(
-          and(
-            eq(playlists.ownerId, ownerId),
-            eq(playlists.name, "Read later"),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const playlistId = existingPlaylist[0]?.id;
-
-      if (!playlistId) {
-        return { changed: false, selected: false };
-      }
-
-      const removed = await tx
-        .delete(playlistItems)
-        .where(
-          and(
-            eq(playlistItems.playlistId, playlistId),
-            eq(playlistItems.paperId, paperId),
-          ),
-        )
-        .returning({ paperId: playlistItems.paperId });
-      return { changed: removed.length > 0, selected: false };
-    }
-
-    const [createdPlaylist] = await tx
-      .insert(playlists)
-      .values({
-        ownerId,
-        name: "Read later",
-        description: "Default private queue for papers to revisit.",
-        isDefault: true,
-      })
-      .onConflictDoNothing({ target: [playlists.ownerId, playlists.name] })
-      .returning({ id: playlists.id });
-    const existingPlaylist = createdPlaylist
-      ? null
-      : await tx
-          .select({ id: playlists.id })
-          .from(playlists)
-          .where(
-            and(
-              eq(playlists.ownerId, ownerId),
-              eq(playlists.name, "Read later"),
-            ),
-          )
-          .limit(1)
-          .for("update");
-    const playlistId = createdPlaylist?.id ?? existingPlaylist?.[0]?.id;
-
-    if (!playlistId) {
-      throw new Error("Find Read later playlist after conflict: missing saved row");
-    }
-
-    const [created] = await tx
-      .insert(playlistItems)
-      .values({ playlistId, paperId, position: 0 })
-      .onConflictDoNothing({
-        target: [playlistItems.playlistId, playlistItems.paperId],
-      })
-      .returning({ paperId: playlistItems.paperId });
-
-    if (created) {
-      await tx.insert(userPaperInteractions).values({
-        ownerId,
-        paperId,
-        recommendationImpressionId: options.recommendationImpressionId ?? null,
-        action: "save_to_playlist",
-        context: "feed",
-      });
-    }
-
-    return { changed: Boolean(created), selected: true };
-  });
-
-  if (result.changed) scheduleProfileEmbeddingRefresh(ownerId);
-  return result;
-}
-
-/** @user-scoped */
 export async function getPaperPlaylistOptions(
   ownerId: string,
   paperId: string,
@@ -1933,28 +1843,100 @@ export async function getPaperPlaylistOptions(
   }));
 }
 
-/** @user-scoped */
-export async function setPaperPlaylistMembership(
+/**
+ * Canonical user-scoped service for every private-playlist membership change.
+ * Playlist authorization, row serialization, max-position allocation,
+ * interaction recording, and membership state commit in one transaction.
+ */
+export async function setPlaylistMembership(
   ownerId: string,
   paperId: string,
-  playlistId: string,
+  target: PlaylistMembershipTarget,
   selected: boolean,
-  context: PlaylistSaveContext,
+  context: PlaylistMutationContext,
   options: InteractionRecordOptions = {},
 ) {
   const result = await db.transaction(async (tx) => {
-    const ownedPlaylist = await tx
-      .select({ id: playlists.id })
-      .from(playlists)
-      .where(
-        and(eq(playlists.id, playlistId), eq(playlists.ownerId, ownerId)),
-      )
-      .limit(1)
-      .for("update");
+    if (target.kind === "new_playlist" && !selected) {
+      throw new Error("A new playlist must start selected");
+    }
 
-    if (!ownedPlaylist.length) {
+    let ownedPlaylist:
+      | { id: string; isDefault: boolean; name: string }
+      | undefined;
+
+    if (target.kind === "new_playlist") {
+      [ownedPlaylist] = await tx
+        .insert(playlists)
+        .values({ ownerId, name: target.name, isDefault: false })
+        .returning({
+          id: playlists.id,
+          isDefault: playlists.isDefault,
+          name: playlists.name,
+        });
+    } else if (target.kind === "read_later" && selected) {
+      [ownedPlaylist] = await tx
+        .insert(playlists)
+        .values({
+          ownerId,
+          name: "Read later",
+          description: "Default private queue for papers to revisit.",
+          isDefault: true,
+        })
+        .onConflictDoNothing({ target: [playlists.ownerId, playlists.name] })
+        .returning({
+          id: playlists.id,
+          isDefault: playlists.isDefault,
+          name: playlists.name,
+        });
+    }
+
+    if (!ownedPlaylist) {
+      if (target.kind === "new_playlist") {
+        throw new Error("Created playlist is unavailable");
+      }
+      const rows = await tx
+        .select({
+          id: playlists.id,
+          isDefault: playlists.isDefault,
+          name: playlists.name,
+        })
+        .from(playlists)
+        .where(
+          target.kind === "read_later"
+            ? and(
+                eq(playlists.ownerId, ownerId),
+                eq(playlists.name, "Read later"),
+              )
+            : and(
+                eq(playlists.id, target.playlistId),
+                eq(playlists.ownerId, ownerId),
+              ),
+        )
+        .limit(1)
+        .for("update");
+      ownedPlaylist = rows[0];
+    }
+
+    if (!ownedPlaylist) {
+      if (target.kind === "read_later" && !selected) {
+        return {
+          changed: false,
+          created: false,
+          option: null,
+          selected: false,
+        };
+      }
       throw new Error("Playlist is unavailable");
     }
+
+    const playlistId = ownedPlaylist.id;
+    const option = {
+      id: playlistId,
+      isDefault: ownedPlaylist.isDefault,
+      name: ownedPlaylist.name,
+      selected,
+    } satisfies PaperPlaylistOption;
 
     if (!selected) {
       const removed = await tx
@@ -1969,6 +1951,7 @@ export async function setPaperPlaylistMembership(
       return {
         changed: removed.length > 0,
         created: false,
+        option,
         selected: false,
       };
     }
@@ -2004,50 +1987,12 @@ export async function setPaperPlaylistMembership(
     return {
       changed: Boolean(created),
       created: Boolean(created),
+      option,
       selected: true,
     };
   });
 
   if (result.changed) scheduleProfileEmbeddingRefresh(ownerId);
-  return result;
-}
-
-/** @user-scoped */
-export async function createPlaylistWithPaper(
-  ownerId: string,
-  paperId: string,
-  name: string,
-  context: PlaylistSaveContext,
-  options: InteractionRecordOptions = {},
-) {
-  const result = await db.transaction(async (tx) => {
-    const [playlist] = await tx
-      .insert(playlists)
-      .values({ ownerId, name, isDefault: false })
-      .returning({ id: playlists.id, name: playlists.name });
-
-    await tx.insert(playlistItems).values({
-      playlistId: playlist.id,
-      paperId,
-      position: 0,
-    });
-    await tx.insert(userPaperInteractions).values({
-      ownerId,
-      paperId,
-      recommendationImpressionId: options.recommendationImpressionId ?? null,
-      action: "save_to_playlist",
-      context,
-    });
-
-    return {
-      id: playlist.id,
-      name: playlist.name,
-      isDefault: false,
-      selected: true,
-    } satisfies PaperPlaylistOption;
-  });
-
-  scheduleProfileEmbeddingRefresh(ownerId);
   return result;
 }
 
@@ -2093,26 +2038,6 @@ export async function deletePlaylist(ownerId: string, playlistId: string) {
     .returning({ id: playlists.id });
 
   if (deleted.length) scheduleProfileEmbeddingRefresh(ownerId);
-}
-
-/** @user-scoped */
-export async function addToPlaylist(
-  ownerId: string,
-  playlistId: string,
-  paperId: string,
-) {
-  await addToOwnedPlaylist(ownerId, playlistId, paperId);
-  scheduleProfileEmbeddingRefresh(ownerId);
-}
-
-/** @user-scoped */
-export async function removeFromPlaylist(
-  ownerId: string,
-  playlistId: string,
-  paperId: string,
-) {
-  await removeFromOwnedPlaylist(ownerId, playlistId, paperId);
-  scheduleProfileEmbeddingRefresh(ownerId);
 }
 
 /** @user-scoped */
