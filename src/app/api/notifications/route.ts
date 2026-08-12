@@ -29,6 +29,12 @@ function parseReadState(value: string | null): NotificationReadState {
   return value === "read" || value === "unread" ? value : "all";
 }
 
+function parseView(value: string | null) {
+  if (value === null || value === "list") return "list";
+  if (value === "count") return "count";
+  throw new Error("Invalid notification view.");
+}
+
 function parseLimit(value: string | null) {
   if (value === null) return 20;
   const limit = Number(value);
@@ -57,6 +63,15 @@ export async function GET(request: Request) {
   try {
     const ownerId = await requireOwnerId();
     const url = new URL(request.url);
+    const view = parseView(url.searchParams.get("view"));
+
+    if (view === "count") {
+      return NextResponse.json(
+        { unreadCount: await countUnreadNotifications(ownerId) },
+        { headers: responseHeaders() },
+      );
+    }
+
     const [items, unreadCount] = await Promise.all([
       listNotifications(ownerId, {
         limit: parseLimit(url.searchParams.get("limit")),

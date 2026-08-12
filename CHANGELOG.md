@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Reduced background notification work: the closed header bell now polls only
+  the unread count, loads the latest notification page on demand when opened,
+  cancels or shares overlapping requests, and debounces browser lifecycle
+  refresh bursts. The full notification-history route remains independently
+  paginated.
 - Kept consumed or rejected papers out of future feed batches independently of
   the 200-row ranking-history window. `open_detail`, `dismiss`,
   `not_interested`, `read`, and `already_read` now materialize one durable,

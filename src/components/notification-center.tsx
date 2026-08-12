@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Bell, CheckCheck, X } from "lucide-react";
@@ -14,21 +20,43 @@ import {
 } from "@/lib/notifications/presentation";
 import type { NotificationSummary } from "@/lib/repositories/notifications";
 
-type NotificationResponse = {
-  items: NotificationSummary[];
+type NotificationCountResponse = {
   unreadCount: number;
 };
+
+type NotificationListResponse = NotificationCountResponse & {
+  items: NotificationSummary[];
+};
+
+type NotificationRequestKind = "count" | "list";
+
+type ActiveNotificationRequest = {
+  kind: NotificationRequestKind;
+  controller: AbortController;
+  promise: Promise<void>;
+};
+
+const LIFECYCLE_REFRESH_DEBOUNCE_MS = 250;
+const LIFECYCLE_REFRESH_COOLDOWN_MS = 1_000;
 
 export function NotificationCenter() {
   const bellRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const knownIdsRef = useRef(new Set<string>());
   const initializedRef = useRef(false);
-  const refreshSequenceRef = useRef(0);
+  const panelOpenRef = useRef(false);
+  const activeRequestRef = useRef<ActiveNotificationRequest | null>(null);
+  const lifecycleRefreshTimerRef = useRef<number | null>(null);
+  const lastRefreshStartedAtRef = useRef<
+    Record<NotificationRequestKind, number>
+  >({
+    count: 0,
+    list: 0,
+  });
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationSummary[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<NotificationSummary | null>(null);
   const [panelPosition, setPanelPosition] = useState({ top: "4.5rem", right: "1rem" });
@@ -43,60 +71,153 @@ export function NotificationCenter() {
     });
   }, []);
 
-  const refresh = useCallback(async (announceNew = false) => {
-    const sequence = ++refreshSequenceRef.current;
-    try {
-      const response = await fetch("/api/notifications?limit=20", {
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) throw new Error("Notification request failed");
-      const payload = (await response.json()) as NotificationResponse;
-      const ordered = pinActionableNotifications(payload.items);
-      if (sequence !== refreshSequenceRef.current) return;
+  const refresh = useCallback(
+    (kind: NotificationRequestKind, announceNew = false) => {
+      const activeRequest = activeRequestRef.current;
+      if (activeRequest?.kind === kind) return activeRequest.promise;
 
-      if (initializedRef.current && announceNew) {
-        const important = ordered.find(
-          (item) =>
-            !item.readAt &&
-            !knownIdsRef.current.has(item.id) &&
-            isImportantNotification(item),
-        );
-        if (important) setToast(important);
+      activeRequest?.controller.abort();
+      const controller = new AbortController();
+      lastRefreshStartedAtRef.current[kind] = Date.now();
+      if (kind === "list") {
+        setLoading(true);
+        setErrorMessage(null);
       }
 
-      knownIdsRef.current = new Set(ordered.map((item) => item.id));
-      initializedRef.current = true;
-      setItems(ordered);
-      setUnreadCount(payload.unreadCount);
-      setErrorMessage(null);
-    } catch {
-      if (sequence !== refreshSequenceRef.current) return;
-      setErrorMessage("Notifications could not be refreshed.");
-    } finally {
-      if (sequence === refreshSequenceRef.current) setLoading(false);
+      const promise = (async () => {
+        try {
+          const response = await fetch(
+            kind === "count"
+              ? "/api/notifications?view=count"
+              : "/api/notifications?limit=20",
+            {
+              cache: "no-store",
+              headers: { Accept: "application/json" },
+              signal: controller.signal,
+            },
+          );
+          if (!response.ok) throw new Error("Notification request failed");
+          const payload = (await response.json()) as NotificationCountResponse;
+          if (
+            controller.signal.aborted ||
+            activeRequestRef.current?.controller !== controller
+          ) {
+            return;
+          }
+
+          setUnreadCount(payload.unreadCount);
+          if (kind === "count") return;
+
+          const ordered = pinActionableNotifications(
+            (payload as NotificationListResponse).items,
+          );
+          if (initializedRef.current && announceNew) {
+            const important = ordered.find(
+              (item) =>
+                !item.readAt &&
+                !knownIdsRef.current.has(item.id) &&
+                isImportantNotification(item),
+            );
+            if (important) setToast(important);
+          }
+
+          knownIdsRef.current = new Set(ordered.map((item) => item.id));
+          initializedRef.current = true;
+          setItems(ordered);
+          setErrorMessage(null);
+        } catch {
+          if (
+            controller.signal.aborted ||
+            activeRequestRef.current?.controller !== controller
+          ) {
+            return;
+          }
+          if (kind === "list") {
+            setErrorMessage("Notifications could not be refreshed.");
+          }
+        } finally {
+          if (activeRequestRef.current?.controller === controller) {
+            activeRequestRef.current = null;
+            if (kind === "list") setLoading(false);
+          }
+        }
+      })();
+
+      activeRequestRef.current = { kind, controller, promise };
+      return promise;
+    },
+    [],
+  );
+
+  const scheduleLifecycleRefresh = useCallback(() => {
+    if (lifecycleRefreshTimerRef.current !== null) {
+      window.clearTimeout(lifecycleRefreshTimerRef.current);
     }
-  }, []);
+    lifecycleRefreshTimerRef.current = window.setTimeout(() => {
+      lifecycleRefreshTimerRef.current = null;
+      const kind = panelOpenRef.current ? "list" : "count";
+      if (
+        Date.now() - lastRefreshStartedAtRef.current[kind] <
+        LIFECYCLE_REFRESH_COOLDOWN_MS
+      ) {
+        return;
+      }
+      void refresh(kind, kind === "list");
+    }, LIFECYCLE_REFRESH_DEBOUNCE_MS);
+  }, [refresh]);
 
   useEffect(() => {
-    void refresh(false);
+    const initialRefresh = window.setTimeout(() => void refresh("count"), 0);
     const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refresh(true);
+      if (document.visibilityState === "visible") scheduleLifecycleRefresh();
     }, 60_000);
     const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh(true);
+      if (document.visibilityState === "visible") scheduleLifecycleRefresh();
     };
-    const onReconnect = () => void refresh(true);
+    const onReconnect = () => scheduleLifecycleRefresh();
     window.addEventListener("focus", onReconnect);
     window.addEventListener("online", onReconnect);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
+      window.clearTimeout(initialRefresh);
       window.clearInterval(interval);
       window.removeEventListener("focus", onReconnect);
       window.removeEventListener("online", onReconnect);
       document.removeEventListener("visibilitychange", onVisible);
+      if (lifecycleRefreshTimerRef.current !== null) {
+        window.clearTimeout(lifecycleRefreshTimerRef.current);
+        lifecycleRefreshTimerRef.current = null;
+      }
+      activeRequestRef.current?.controller.abort();
+      activeRequestRef.current = null;
     };
-  }, [refresh]);
+  }, [refresh, scheduleLifecycleRefresh]);
+
+  const closePanel = useCallback((restoreFocus = false) => {
+    panelOpenRef.current = false;
+    setOpen(false);
+    if (lifecycleRefreshTimerRef.current !== null) {
+      window.clearTimeout(lifecycleRefreshTimerRef.current);
+      lifecycleRefreshTimerRef.current = null;
+    }
+    if (activeRequestRef.current?.kind === "list") {
+      activeRequestRef.current.controller.abort();
+      activeRequestRef.current = null;
+      setLoading(false);
+    }
+    if (restoreFocus) bellRef.current?.focus();
+  }, []);
+
+  const openPanel = useCallback(() => {
+    panelOpenRef.current = true;
+    if (lifecycleRefreshTimerRef.current !== null) {
+      window.clearTimeout(lifecycleRefreshTimerRef.current);
+      lifecycleRefreshTimerRef.current = null;
+    }
+    positionPanel();
+    setOpen(true);
+    void refresh("list");
+  }, [positionPanel, refresh]);
 
   useEffect(() => {
     if (!open) return;
@@ -108,8 +229,7 @@ export function NotificationCenter() {
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setOpen(false);
-        bellRef.current?.focus();
+        closePanel(true);
         return;
       }
       if (event.key !== "Tab" || !focusable?.length) return;
@@ -126,7 +246,7 @@ export function NotificationCenter() {
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [closePanel, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -173,11 +293,9 @@ export function NotificationCenter() {
         aria-controls="notification-center-panel"
         onClick={() => {
           if (open) {
-            setOpen(false);
+            closePanel();
           } else {
-            positionPanel();
-            setOpen(true);
-            void refresh(false);
+            openPanel();
           }
         }}
         className="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
@@ -199,10 +317,7 @@ export function NotificationCenter() {
             type="button"
             aria-label="Close notifications"
             className="fixed inset-0 z-40 bg-slate-950/30 md:bg-transparent"
-            onClick={() => {
-              setOpen(false);
-              bellRef.current?.focus();
-            }}
+            onClick={() => closePanel(true)}
           />
           <div
             ref={panelRef}
@@ -244,10 +359,7 @@ export function NotificationCenter() {
                 <button
                   type="button"
                   aria-label="Close notifications"
-                  onClick={() => {
-                    setOpen(false);
-                    bellRef.current?.focus();
-                  }}
+                  onClick={() => closePanel(true)}
                   className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-950"
                 >
                   <X aria-hidden="true" size={18} />
@@ -270,7 +382,7 @@ export function NotificationCenter() {
                   <p className="text-sm font-bold text-rose-800">{errorMessage}</p>
                   <button
                     type="button"
-                    onClick={() => void refresh(false)}
+                    onClick={() => void refresh("list")}
                     className="mt-3 text-sm font-black text-rose-900 underline"
                   >
                     Try again
@@ -281,7 +393,7 @@ export function NotificationCenter() {
                   key={items.map((item) => `${item.id}:${item.readAt}`).join("|")}
                   compact
                   initialItems={items}
-                  onChanged={() => void refresh(false)}
+                  onChanged={() => void refresh("list")}
                 />
               )}
             </div>
@@ -289,7 +401,7 @@ export function NotificationCenter() {
             <div className="border-t border-slate-200 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
               <Link
                 href="/notifications"
-                onClick={() => setOpen(false)}
+                onClick={() => closePanel()}
                 className="block rounded-lg bg-slate-950 px-4 py-2.5 text-center text-sm font-black text-white hover:bg-slate-800"
               >
                 View notification history
