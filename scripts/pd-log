@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: $0 <log-path> [pattern]" >&2
+  exit 2
+fi
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+log="$1"
+pattern="${2:-}"
+[[ "$log" = /* ]] || log="$root/$log"
+[[ -f "$log" ]] || { echo "log not found: $log" >&2; exit 1; }
+
+clean="$(mktemp)"
+trap 'rm -f "$clean"' EXIT
+
+sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$log" 2>/dev/null \
+  | awk '
+      /NO_COLOR.*FORCE_COLOR/ { next }
+      /node --trace-warnings/ { next }
+      length($0) > 1200 { printf("[omitted long line: %d chars]\\n", length($0)); next }
+      { print }
+    ' >"$clean"
+
+if [[ -n "$pattern" ]]; then
+  if command -v rg >/dev/null 2>&1; then
+    rg -n -i -C 4 -m 40 -- "$pattern" "$clean" || true
+  else
+    grep -Ein -C 4 -m 40 -- "$pattern" "$clean" || true
+  fi
+  exit 0
+fi
+
+echo "--- focused diagnostics ---"
+if command -v rg >/dev/null 2>&1; then
+  rg -n -i -C 2 -m 60 \
+    'error context:|test-failed|trace\.zip|(^|[^a-z])(error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4})([^a-z]|$)' \
+    "$clean" || true
+else
+  grep -Ein -C 2 -m 60 \
+    'error context:|test-failed|trace\.zip|error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4}' \
+    "$clean" || true
+fi
+
+echo "--- compact tail ---"
+tail -n 30 "$clean"
