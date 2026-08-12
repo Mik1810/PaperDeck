@@ -8,13 +8,18 @@ on:
         required: false
         default: "cs.AI,cs.CL,cs.CR,cs.CC,cs.DS,cs.LG,cs.LO,cs.PL,cs.SE,cs.SY"
       max_results:
-        description: "Maximum papers to fetch in this run"
+        description: "Maximum papers per category and page"
         required: false
         default: "25"
       dry_run:
         description: "Fetch and report importable papers without writing"
         required: false
         default: false
+        type: boolean
+      revision_sweep:
+        description: "Refresh papers with newer arXiv versions"
+        required: false
+        default: true
         type: boolean
   schedule:
     - cron: "17 4 * * *"
@@ -33,6 +38,9 @@ jobs:
       ARXIV_CATEGORIES: ${{ github.event.inputs.categories || vars.ARXIV_CATEGORIES || 'cs.AI,cs.CL,cs.CR,cs.CC,cs.DS,cs.LG,cs.LO,cs.PL,cs.SE,cs.SY' }}
       ARXIV_MAX_RESULTS: ${{ github.event.inputs.max_results || vars.ARXIV_MAX_RESULTS || '25' }}
       ARXIV_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      ARXIV_REVISION_SWEEP: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.revision_sweep) || vars.ARXIV_REVISION_SWEEP || 'true' }}
+      ARXIV_REVISION_PAGES: ${{ vars.ARXIV_REVISION_PAGES || '10' }}
+      ARXIV_DATABASE_CONCURRENCY: ${{ vars.ARXIV_DATABASE_CONCURRENCY || '4' }}
       ARXIV_USER_AGENT: ${{ vars.ARXIV_USER_AGENT || 'PaperDeck/0.1.0 (https://paperdeck.michaelpiccirilli.it)' }}
 
     steps:
@@ -132,12 +140,13 @@ jobs:
           lines = [
               f"## arXiv Ingestion · {mode}",
               "",
-              "| Category | Fetched | Importable | Skipped |",
-              "|----------|---------|------------|---------|",
+              "| Category | Path | Fetched | Importable | Skipped |",
+              "|----------|------|---------|------------|---------|",
           ]
           for item in breakdown:
               lines.append(
-                  f"| {item.get('category')} | {badge(item.get('fetched'))} "
+                  f"| {item.get('category')} | {item.get('path', 'new')} "
+                  f"| {badge(item.get('fetched'))} "
                   f"| {badge(item.get('importable'))} | {item.get('skipped')} |"
               )
 
@@ -149,11 +158,12 @@ jobs:
 
           if any(item.get("cursorHint") for item in breakdown):
               lines += ["", "### Cursor decisions", ""]
-              lines.append("| Category | Cursor | First fetched | Last fetched |")
-              lines.append("|----------|--------|---------------|--------------|")
+              lines.append("| Category | Path | Cursor | First fetched | Last fetched |")
+              lines.append("|----------|------|--------|---------------|--------------|")
               for item in breakdown:
                   lines.append(
-                      f"| {item.get('category')} | cursor at {item.get('cursorHint')} "
+                      f"| {item.get('category')} | {item.get('path', 'new')} "
+                      f"| cursor at {item.get('cursorHint')} "
                       f"| first {item.get('firstFetched')} | last {item.get('lastFetched')} |"
                   )
 
