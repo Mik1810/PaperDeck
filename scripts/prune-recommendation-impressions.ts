@@ -1,11 +1,30 @@
 import { loadEnvConfig } from "@next/env";
 import postgres from "postgres";
+import {
+  countExpiredRecommendationAnalytics,
+  DEFAULT_RECOMMENDATION_ANALYTICS_BATCH_SIZE,
+  DEFAULT_RECOMMENDATION_ANALYTICS_MAX_BATCHES,
+  parsePositiveInteger,
+  pruneExpiredRecommendationAnalytics,
+} from "./lib/recommendation-analytics-retention";
 
 loadEnvConfig(process.cwd());
 
 function parseArgs() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
+  const batchSize = parsePositiveInteger(
+    args.find((arg) => arg.startsWith("--batch-size="))?.split("=")[1] ??
+      String(DEFAULT_RECOMMENDATION_ANALYTICS_BATCH_SIZE),
+    "Recommendation analytics purge batch size",
+    10_000,
+  );
+  const maxBatches = parsePositiveInteger(
+    args.find((arg) => arg.startsWith("--max-batches="))?.split("=")[1] ??
+      String(DEFAULT_RECOMMENDATION_ANALYTICS_MAX_BATCHES),
+    "Recommendation analytics purge maximum batches",
+    10_000,
+  );
   const daysArg = args.find((arg) => arg.startsWith("--days="));
   const rawDays =
     daysArg?.replace("--days=", "") ??
@@ -17,11 +36,11 @@ function parseArgs() {
     throw new Error(`Invalid retention days: ${rawDays}`);
   }
 
-  return { days, dryRun };
+  return { batchSize, days, dryRun, maxBatches };
 }
 
 async function main() {
-  const { days, dryRun } = parseArgs();
+  const { batchSize, days, dryRun, maxBatches } = parseArgs();
   const databaseUrl =
     process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
 
@@ -34,62 +53,27 @@ async function main() {
 
   try {
     if (dryRun) {
-      const rows = await sql<{
-        batch_item_count: string;
-        impression_count: string;
-      }[]>`
-        select
-          (
-            select count(*)::text
-            from recommendation_batch_items as batch_item
-            where delivered_at < ${cutoff.toISOString()}
-              and not exists (
-                select 1
-                from recommendation_impressions as impression
-                where impression.batch_item_id = batch_item.id
-                  and impression.shown_at >= ${cutoff.toISOString()}
-              )
-          ) as batch_item_count,
-          (
-            select count(*)::text
-            from recommendation_impressions
-            where shown_at < ${cutoff.toISOString()}
-          ) as impression_count
-      `;
+      const counts = await countExpiredRecommendationAnalytics(sql, cutoff);
 
       console.log(
         JSON.stringify({
           mode: "dry-run",
           retentionDays: days,
           cutoff: cutoff.toISOString(),
-          prunableBatchItemCount: Number(rows[0]?.batch_item_count ?? 0),
-          prunableImpressionCount: Number(rows[0]?.impression_count ?? 0),
+          prunableBatchItemCount: counts.batchItemCount,
+          prunableImpressionCount: counts.impressionCount,
         }),
       );
       return;
     }
 
-    const deleted = await sql.begin(async (transaction) => {
-      const impressions = await transaction<{ id: string }[]>`
-        delete from recommendation_impressions
-        where shown_at < ${cutoff.toISOString()}
-        returning id
-      `;
-      const batchItems = await transaction<{ id: string }[]>`
-        delete from recommendation_batch_items as batch_item
-        where delivered_at < ${cutoff.toISOString()}
-          and not exists (
-            select 1
-            from recommendation_impressions as impression
-            where impression.batch_item_id = batch_item.id
-          )
-        returning id
-      `;
-
-      return {
-        batchItemCount: batchItems.length,
-        impressionCount: impressions.length,
-      };
+    await sql.unsafe("set lock_timeout = '5s'");
+    await sql.unsafe("set statement_timeout = '30s'");
+    const deleted = await pruneExpiredRecommendationAnalytics({
+      batchSize,
+      cutoff,
+      maxBatches,
+      sql,
     });
 
     console.log(
@@ -97,8 +81,19 @@ async function main() {
         mode: "write",
         retentionDays: days,
         cutoff: cutoff.toISOString(),
-        deletedBatchItemCount: deleted.batchItemCount,
-        deletedImpressionCount: deleted.impressionCount,
+        batchSize,
+        maxBatches,
+        deletedBatchItemCount: deleted.batchItems.deletedCount,
+        deletedImpressionCount: deleted.impressions.deletedCount,
+        batchItemBatches: deleted.batchItems.batches,
+        impressionBatches: deleted.impressions.batches,
+        maxBatchItemTransactionMs: Number(
+          deleted.batchItems.maxBatchDurationMs.toFixed(2),
+        ),
+        maxImpressionTransactionMs: Number(
+          deleted.impressions.maxBatchDurationMs.toFixed(2),
+        ),
+        truncated: deleted.truncated,
       }),
     );
   } finally {

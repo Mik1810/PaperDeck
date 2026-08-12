@@ -112,6 +112,7 @@ Aggiornato al 2026-08-04:
   - 2 user profile embeddings MiniLM in `user_profile_embeddings`; il retrieval filtra i profili sul modello corrente.
   - RPC `match_papers_by_embedding` per cosine similarity search attiva con default MiniLM.
 - Feed semantico: profilo utente generato su write da onboarding/settings, con primo batch feed e batch live breve salvati in `recommendations` per evitare reranking completo a ogni refresh.
+  - Un cache hit fresco viene deciso prima di caricare tassonomia e stato completo del feed: la lookup esclude direttamente in PostgreSQL Preferiti, playlist ed esclusioni durevoli, idrata i paper soltanto dopo avere raggiunto la soglia minima e carica a parte solo lo stato necessario alla UI.
   - Retrieval IVFFlat con 10 probe; batch cache sotto 10 risultati visibili vengono rigenerati e deck semantici sotto 50 candidati non visti vengono completati da un pool catalogo limitato e pesato. Il ranking trasferisce soltanto descrittori e topic dei candidati, poi carica autori, abstract e summary per i 50 finalisti, mantenendo e persistendo la provenienza del candidato.
   - La consegna del deck e' persistita come batch item distinta dall'impression: soltanto una carta diventata attiva produce un'impression idempotente e attribuibile alle successive azioni utente.
 - Gate stabilita' raccomandazioni: App CI mantiene un sanity check sintetico separato da una baseline discriminante con rilevanza graduata, profili sovrapposti, feedback, paper gia' visti e segnali in conflitto; blocca regressioni medie e del profilo peggiore su NDCG/recall, exposure coverage, sovrapposizione e seen-paper leakage. Un workflow separato riporta il p95 del reranker senza renderlo inizialmente bloccante.
@@ -438,6 +439,9 @@ MVP semplice:
 
 - Digest giornaliero o settimanale solo in app.
 - Lista "New for you".
+- La finestra adattiva 7/14/30 giorni legge una sola volta i candidati del
+  range massimo e sceglie in memoria la prima finestra con almeno tre paper,
+  preservando l'ordine del ranking e le esclusioni del feed.
 
 Futuro:
 
@@ -482,7 +486,7 @@ Stato attuale:
 - Preferiti e appartenenza corrente a qualsiasi playlist privata escludono il
   paper finche' la raccolta lo contiene; dopo la rimozione il paper torna
   eleggibile se non possiede anche un'esclusione durevole.
-- Retrieval semantico via pgvector e profilo utente attivi; i batch feed salvati in `recommendations` evitano reranking completo a ogni refresh.
+- Retrieval semantico via pgvector e profilo utente attivi; i batch feed salvati in `recommendations` evitano reranking completo a ogni refresh e vengono verificati prima di caricare tassonomia o input del ranking live.
 
 ### Ranking MVP
 
