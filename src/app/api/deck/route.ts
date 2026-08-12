@@ -4,7 +4,7 @@ import {
   recordPaperInteraction,
   resolveRecommendationImpressionId,
   setFavoriteState,
-  setReadLaterState,
+  setPlaylistMembership,
 } from "@/lib/repositories/user-data";
 import { logger } from "@/lib/logging/logger";
 
@@ -63,16 +63,19 @@ export async function POST(request: Request) {
             { status: 400 },
           );
         }
-        const result = await setReadLaterState(
+        const result = await setPlaylistMembership(
           ownerId,
           paperId,
+          { kind: "read_later" },
           body.selected,
+          "feed",
           interactionOptions,
         );
         response = NextResponse.json({
           ok: true,
           action: "read_later",
-          ...result,
+          changed: result.changed,
+          selected: result.selected,
         });
         break;
       }

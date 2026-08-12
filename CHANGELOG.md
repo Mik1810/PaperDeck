@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Consolidated every private-playlist membership mutation behind one
+  owner-scoped transaction. Quick Read later saves, the multi-playlist picker,
+  Library removal, inline playlist creation, and group private saves now share
+  playlist-row serialization, duplicate-safe `max(position) + 1` ordering,
+  append-only interaction recording, and profile-refresh scheduling.
 - Made Library loading proportional to the visible collection instead of the
   owner's complete private library. The initial response now contains counts,
   playlist metadata, and at most 24 papers from the selected collection;

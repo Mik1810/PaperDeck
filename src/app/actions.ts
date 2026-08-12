@@ -10,15 +10,12 @@ import {
   saveSelectedTopics,
   setFavoriteState,
   createPlaylist,
-  createPlaylistWithPaper,
   renamePlaylist,
   deletePlaylist,
-  addToPlaylist,
-  removeFromPlaylist,
   reorderPlaylistItems,
   getDefaultOnboardingTopicIds,
   resolveRecommendationImpressionId,
-  setPaperPlaylistMembership,
+  setPlaylistMembership,
   type PaperPlaylistOption,
   type PlaylistSaveContext,
   clearFeedRecommendations,
@@ -559,10 +556,10 @@ export async function setPaperPlaylistMembershipAction(
             input.recommendationBatchItemId ?? null,
           )
         : null;
-    const result = await setPaperPlaylistMembership(
+    const result = await setPlaylistMembership(
       ownerId,
       input.paperId,
-      input.playlistId,
+      { kind: "playlist", playlistId: input.playlistId },
       input.selected,
       input.context,
       { recommendationImpressionId },
@@ -595,15 +592,17 @@ export async function createPlaylistWithPaperAction(
             input.recommendationBatchItemId ?? null,
           )
         : null;
-    const option = await createPlaylistWithPaper(
+    const result = await setPlaylistMembership(
       ownerId,
       input.paperId,
-      name,
+      { kind: "new_playlist", name },
+      true,
       input.context,
       { recommendationImpressionId },
     );
+    if (!result.option) throw new Error("Created playlist is unavailable");
     revalidatePlaylistPickerPaths(input.paperId, input.context);
-    return { ok: true, created: true, option };
+    return { ok: true, created: true, option: result.option };
   } catch {
     return {
       ok: false,
@@ -668,39 +667,21 @@ export async function deletePlaylistAction(formData: FormData) {
   revalidatePath("/library");
 }
 
-export async function addToPlaylistAction(formData: FormData) {
-  const ownerId = await requireOwnerId();
-  const playlistId = formData.get("playlistId");
-  const paperId = formData.get("paperId");
-
-  if (
-    typeof playlistId !== "string" ||
-    !playlistId ||
-    typeof paperId !== "string" ||
-    !paperId
-  ) {
-    throw new Error("Missing playlistId or paperId");
-  }
-
-  await addToPlaylist(ownerId, playlistId, paperId);
-  revalidatePath("/library");
-}
-
 export async function removeFromPlaylistAction(formData: FormData) {
   const ownerId = await requireOwnerId();
-  const playlistId = formData.get("playlistId");
-  const paperId = formData.get("paperId");
+  const playlistId = requireUuid(
+    requireFormId(formData, "playlistId"),
+    "playlist id",
+  );
+  const paperId = requireUuid(requireFormId(formData, "paperId"), "paper id");
 
-  if (
-    typeof playlistId !== "string" ||
-    !playlistId ||
-    typeof paperId !== "string" ||
-    !paperId
-  ) {
-    throw new Error("Missing playlistId or paperId");
-  }
-
-  await removeFromPlaylist(ownerId, playlistId, paperId);
+  await setPlaylistMembership(
+    ownerId,
+    paperId,
+    { kind: "playlist", playlistId },
+    false,
+    "library",
+  );
   revalidatePath("/library");
 }
 

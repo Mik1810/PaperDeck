@@ -273,20 +273,58 @@ test.describe("deck API mutations", () => {
     test.skip(!devAuthEnabled, "Requires dev auth.");
     test.skip(!hasDb, "Requires DATABASE_URL.");
 
-    const paperId = await withDb(getSeedPaperId);
+    const { anchorPaperId, concurrentPaperIds, paperId } = await withDb(async (sql) => {
+      const rows = await sql<{ id: string }[]>`
+        select id from papers where embedding is not null order by id limit 4
+      `;
+      if (rows.length < 4) throw new Error("Read later ordering test requires four papers");
+      return {
+        anchorPaperId: rows[1].id,
+        concurrentPaperIds: [rows[2].id, rows[3].id],
+        paperId: rows[0].id,
+      };
+    });
     await withDb(async (sql) => {
-      await sql`delete from playlist_items where paper_id = ${paperId} and playlist_id in (select id from playlists where owner_id = ${devOwnerId} and name = 'Read later')`;
+      const [playlist] = await sql<{ id: string }[]>`
+        insert into playlists (owner_id, name, is_default)
+        values (${devOwnerId}, 'Read later', true)
+        on conflict (owner_id, name) do update set is_default = true
+        returning id
+      `;
+      await sql`delete from playlist_items where paper_id = ${paperId} and playlist_id = ${playlist.id}::uuid`;
+      await sql`
+        insert into playlist_items (playlist_id, paper_id, position)
+        values (${playlist.id}::uuid, ${anchorPaperId}::uuid, 7)
+        on conflict (playlist_id, paper_id) do update set position = 7
+      `;
       await sql`delete from user_paper_interactions where owner_id = ${devOwnerId} and paper_id = ${paperId} and action = 'save_to_playlist'`;
     });
 
-    const expectedChanges = [true, false, true, false, true];
-    for (const [index, selected] of [true, true, false, false, true].entries()) {
+    const concurrentAdds = await Promise.all(
+      [0, 1].map(() =>
+        request.post("/api/deck", {
+          data: { action: "read_later", paperId, selected: true },
+        }),
+      ),
+    );
+    const concurrentBodies = await Promise.all(
+      concurrentAdds.map(async (response) => {
+        expect(response.status()).toBe(200);
+        return response.json();
+      }),
+    );
+    expect(concurrentBodies.map((body) => body.changed).sort()).toEqual([
+      false,
+      true,
+    ]);
+
+    for (const [index, selected] of [false, false, true].entries()) {
       const response = await request.post("/api/deck", {
         data: { action: "read_later", paperId, selected },
       });
       expect(response.status()).toBe(200);
       expect(await response.json()).toMatchObject({
-        changed: expectedChanges[index],
+        changed: [true, false, true][index],
         ok: true,
         selected,
       });
@@ -294,13 +332,55 @@ test.describe("deck API mutations", () => {
 
     const state = await withDb(async (sql) => sql<{
       interactions: number;
+      position: number;
       read_later: number;
     }[]>`
       select
         (select count(*)::int from playlist_items where paper_id = ${paperId} and playlist_id in (select id from playlists where owner_id = ${devOwnerId} and name = 'Read later')) as read_later,
+        (select position from playlist_items where paper_id = ${paperId} and playlist_id in (select id from playlists where owner_id = ${devOwnerId} and name = 'Read later')) as position,
         (select count(*)::int from user_paper_interactions where owner_id = ${devOwnerId} and paper_id = ${paperId} and action = 'save_to_playlist') as interactions
     `);
-    expect(state[0]).toEqual({ interactions: 2, read_later: 1 });
+    expect(state[0]).toEqual({ interactions: 2, position: 8, read_later: 1 });
+
+    const distinctAdds = await Promise.all(
+      concurrentPaperIds.map((concurrentPaperId) =>
+        request.post("/api/deck", {
+          data: {
+            action: "read_later",
+            paperId: concurrentPaperId,
+            selected: true,
+          },
+        }),
+      ),
+    );
+    for (const response of distinctAdds) {
+      expect(response.status()).toBe(200);
+      expect(await response.json()).toMatchObject({
+        changed: true,
+        ok: true,
+        selected: true,
+      });
+    }
+    const concurrentState = await withDb(async (sql) => sql<{
+      interactions: number;
+      positions: number[];
+    }[]>`
+      select
+        array_agg(item.position order by item.position)::int[] as positions,
+        (
+          select count(*)::int
+          from user_paper_interactions
+          where owner_id = ${devOwnerId}
+            and paper_id in (${concurrentPaperIds[0]}::uuid, ${concurrentPaperIds[1]}::uuid)
+            and action = 'save_to_playlist'
+        ) as interactions
+      from playlist_items as item
+      join playlists as playlist on playlist.id = item.playlist_id
+      where playlist.owner_id = ${devOwnerId}
+        and playlist.name = 'Read later'
+        and item.paper_id in (${concurrentPaperIds[0]}::uuid, ${concurrentPaperIds[1]}::uuid)
+    `);
+    expect(concurrentState[0]).toEqual({ interactions: 2, positions: [9, 10] });
   });
 
   test("rolls back collection state when interaction recording fails", async ({
@@ -669,6 +749,30 @@ test.describe("playlist authorization", () => {
       new RegExp(`/library\\?playlist=${pickerPlaylistId}$`),
     );
     await expect(page.getByText("Editing", { exact: true })).toBeVisible();
+    const interactionsBeforeLibraryRemoval = await withDb(async (sql) => {
+      const [row] = await sql<{ count: number }[]>`
+        select count(*)::int as count
+        from user_paper_interactions
+        where owner_id = ${devOwnerId}
+          and paper_id = ${pickerPaperId}::uuid
+          and action = 'save_to_playlist'
+      `;
+      return row.count;
+    });
+    await page.getByRole("button", { name: "Remove from playlist" }).click();
+    await expect(page.getByText("This playlist is empty")).toBeVisible();
+    const removedState = await withDb(async (sql) => {
+      const [row] = await sql<{ interactions: number; items: number }[]>`
+        select
+          (select count(*)::int from playlist_items where playlist_id = ${pickerPlaylistId}::uuid and paper_id = ${pickerPaperId}::uuid) as items,
+          (select count(*)::int from user_paper_interactions where owner_id = ${devOwnerId} and paper_id = ${pickerPaperId}::uuid and action = 'save_to_playlist') as interactions
+      `;
+      return row;
+    });
+    expect(removedState).toEqual({
+      interactions: interactionsBeforeLibraryRemoval,
+      items: 0,
+    });
     await page
       .getByRole("button", { name: "Stop editing Picker Playlist" })
       .click();
@@ -677,8 +781,39 @@ test.describe("playlist authorization", () => {
       new RegExp(`/library\\?playlist=${pickerPlaylistId}$`),
     );
 
-    await page.locator(`a[href="/papers/${pickerPaperId}"]`).click();
+    await page.goto(`/papers/${pickerPaperId}`);
     await expect(page).toHaveURL(new RegExp(`/papers/${pickerPaperId}$`));
+    await page.getByRole("button", { name: "Saved", exact: true }).click();
+    const pickerDialog = page.getByRole("dialog", { name: "Save to playlists" });
+    const pickerPlaylistCheckbox = pickerDialog.getByRole("checkbox", {
+      name: /Picker Playlist/,
+    });
+    await expect(pickerPlaylistCheckbox).not.toBeChecked();
+    await pickerPlaylistCheckbox.check();
+    await expect(pickerPlaylistCheckbox).toBeChecked();
+    await expect(pickerPlaylistCheckbox).toBeEnabled();
+    await expect
+      .poll(() =>
+        withDb(async (sql) => {
+          const [row] = await sql<{
+            interactions: number;
+            items: number;
+            position: number;
+          }[]>`
+            select
+              (select count(*)::int from playlist_items where playlist_id = ${pickerPlaylistId}::uuid and paper_id = ${pickerPaperId}::uuid) as items,
+              (select position from playlist_items where playlist_id = ${pickerPlaylistId}::uuid and paper_id = ${pickerPaperId}::uuid) as position,
+              (select count(*)::int from user_paper_interactions where owner_id = ${devOwnerId} and paper_id = ${pickerPaperId}::uuid and action = 'save_to_playlist') as interactions
+          `;
+          return row;
+        }),
+      )
+      .toEqual({
+        interactions: interactionsBeforeLibraryRemoval + 1,
+        items: 1,
+        position: 0,
+      });
+    await pickerDialog.getByRole("button", { name: "Done" }).click();
     page.off("request", recordCollectionRequest);
   });
 });
