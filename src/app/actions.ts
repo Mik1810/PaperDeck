@@ -606,24 +606,7 @@ export async function createPlaylistWithPaperAction(
       { recommendationImpressionId },
     );
     if (!result.option) throw new Error("Created playlist is unavailable");
-    const option = await withOwnerProfileFallback(ownerId, async () => {
-      const recommendationImpressionId =
-        input.context === "feed"
-          ? await resolveRecommendationImpressionId(
-              ownerId,
-              input.paperId,
-              input.recommendationImpressionId ?? null,
-              input.recommendationBatchItemId ?? null,
-            )
-          : null;
-      return createPlaylistWithPaper(
-        ownerId,
-        input.paperId,
-        name,
-        input.context,
-        { recommendationImpressionId },
-      );
-    });
+    
     revalidatePlaylistPickerPaths(input.paperId, input.context);
     return { ok: true, created: true, option: result.option };
   } catch {

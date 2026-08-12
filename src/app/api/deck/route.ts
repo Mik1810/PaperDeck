@@ -5,7 +5,6 @@ import {
   resolveRecommendationImpressionId,
   setFavoriteState,
   setPlaylistMembership,
-  setReadLaterState,
   withOwnerProfileFallback,
 } from "@/lib/repositories/user-data";
 import { logger } from "@/lib/logging/logger";
@@ -66,16 +65,21 @@ export async function POST(request: Request) {
               { status: 400 },
             );
           }
-          const result = await setReadLaterState(
+
+          const result = await setPlaylistMembership(
             ownerId,
             paperId,
+            { kind: "read_later" },
             body.selected,
+            "feed",
             interactionOptions,
           );
+
           response = NextResponse.json({
             ok: true,
             action: "read_later",
-            ...result,
+            changed: result.changed,
+            selected: result.selected,
           });
           break;
         }
@@ -106,33 +110,6 @@ export async function POST(request: Request) {
             { ok: false, error: `Unknown action: ${action}` },
             { status: 400 },
           );
-        }
-        const result = await setPlaylistMembership(
-          ownerId,
-          paperId,
-          { kind: "read_later" },
-          body.selected,
-          "feed",
-          interactionOptions,
-        );
-        response = NextResponse.json({
-          ok: true,
-          action: "read_later",
-          changed: result.changed,
-          selected: result.selected,
-        });
-        break;
-      }
-      case "dismiss": {
-        await recordPaperInteraction(
-          ownerId,
-          paperId,
-          "dismiss",
-          "feed",
-          interactionOptions,
-        );
-        response = NextResponse.json({ ok: true, action: "dismiss" });
-        break;
       }
 
       return response;
