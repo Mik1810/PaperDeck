@@ -12,6 +12,14 @@ on:
         required: false
         default: false
         type: boolean
+      batch_size:
+        description: "Rows deleted per committed table batch (1-10000)"
+        required: false
+        default: "10000"
+      max_batches:
+        description: "Maximum committed batches per table"
+        required: false
+        default: "100"
   schedule:
     - cron: "11 5 * * 0"
 
@@ -26,6 +34,8 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       RETENTION_DAYS: ${{ github.event.inputs.retention_days || vars.RECOMMENDATION_IMPRESSION_RETENTION_DAYS || '90' }}
       DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.RECOMMENDATION_IMPRESSION_PRUNE_BATCH_SIZE || '10000' }}
+      MAX_BATCHES: ${{ github.event.inputs.max_batches || vars.RECOMMENDATION_IMPRESSION_PRUNE_MAX_BATCHES || '100' }}
 
     steps:
       - name: Checkout
@@ -44,7 +54,7 @@ jobs:
         id: prune
         shell: bash
         run: |
-          cmd=(npm run analytics:prune -- --days="$RETENTION_DAYS")
+          cmd=(npm run analytics:prune -- --days="$RETENTION_DAYS" --batch-size="$BATCH_SIZE" --max-batches="$MAX_BATCHES")
 
           if [ "$DRY_RUN" = "true" ]; then
             cmd+=(--dry-run)
@@ -61,6 +71,8 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Retention:** $RETENTION_DAYS days" >> "$GITHUB_STEP_SUMMARY"
           echo "**Dry run:** $DRY_RUN" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Batch size:** $BATCH_SIZE" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Maximum batches per table:** $MAX_BATCHES" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           output='${{ steps.prune.outputs.output }}'

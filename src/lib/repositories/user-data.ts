@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
-import { and, asc, desc, eq, gt, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   profiles,
@@ -37,12 +37,16 @@ import {
   type CatalogRankingCandidate,
 } from "@/lib/repositories/catalog";
 import { topicDisplayLabel } from "@/lib/arxiv-categories";
+import {
+  type DigestRecencyCandidate,
+  selectDigestPaperIdsByRecency,
+} from "@/lib/digest-selection";
 import { isDefaultOnboardingTopic } from "@/lib/topic-taxonomy";
 import {
   INITIAL_FEED_RECOMMENDATION_COUNT,
+  INITIAL_FEED_RECOMMENDATION_MAX_AGE_MS,
   INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
   LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
-  isFreshRecommendationBatch,
   isUsableRecommendationBatchSize,
   needsCatalogRecommendationFill,
   recommendationModelVersionForFeedSource,
@@ -93,9 +97,14 @@ type RecommendationDeliveryBatch = {
 
 type RecommendationBatchSource = "initial_batch" | "live_batch";
 
+type FeedPresentationState = Pick<
+  UserPaperState,
+  "favoriteIds" | "readLaterIds"
+>;
+
 type RankedFeedData = {
   rankedPapers: RankedPaper[];
-  feedState: FeedState;
+  presentationState: FeedPresentationState | null;
   timings: Record<string, number>;
   source: RecommendationFeedSource;
   liveBatchToCache: RankedPaper[];
@@ -620,6 +629,33 @@ async function getFeedState(ownerId: string): Promise<FeedState> {
   };
 }
 
+async function getFeedPresentationState(
+  ownerId: string,
+): Promise<FeedPresentationState> {
+  const [favRows, readLaterRows] = await Promise.all([
+    db
+      .select({ paperId: favorites.paperId })
+      .from(favorites)
+      .where(eq(favorites.ownerId, ownerId)),
+    db
+      .select({ paperId: playlistItems.paperId })
+      .from(playlistItems)
+      .innerJoin(
+        playlists,
+        and(
+          eq(playlists.id, playlistItems.playlistId),
+          eq(playlists.ownerId, ownerId),
+          eq(playlists.isDefault, true),
+        ),
+      ),
+  ]);
+
+  return {
+    favoriteIds: new Set(favRows.map((row) => row.paperId)),
+    readLaterIds: new Set(readLaterRows.map((row) => row.paperId)),
+  };
+}
+
 async function buildLiveRankedFeed(
   ownerId: string,
   topics: TopicRow[],
@@ -750,65 +786,47 @@ async function buildLiveRankedFeed(
 
 async function getLatestInitialRecommendationBatch(
   ownerId: string,
-  state: UserPaperState,
   limit = INITIAL_FEED_RECOMMENDATION_COUNT,
 ) {
   return getLatestRecommendationBatch({
     limit,
     modelVersion: INITIAL_FEED_RECOMMENDATION_MODEL_VERSION,
     ownerId,
-    source: "initial_batch",
-    state,
   });
 }
 
 async function getLatestLiveRecommendationBatch(
   ownerId: string,
-  state: UserPaperState,
   limit = INITIAL_FEED_RECOMMENDATION_COUNT,
 ) {
   return getLatestRecommendationBatch({
     limit,
     modelVersion: LIVE_FEED_RECOMMENDATION_MODEL_VERSION,
     ownerId,
-    source: "live_batch",
-    state,
   });
 }
 
+type CachedRecommendationRow = {
+  candidateSource: string | null;
+  paperId: string;
+  reason: string | null;
+  score: number;
+};
+
 async function getLatestRecommendationBatch({
   ownerId,
-  state,
   modelVersion,
-  source,
   limit = INITIAL_FEED_RECOMMENDATION_COUNT,
 }: {
   ownerId: string;
-  state: UserPaperState;
   modelVersion: string;
-  source: RecommendationBatchSource;
   limit?: number;
-}) {
-  const latest = await db
-    .select({ generatedAt: recommendations.generatedAt })
-    .from(recommendations)
-    .where(
-      and(
-        eq(recommendations.ownerId, ownerId),
-        eq(recommendations.modelVersion, modelVersion),
-      ),
-    )
-    .orderBy(desc(recommendations.generatedAt))
-    .limit(1);
+}): Promise<CachedRecommendationRow[]> {
+  const freshAfter = new Date(
+    Date.now() - INITIAL_FEED_RECOMMENDATION_MAX_AGE_MS,
+  ).toISOString();
 
-  if (
-    !latest[0]?.generatedAt ||
-    !isFreshRecommendationBatch(latest[0].generatedAt)
-  ) {
-    return [];
-  }
-
-  const recommendationRows = await db
+  return db
     .select({
       candidateSource: recommendations.candidateSource,
       paperId: recommendations.paperId,
@@ -820,24 +838,47 @@ async function getLatestRecommendationBatch({
       and(
         eq(recommendations.ownerId, ownerId),
         eq(recommendations.modelVersion, modelVersion),
-        eq(recommendations.generatedAt, latest[0].generatedAt),
+        gte(recommendations.generatedAt, freshAfter),
+        sql`${recommendations.generatedAt} = (
+          select max(latest.generated_at)
+          from ${recommendations} as latest
+          where latest.owner_id = ${ownerId}
+            and latest.model_version = ${modelVersion}
+        )`,
+        sql`not exists (
+          select 1
+          from ${favorites} as cached_favorite
+          where cached_favorite.owner_id = ${ownerId}
+            and cached_favorite.paper_id = ${recommendations.paperId}
+        )`,
+        sql`not exists (
+          select 1
+          from ${playlistItems} as cached_item
+          inner join ${playlists} as cached_playlist
+            on cached_playlist.id = cached_item.playlist_id
+          where cached_playlist.owner_id = ${ownerId}
+            and cached_item.paper_id = ${recommendations.paperId}
+        )`,
+        sql`not exists (
+          select 1
+          from ${userPaperFeedExclusions} as cached_exclusion
+          where cached_exclusion.owner_id = ${ownerId}
+            and cached_exclusion.paper_id = ${recommendations.paperId}
+        )`,
       ),
     )
     .orderBy(desc(recommendations.score))
     .limit(limit);
+}
 
-  const visibleRows = recommendationRows.filter(
-    (row) => !state.seenIds.has(row.paperId),
-  );
-
-  if (!visibleRows.length) {
-    return [];
-  }
-
-  const papers = await getPapersByIds(visibleRows.map((row) => row.paperId));
+async function hydrateRecommendationBatch(
+  rows: CachedRecommendationRow[],
+  source: RecommendationBatchSource,
+) {
+  const papers = await getPapersByIds(rows.map((row) => row.paperId));
   const papersById = new Map(papers.map((paper) => [paper.id, paper]));
 
-  return visibleRows
+  return rows
     .map((row): RankedPaper | null => {
       const paper = papersById.get(row.paperId);
 
@@ -999,52 +1040,64 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
 
 async function getRankedFeedData(ownerId: string): Promise<RankedFeedData> {
   const timings: Record<string, number> = {};
+  const initialRows = await measureAsync(
+    timings,
+    "initial_batch_lookup",
+    getLatestInitialRecommendationBatch(ownerId),
+  );
+
+  if (isUsableRecommendationBatchSize(initialRows.length)) {
+    const rankedPapers = await measureAsync(
+      timings,
+      "initial_batch_hydration",
+      hydrateRecommendationBatch(initialRows, "initial_batch"),
+    );
+    if (isUsableRecommendationBatchSize(rankedPapers.length)) {
+      return {
+        liveBatchToCache: [],
+        presentationState: null,
+        rankedPapers,
+        source: "initial_batch",
+        timings,
+      };
+    }
+  }
+
+  const liveRows = await measureAsync(
+    timings,
+    "live_batch_lookup",
+    getLatestLiveRecommendationBatch(ownerId),
+  );
+
+  if (isUsableRecommendationBatchSize(liveRows.length)) {
+    const rankedPapers = await measureAsync(
+      timings,
+      "live_batch_hydration",
+      hydrateRecommendationBatch(liveRows, "live_batch"),
+    );
+    if (isUsableRecommendationBatchSize(rankedPapers.length)) {
+      return {
+        liveBatchToCache: [],
+        presentationState: null,
+        rankedPapers,
+        source: "live_batch",
+        timings,
+      };
+    }
+  }
+
   const [topics, feedState] = await Promise.all([
     measureAsync(timings, "topics", getTopics()),
     measureAsync(timings, "feed_state", getFeedState(ownerId)),
   ]);
-  const state = feedState.userState;
-
-  let rankedPapers = await measureAsync(
-    timings,
-    "initial_recommendation_batch",
-    getLatestInitialRecommendationBatch(ownerId, state),
-  );
-
-  if (isUsableRecommendationBatchSize(rankedPapers.length)) {
-    return {
-      feedState,
-      liveBatchToCache: [],
-      rankedPapers,
-      source: "initial_batch",
-      timings,
-    };
-  }
-
-  rankedPapers = await measureAsync(
-    timings,
-    "live_recommendation_batch",
-    getLatestLiveRecommendationBatch(ownerId, state),
-  );
-
-  if (isUsableRecommendationBatchSize(rankedPapers.length)) {
-    return {
-      feedState,
-      liveBatchToCache: [],
-      rankedPapers,
-      source: "live_batch",
-      timings,
-    };
-  }
-
   const liveFeed = await buildLiveRankedFeed(ownerId, topics, feedState, timings);
 
   return {
-    feedState,
     liveBatchToCache: liveFeed.rankedPapers.slice(
       0,
       INITIAL_FEED_RECOMMENDATION_COUNT,
     ),
+    presentationState: feedState.userState,
     rankedPapers: liveFeed.rankedPapers,
     source: "live_rank",
     timings,
@@ -1064,7 +1117,13 @@ export async function getFeedPageData(ownerId: string) {
   const feedData = await getRankedFeedData(ownerId);
   const { rankedPapers, timings } = feedData;
   const visiblePapers = rankedPapers.slice(0, INITIAL_FEED_RECOMMENDATION_COUNT);
-  const state = feedData.feedState.userState;
+  const state =
+    feedData.presentationState ??
+    (await measureAsync(
+      timings,
+      "presentation_state",
+      getFeedPresentationState(ownerId),
+    ));
   const deliveryBatch = await measureAsync(
     timings,
     "recommendation_batch_items",
@@ -1125,27 +1184,30 @@ export async function getFeedPageData(ownerId: string) {
 
 const DIGEST_PAPER_COUNT = 10;
 const DIGEST_MIN_PAPER_COUNT = 3;
-const DIGEST_RECENCY_WINDOWS_DAYS = [7, 14, 30];
 
 export type DigestGroup = {
   topicLabel: string;
   papers: Paper[];
 };
 
-async function getRecentPaperIds(
+async function getDigestRecencyCandidates(
   paperIds: string[],
-  sinceDays: number,
-): Promise<Set<string>> {
+  maximumWindowDays: number,
+  nowMs: number,
+): Promise<DigestRecencyCandidate[]> {
   if (!paperIds.length) {
-    return new Set();
+    return [];
   }
 
   const since = new Date(
-    Date.now() - sinceDays * 24 * 60 * 60 * 1000,
+    nowMs - maximumWindowDays * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const rows = await db
-    .select({ id: papers.id })
+  return db
+    .select({
+      availableAt: sql<string>`coalesce(${papers.publishedAt}, ${papers.ingestedAt})`,
+      paperId: papers.id,
+    })
     .from(papers)
     .where(
       and(
@@ -1153,30 +1215,23 @@ async function getRecentPaperIds(
         sql`coalesce(${papers.publishedAt}, ${papers.ingestedAt}) >= ${since}`,
       ),
     );
-
-  return new Set(rows.map((row) => row.id));
 }
 
 /** @admin */
 export async function getDigestPageData(ownerId: string) {
   const feedData = await getRankedFeedData(ownerId);
   const { rankedPapers } = feedData;
-  const state = feedData.feedState.userState;
+  const state =
+    feedData.presentationState ?? (await getFeedPresentationState(ownerId));
   const rankedById = new Map(rankedPapers.map((paper) => [paper.id, paper]));
 
-  let recentPapers: RankedPaper[] = [];
-
-  for (const windowDays of DIGEST_RECENCY_WINDOWS_DAYS) {
-    const recentIds = await getRecentPaperIds(
-      rankedPapers.map((paper) => paper.id),
-      windowDays,
-    );
-    recentPapers = rankedPapers.filter((paper) => recentIds.has(paper.id));
-
-    if (recentPapers.length >= DIGEST_MIN_PAPER_COUNT) {
-      break;
-    }
-  }
+  const recentSelection = await selectDigestPaperIdsByRecency({
+    loadCandidates: getDigestRecencyCandidates,
+    minimumPaperCount: DIGEST_MIN_PAPER_COUNT,
+    rankedPaperIds: rankedPapers.map((paper) => paper.id),
+  });
+  const recentIds = new Set(recentSelection.paperIds);
+  const recentPapers = rankedPapers.filter((paper) => recentIds.has(paper.id));
 
   const selectedPapers = recentPapers.slice(0, DIGEST_PAPER_COUNT);
 
