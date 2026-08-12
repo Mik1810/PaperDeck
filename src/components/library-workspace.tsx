@@ -12,27 +12,20 @@ import { HeartOff, Layers } from "lucide-react";
 import { removeFavoriteAction } from "@/app/actions";
 import { PaperListItem } from "@/components/paper-list-item";
 import { PlaylistPapers } from "@/components/playlist-papers";
-import {
-  PlaylistSidebar,
-  type LibraryCollectionKey,
-} from "@/components/playlist-sidebar";
-import type { LibraryBackgroundData } from "@/lib/repositories/user-data";
-import type { Paper } from "@/types/paper";
-
-type PlaylistSummary = {
-  id: string;
-  name: string;
-  paperIds: string[];
-  isDefault?: boolean;
-};
+import { PlaylistSidebar } from "@/components/playlist-sidebar";
+import type {
+  LibraryCollectionKey,
+  LibraryCollectionPage,
+  LibraryPlaylistSummary,
+} from "@/lib/library-collections";
 
 type Props = {
+  initialCollectionPage: LibraryCollectionPage;
   initialFavoriteCount: number;
   initialIgnoredCount: number;
-  initialPlaylists: PlaylistSummary[];
-  initialReadLaterPapers: Paper[];
-  initialSelectedPlaylistId: string | null;
-  initialSelectedView: "read-later" | "favorites" | "ignored" | "playlist";
+  initialPlaylists: LibraryPlaylistSummary[];
+  initialReadLaterCount: number;
+  initialSelectedKey: LibraryCollectionKey;
 };
 
 function formatIgnoredDate(value: string) {
@@ -90,70 +83,100 @@ function PaperGrid({ children }: { children: ReactNode }) {
   );
 }
 
-function initialCollectionKey({
-  playlistId,
-  view,
-}: {
-  playlistId: string | null;
-  view: Props["initialSelectedView"];
-}): LibraryCollectionKey {
-  if (playlistId) return `playlist:${playlistId}`;
-  return view === "playlist" ? "read-later" : view;
+function mergeCollectionPages(
+  current: LibraryCollectionPage,
+  next: LibraryCollectionPage,
+): LibraryCollectionPage {
+  const seenPaperIds = new Set<string>();
+  const items = [...current.items, ...next.items].filter((item) => {
+    if (seenPaperIds.has(item.paper.id)) return false;
+    seenPaperIds.add(item.paper.id);
+    return true;
+  });
+
+  return { ...next, items };
 }
 
 export function LibraryWorkspace({
+  initialCollectionPage,
   initialFavoriteCount,
   initialIgnoredCount,
   initialPlaylists,
-  initialReadLaterPapers,
-  initialSelectedPlaylistId,
-  initialSelectedView,
+  initialReadLaterCount,
+  initialSelectedKey,
 }: Props) {
-  const initialKey = initialCollectionKey({
-    playlistId: initialSelectedPlaylistId,
-    view: initialSelectedView,
-  });
   const [selectedKey, setSelectedKey] =
-    useState<LibraryCollectionKey>(initialKey);
+    useState<LibraryCollectionKey>(initialSelectedKey);
   const [editingKey, setEditingKey] =
     useState<LibraryCollectionKey | null>(null);
-  const [backgroundData, setBackgroundData] =
-    useState<LibraryBackgroundData | null>(null);
-  const [backgroundError, setBackgroundError] = useState<string | null>(null);
-  const [backgroundLoading, setBackgroundLoading] = useState(true);
-  const backgroundRequestRef =
-    useRef<Promise<LibraryBackgroundData> | null>(null);
+  const [collectionPages, setCollectionPages] = useState<
+    Record<string, LibraryCollectionPage>
+  >({ [initialCollectionPage.collectionKey]: initialCollectionPage });
+  const collectionPagesRef = useRef(collectionPages);
+  const collectionRequestsRef = useRef(
+    new Map<string, Promise<LibraryCollectionPage>>(),
+  );
+  const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
+  const [errorsByKey, setErrorsByKey] = useState<Record<string, string>>({});
+  const [favoriteCount, setFavoriteCount] = useState(initialFavoriteCount);
 
-  const loadBackgroundData = useCallback(async () => {
-    setBackgroundLoading(true);
-    setBackgroundError(null);
-    if (!backgroundRequestRef.current) {
-      backgroundRequestRef.current = fetch("/api/library/collections", {
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      }).then(async (response) => {
-        if (!response.ok) throw new Error("Library preload failed");
-        return (await response.json()) as LibraryBackgroundData;
+  const loadCollectionPage = useCallback(
+    async (key: LibraryCollectionKey, cursor: string | null = null) => {
+      if (!cursor && collectionPagesRef.current[key]) return;
+
+      const requestKey = `${key}:${cursor ?? "initial"}`;
+      setLoadingKeys((current) => new Set(current).add(key));
+      setErrorsByKey((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
       });
-    }
 
-    try {
-      const data = await backgroundRequestRef.current;
-      setBackgroundData(data);
-    } catch {
-      backgroundRequestRef.current = null;
-      setBackgroundError("This collection could not be loaded.");
-    } finally {
-      setBackgroundLoading(false);
-    }
-  }, []);
+      let request = collectionRequestsRef.current.get(requestKey);
+      if (!request) {
+        const params = new URLSearchParams({ collection: key });
+        if (cursor) params.set("cursor", cursor);
+        request = fetch(`/api/library/collections?${params.toString()}`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }).then(async (response) => {
+          if (!response.ok) throw new Error("Library collection request failed");
+          const data = (await response.json()) as LibraryCollectionPage;
+          if (data.collectionKey !== key) {
+            throw new Error("Library collection response mismatch");
+          }
+          return data;
+        });
+        collectionRequestsRef.current.set(requestKey, request);
+      }
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void loadBackgroundData();
-    }, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [loadBackgroundData]);
+      try {
+        const data = await request;
+        setCollectionPages((current) => {
+          const nextPage =
+            cursor && current[key]
+              ? mergeCollectionPages(current[key], data)
+              : data;
+          const next = { ...current, [key]: nextPage };
+          collectionPagesRef.current = next;
+          return next;
+        });
+      } catch {
+        setErrorsByKey((current) => ({
+          ...current,
+          [key]: "This collection could not be loaded.",
+        }));
+      } finally {
+        collectionRequestsRef.current.delete(requestKey);
+        setLoadingKeys((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
+      }
+    },
+    [],
+  );
 
   const customPlaylistIds = useMemo(
     () =>
@@ -180,13 +203,15 @@ export function LibraryWorkspace({
 
   useEffect(() => {
     function onPopState() {
-      setSelectedKey(collectionKeyFromLocation());
+      const key = collectionKeyFromLocation();
+      setSelectedKey(key);
       setEditingKey(null);
+      void loadCollectionPage(key);
     }
 
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [collectionKeyFromLocation]);
+  }, [collectionKeyFromLocation, loadCollectionPage]);
 
   useEffect(() => {
     if (!selectedKey.startsWith("playlist:")) return;
@@ -196,9 +221,10 @@ export function LibraryWorkspace({
       setSelectedKey("read-later");
       setEditingKey(null);
       window.history.replaceState(null, "", "/library");
+      void loadCollectionPage("read-later");
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [customPlaylistIds, selectedKey]);
+  }, [customPlaylistIds, loadCollectionPage, selectedKey]);
 
   function selectCollection(
     key: LibraryCollectionKey,
@@ -209,29 +235,46 @@ export function LibraryWorkspace({
     setEditingKey(edit ? key : null);
     const currentHref = `${window.location.pathname}${window.location.search}`;
     if (currentHref !== href) window.history.pushState(null, "", href);
+    void loadCollectionPage(key);
   }
 
   async function removeFavorite(formData: FormData) {
     const paperId = String(formData.get("paperId") ?? "");
     await removeFavoriteAction(formData);
-    setBackgroundData((current) =>
-      current
-        ? {
-            ...current,
-            favoritePaperIds: current.favoritePaperIds.filter(
-              (candidateId) => candidateId !== paperId,
-            ),
-          }
-        : current,
-    );
+    setCollectionPages((current) => {
+      const page = current.favorites;
+      if (!page) return current;
+      const next = {
+        ...current,
+        favorites: {
+          ...page,
+          items: page.items.filter((item) => item.paper.id !== paperId),
+        },
+      };
+      collectionPagesRef.current = next;
+      return next;
+    });
+    setFavoriteCount((current) => Math.max(0, current - 1));
   }
 
-  const papersById = useMemo(() => {
-    const map = new Map<string, Paper>();
-    for (const paper of initialReadLaterPapers) map.set(paper.id, paper);
-    for (const paper of backgroundData?.papers ?? []) map.set(paper.id, paper);
-    return map;
-  }, [backgroundData?.papers, initialReadLaterPapers]);
+  function removePlaylistPaper(
+    collectionKey: LibraryCollectionKey,
+    paperId: string,
+  ) {
+    setCollectionPages((current) => {
+      const page = current[collectionKey];
+      if (!page) return current;
+      const next = {
+        ...current,
+        [collectionKey]: {
+          ...page,
+          items: page.items.filter((item) => item.paper.id !== paperId),
+        },
+      };
+      collectionPagesRef.current = next;
+      return next;
+    });
+  }
 
   const defaultPlaylist = initialPlaylists.find(
     (playlist) => playlist.isDefault,
@@ -252,39 +295,30 @@ export function LibraryWorkspace({
       : selectedKey === "ignored"
         ? "Ignored"
         : selectedPlaylist?.name ?? "Read later";
-  const favoritePapers =
-    backgroundData?.favoritePaperIds.flatMap((paperId) => {
-      const paper = papersById.get(paperId);
-      return paper ? [paper] : [];
-    }) ?? [];
-  const ignoredPapers =
-    backgroundData?.ignoredItems.flatMap((item) => {
-      const paper = papersById.get(item.paperId);
-      return paper ? [{ ...item, paper }] : [];
-    }) ?? [];
-  const selectedPapers =
-    selectedPlaylist?.paperIds.flatMap((paperId) => {
-      const paper = papersById.get(paperId);
-      return paper ? [paper] : [];
-    }) ?? [];
-  const needsBackgroundData = selectedKey !== "read-later";
+  const selectedPage = collectionPages[selectedKey];
+  const selectedPapers = selectedPage?.items.map((item) => item.paper) ?? [];
+  const isLoading = loadingKeys.has(selectedKey);
+  const collectionError = errorsByKey[selectedKey];
+
+  function retrySelectedCollection() {
+    void loadCollectionPage(
+      selectedKey,
+      selectedPage?.nextCursor ?? null,
+    );
+  }
 
   return (
     <div className="grid gap-5 md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)]">
       <PlaylistSidebar
         editingKey={editingKey}
-        favoriteCount={
-          backgroundData?.favoritePaperIds.length ?? initialFavoriteCount
-        }
-        ignoredCount={
-          backgroundData?.ignoredItems.length ?? initialIgnoredCount
-        }
+        favoriteCount={favoriteCount}
+        ignoredCount={initialIgnoredCount}
         onSelectCollection={(key, href) => selectCollection(key, href, false)}
         onToggleEditing={(key, href) =>
           selectCollection(key, href, editingKey !== key)
         }
         playlists={initialPlaylists}
-        readLaterCount={initialReadLaterPapers.length}
+        readLaterCount={initialReadLaterCount}
         selectedKey={selectedKey}
       />
 
@@ -303,19 +337,19 @@ export function LibraryWorkspace({
           ) : null}
         </div>
 
-        {needsBackgroundData && !backgroundData ? (
-          backgroundError ? (
+        {!selectedPage ? (
+          collectionError ? (
             <div
               className="rounded-lg border border-rose-200 bg-rose-50 p-5"
               role="alert"
             >
               <p className="text-sm font-bold text-rose-800">
-                {backgroundError}
+                {collectionError}
               </p>
               <button
                 className="mt-3 text-sm font-black text-rose-900 underline"
-                disabled={backgroundLoading}
-                onClick={() => void loadBackgroundData()}
+                disabled={isLoading}
+                onClick={retrySelectedCollection}
                 type="button"
               >
                 Try again
@@ -326,16 +360,20 @@ export function LibraryWorkspace({
           )
         ) : null}
 
-        {selectedKey === "read-later" ? (
+        {selectedKey === "read-later" && selectedPage ? (
           isEditing && defaultPlaylist ? (
             <PlaylistPapers
-              key={`${defaultPlaylist.id}-${initialReadLaterPapers.map((paper) => paper.id).join(",")}`}
-              papers={initialReadLaterPapers}
+              key={`${defaultPlaylist.id}-${selectedPapers.map((paper) => paper.id).join(",")}`}
+              onPaperRemoved={(paperId) =>
+                removePlaylistPaper("read-later", paperId)
+              }
+              papers={selectedPapers}
               playlistId={defaultPlaylist.id}
+              reorderDisabled={Boolean(selectedPage.nextCursor)}
             />
-          ) : initialReadLaterPapers.length ? (
+          ) : selectedPapers.length ? (
             <PaperGrid>
-              {initialReadLaterPapers.map((paper) => (
+              {selectedPapers.map((paper) => (
                 <PaperListItem key={paper.id} paper={paper} />
               ))}
             </PaperGrid>
@@ -347,10 +385,10 @@ export function LibraryWorkspace({
           )
         ) : null}
 
-        {selectedKey === "favorites" && backgroundData ? (
-          favoritePapers.length ? (
+        {selectedKey === "favorites" && selectedPage ? (
+          selectedPapers.length ? (
             <PaperGrid>
-              {favoritePapers.map((paper) => (
+              {selectedPapers.map((paper) => (
                 <PaperListItem
                   key={paper.id}
                   action={
@@ -384,21 +422,23 @@ export function LibraryWorkspace({
           )
         ) : null}
 
-        {selectedKey === "ignored" && backgroundData ? (
-          ignoredPapers.length ? (
+        {selectedKey === "ignored" && selectedPage ? (
+          selectedPage.items.length ? (
             <PaperGrid>
-              {ignoredPapers.map((item) => (
+              {selectedPage.items.map((item) => (
                 <PaperListItem
-                  key={`${item.action}-${item.paper.id}-${item.ignoredAt}`}
+                  key={`${item.ignoredAction}-${item.paper.id}-${item.ignoredAt}`}
                   meta={
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
-                        {ignoredActionLabel(item.action)}
-                      </span>
-                      <span className="text-xs font-bold text-slate-500">
-                        {formatIgnoredDate(item.ignoredAt)}
-                      </span>
-                    </div>
+                    item.ignoredAction && item.ignoredAt ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
+                          {ignoredActionLabel(item.ignoredAction)}
+                        </span>
+                        <span className="text-xs font-bold text-slate-500">
+                          {formatIgnoredDate(item.ignoredAt)}
+                        </span>
+                      </div>
+                    ) : null
                   }
                   paper={item.paper}
                 />
@@ -412,12 +452,16 @@ export function LibraryWorkspace({
           )
         ) : null}
 
-        {selectedPlaylist && backgroundData ? (
+        {selectedPlaylist && selectedPage ? (
           isEditing ? (
             <PlaylistPapers
               key={`${selectedPlaylist.id}-${selectedPapers.map((paper) => paper.id).join(",")}`}
+              onPaperRemoved={(paperId) =>
+                removePlaylistPaper(selectedKey, paperId)
+              }
               papers={selectedPapers}
               playlistId={selectedPlaylist.id}
+              reorderDisabled={Boolean(selectedPage.nextCursor)}
             />
           ) : selectedPapers.length ? (
             <PaperGrid>
@@ -431,6 +475,44 @@ export function LibraryWorkspace({
               title="This playlist is empty"
             />
           )
+        ) : null}
+
+        {selectedPage && collectionError ? (
+          <div
+            className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-4"
+            role="alert"
+          >
+            <p className="text-sm font-bold text-rose-800">{collectionError}</p>
+            <button
+              className="mt-2 text-sm font-black text-rose-900 underline"
+              disabled={isLoading}
+              onClick={retrySelectedCollection}
+              type="button"
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+
+        {selectedPage?.nextCursor ? (
+          <div className="mt-4 text-center">
+            {isEditing &&
+            (selectedKey === "read-later" || selectedPlaylist) ? (
+              <p className="mb-2 text-xs font-semibold text-slate-500">
+                Load all papers to enable drag-and-drop reordering.
+              </p>
+            ) : null}
+            <button
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:border-teal-400 hover:text-teal-800 disabled:cursor-wait disabled:opacity-60"
+              disabled={isLoading}
+              onClick={() =>
+                void loadCollectionPage(selectedKey, selectedPage.nextCursor)
+              }
+              type="button"
+            >
+              {isLoading ? "Loading..." : "Load more papers"}
+            </button>
+          </div>
         ) : null}
       </section>
     </div>

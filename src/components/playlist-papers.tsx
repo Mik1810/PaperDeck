@@ -15,17 +15,27 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { Layers } from "lucide-react";
-import { reorderPlaylistAction } from "@/app/actions";
+import {
+  removeFromPlaylistAction,
+  reorderPlaylistAction,
+} from "@/app/actions";
 import { MutationAlert } from "@/components/mutation-alert";
 import { SortablePlaylistPaper } from "@/components/sortable-playlist-paper";
 import type { Paper } from "@/types/paper";
 
 type Props = {
+  onPaperRemoved?: (paperId: string) => void;
   playlistId: string;
   papers: Paper[];
+  reorderDisabled?: boolean;
 };
 
-export function PlaylistPapers({ playlistId, papers }: Props) {
+export function PlaylistPapers({
+  onPaperRemoved,
+  playlistId,
+  papers,
+  reorderDisabled = false,
+}: Props) {
   const [orderedPapers, setOrderedPapers] = useState(papers);
   const [reorderErrorMessage, setReorderErrorMessage] = useState<string | null>(
     null,
@@ -37,6 +47,8 @@ export function PlaylistPapers({ playlistId, papers }: Props) {
   );
 
   async function handleDragEnd(event: DragEndEvent) {
+    if (reorderDisabled) return;
+
     const { active, over } = event;
 
     if (!over || active.id === over.id) {
@@ -77,6 +89,15 @@ export function PlaylistPapers({ playlistId, papers }: Props) {
     }
   }
 
+  async function removePaper(formData: FormData) {
+    const paperId = String(formData.get("paperId") ?? "");
+    await removeFromPlaylistAction(formData);
+    setOrderedPapers((current) =>
+      current.filter((paper) => paper.id !== paperId),
+    );
+    onPaperRemoved?.(paperId);
+  }
+
   if (!papers.length) {
     return (
       <div className="rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center">
@@ -113,6 +134,8 @@ export function PlaylistPapers({ playlistId, papers }: Props) {
               key={paper.id}
               paper={paper}
               playlistId={playlistId}
+              removeAction={removePaper}
+              reorderDisabled={reorderDisabled}
             />
           ))}
         </SortableContext>

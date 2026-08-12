@@ -309,6 +309,7 @@ export const userPaperInteractions = pgTable("user_paper_interactions", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("user_paper_interactions_owner_created_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.createdAt.desc().nullsFirst().op("text_ops")),
+	index("user_paper_interactions_ignored_history_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.paperId.asc().nullsLast().op("uuid_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops"), table.id.desc().nullsFirst().op("uuid_ops")).where(sql`${table.action} in ('dismiss', 'not_interested')`),
 	index("user_paper_interactions_owner_paper_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.paperId.asc().nullsLast().op("uuid_ops")),
 	index("user_paper_interactions_recommendation_impression_idx").using("btree", table.recommendationImpressionId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
@@ -532,6 +533,7 @@ export const favorites = pgTable("favorites", {
 	paperId: uuid("paper_id").notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
+	index("favorites_owner_created_paper_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops"), table.paperId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
 			columns: [table.ownerId],
 			foreignColumns: [profiles.ownerId],
@@ -601,6 +603,7 @@ export const playlistItems = pgTable("playlist_items", {
 	position: integer().default(0).notNull(),
 	addedAt: timestamp("added_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
+	index("playlist_items_order_idx").using("btree", table.playlistId.asc().nullsLast().op("uuid_ops"), table.position.asc().nullsLast().op("int4_ops"), table.addedAt.desc().nullsFirst().op("timestamptz_ops"), table.paperId.asc().nullsLast().op("uuid_ops")),
 	index("playlist_items_paper_idx").using("btree", table.paperId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
 			columns: [table.paperId],

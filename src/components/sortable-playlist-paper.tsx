@@ -4,16 +4,22 @@ import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { BookmarkX, GripVertical } from "lucide-react";
-import { removeFromPlaylistAction } from "@/app/actions";
 import { MathContent } from "@/components/math-content";
 import type { Paper } from "@/types/paper";
 
 type Props = {
   paper: Paper;
   playlistId: string;
+  removeAction: (formData: FormData) => Promise<void>;
+  reorderDisabled?: boolean;
 };
 
-export function SortablePlaylistPaper({ paper, playlistId }: Props) {
+export function SortablePlaylistPaper({
+  paper,
+  playlistId,
+  removeAction,
+  reorderDisabled = false,
+}: Props) {
   const {
     attributes,
     listeners,
@@ -21,7 +27,7 @@ export function SortablePlaylistPaper({ paper, playlistId }: Props) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: paper.id });
+  } = useSortable({ disabled: reorderDisabled, id: paper.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -36,10 +42,13 @@ export function SortablePlaylistPaper({ paper, playlistId }: Props) {
       className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-2 shadow-sm transition hover:border-slate-300 hover:shadow-md"
     >
       <button
-        className="mr-2 cursor-grab touch-none rounded p-0.5 text-slate-300 hover:text-slate-500 active:cursor-grabbing"
+        className="mr-2 cursor-grab touch-none rounded p-0.5 text-slate-300 hover:text-slate-500 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
         {...attributes}
         {...listeners}
-        aria-label="Drag to reorder"
+        aria-label={
+          reorderDisabled ? "Load all papers to reorder" : "Drag to reorder"
+        }
+        disabled={reorderDisabled}
         type="button"
       >
         <GripVertical aria-hidden="true" size={16} strokeWidth={2} />
@@ -58,7 +67,7 @@ export function SortablePlaylistPaper({ paper, playlistId }: Props) {
         </p>
       </Link>
 
-      <form action={removeFromPlaylistAction}>
+      <form action={removeAction}>
         <input name="playlistId" type="hidden" value={playlistId} />
         <input name="paperId" type="hidden" value={paper.id} />
         <button

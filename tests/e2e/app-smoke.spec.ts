@@ -131,6 +131,42 @@ async function seedIgnoredHistoryDevOwner() {
   });
 }
 
+async function seedPaginatedLibraryDevOwner() {
+  return withDb(async (sql) => {
+    const papers = await sql<{ id: string }[]>`
+      select id from papers order by published_at desc nulls last, title limit 30
+    `;
+
+    if (papers.length < 30) {
+      throw new Error("Paginated Library smoke setup requires 30 papers");
+    }
+
+    await sql`delete from profiles where owner_id = ${devOwnerId}`;
+    await sql`
+      insert into profiles (owner_id, onboarding_completed_at)
+      values (${devOwnerId}, now())
+    `;
+    const [playlist] = await sql<{ id: string }[]>`
+      insert into playlists (owner_id, name, is_default)
+      values (${devOwnerId}, 'Read later', true)
+      returning id
+    `;
+    const items = papers.map((paper, position) => ({
+      paper_id: paper.id,
+      playlist_id: playlist.id,
+      position,
+    }));
+    await sql`
+      insert into playlist_items ${sql(
+        items,
+        "playlist_id",
+        "paper_id",
+        "position",
+      )}
+    `;
+  });
+}
+
 async function completeDevOnboardingWithTopics(page: Page) {
   await resetDevOwner();
 
@@ -260,19 +296,20 @@ test.describe("dev-auth app smoke", () => {
 
     const papers = await seedIgnoredHistoryDevOwner();
 
-    const collectionsLoaded = page.waitForResponse(
-      (response) =>
-        response.url().includes("/api/library/collections") &&
-        response.status() === 200,
-    );
     const response = await page.goto("/library");
 
     expect(response?.status()).toBeLessThan(500);
     await expect(
       page.getByRole("heading", { exact: true, name: "Read later" }),
     ).toBeVisible();
-    await collectionsLoaded;
+    const ignoredLoaded = page.waitForResponse(
+      (collectionResponse) =>
+        collectionResponse.url().includes(
+          "/api/library/collections?collection=ignored",
+        ) && collectionResponse.status() === 200,
+    );
     await page.getByRole("button", { name: /^Ignored/ }).click();
+    await ignoredLoaded;
     await expect(
       page.getByRole("heading", { exact: true, name: "Ignored" }),
     ).toBeVisible();
@@ -280,6 +317,44 @@ test.describe("dev-auth app smoke", () => {
     await expect(page.getByText("Dismissed")).toBeVisible();
     await expect(page.getByText(papers[0].title)).toHaveCount(1);
     await expect(page.getByText(papers[1].title)).toHaveCount(1);
+  });
+
+  test("library loads later pages only after an explicit request", async ({
+    page,
+  }) => {
+    test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
+
+    await seedPaginatedLibraryDevOwner();
+    const collectionRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/library/collections")) {
+        collectionRequests.push(request.url());
+      }
+    });
+
+    const response = await page.goto("/library");
+    expect(response?.status()).toBeLessThan(500);
+    const paperLinks = page.locator(
+      'section[aria-labelledby="library-collection-title"] a[href^="/papers/"]',
+    );
+    await expect(paperLinks).toHaveCount(24);
+    expect(collectionRequests).toHaveLength(0);
+    await expect(page.getByRole("button", { name: "Load more papers" })).toBeVisible();
+
+    const nextPageLoaded = page.waitForResponse(
+      (collectionResponse) =>
+        collectionResponse.url().includes("collection=read-later") &&
+        collectionResponse.url().includes("cursor=") &&
+        collectionResponse.status() === 200,
+    );
+    await page.getByRole("button", { name: "Load more papers" }).click();
+    await nextPageLoaded;
+
+    await expect(paperLinks).toHaveCount(30);
+    await expect(
+      page.getByRole("button", { name: "Load more papers" }),
+    ).toHaveCount(0);
+    expect(collectionRequests).toHaveLength(1);
   });
 
   test("settings interests persist only after explicit save", async ({ page }) => {

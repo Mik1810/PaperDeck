@@ -7,19 +7,12 @@ import {
   deletePlaylistAction,
   renamePlaylistAction,
 } from "@/app/actions";
+import type {
+  LibraryCollectionKey,
+  LibraryPlaylistSummary,
+} from "@/lib/library-collections";
 
-export type LibraryCollectionKey =
-  | "read-later"
-  | "favorites"
-  | "ignored"
-  | `playlist:${string}`;
-
-type PlaylistSummary = {
-  id: string;
-  name: string;
-  paperIds: string[];
-  isDefault?: boolean;
-};
+export type { LibraryCollectionKey } from "@/lib/library-collections";
 
 type Props = {
   editingKey: LibraryCollectionKey | null;
@@ -33,7 +26,7 @@ type Props = {
     key: LibraryCollectionKey,
     href: string,
   ) => void;
-  playlists: PlaylistSummary[];
+  playlists: LibraryPlaylistSummary[];
   readLaterCount: number;
   selectedKey: LibraryCollectionKey;
 };
@@ -260,7 +253,7 @@ export function PlaylistSidebar({
                     {playlist.name}
                   </span>
                   <span className="mx-2 rounded-md bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">
-                    {playlist.paperIds.length}
+                    {playlist.count}
                   </span>
                 </button>
                 <div className="flex items-center gap-1">

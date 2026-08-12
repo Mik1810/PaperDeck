@@ -551,6 +551,13 @@ test.describe("playlist authorization", () => {
       `;
     });
 
+    const collectionApiRequests: string[] = [];
+    const recordCollectionRequest = (request: { url(): string }) => {
+      if (request.url().includes("/api/library/collections")) {
+        collectionApiRequests.push(request.url());
+      }
+    };
+    page.on("request", recordCollectionRequest);
     await page.goto("/library");
     await expect(page).toHaveURL(/\/library$/);
     await expect(
@@ -562,16 +569,13 @@ test.describe("playlist authorization", () => {
     await expect(
       page.getByText("My playlists", { exact: true }),
     ).toBeVisible();
+    expect(collectionApiRequests).toHaveLength(0);
     await page
       .getByRole("link", { name: `Open ${pickerPaperTitle}` })
       .click();
     await expect(page).toHaveURL(new RegExp(`/papers/${pickerPaperId}$`));
-    const backgroundReload = page.waitForResponse(
-      (response) =>
-        response.url().includes("/api/library/collections") && response.ok(),
-    );
     await page.goBack();
-    await backgroundReload;
+    expect(collectionApiRequests).toHaveLength(0);
 
     await page.getByRole("button", { name: "Edit Read later" }).click();
     await expect(page.getByText("Editing", { exact: true })).toBeVisible();
@@ -617,7 +621,14 @@ test.describe("playlist authorization", () => {
       observer.observe(document.body, { childList: true, subtree: true });
       browserWindow.__paperdeckLibraryTransition = { observer, states };
     });
+    const favoritesLoaded = page.waitForResponse(
+      (response) =>
+        response.url().includes(
+          "/api/library/collections?collection=favorites",
+        ) && response.ok(),
+    );
     await page.getByRole("button", { name: "Edit Favorites" }).click();
+    await favoritesLoaded;
     await expect(page).toHaveURL(/\/library\?view=favorites$/);
     await expect(
       page.getByRole("heading", { name: "Favorites", exact: true }),
@@ -668,6 +679,7 @@ test.describe("playlist authorization", () => {
 
     await page.locator(`a[href="/papers/${pickerPaperId}"]`).click();
     await expect(page).toHaveURL(new RegExp(`/papers/${pickerPaperId}$`));
+    page.off("request", recordCollectionRequest);
   });
 });
 

@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made Library loading proportional to the visible collection instead of the
+  owner's complete private library. The initial response now contains counts,
+  playlist metadata, and at most 24 papers from the selected collection;
+  Favorites, Ignored, custom playlists, and later pages load on demand through
+  private no-store keyset pagination backed by matching database indexes.
 - Separated delivered recommendation batch items from actual feed impressions.
   Loading a 50-paper deck no longer records exposure for hidden cards; an
   authenticated, idempotent visible-card write now creates one impression when
