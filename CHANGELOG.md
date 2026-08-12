@@ -8,6 +8,12 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Bounded recommendation-analytics retention to independently committed,
+  ordered 10,000-row batches with `SKIP LOCKED`, capped each table pass at 100
+  batches, and counted PostgreSQL command results without transferring deleted
+  IDs. Global `(shown_at, id)` and `(delivered_at, id)` indexes now support the
+  pruning keysets, while statement/lock timeouts and workflow output expose and
+  bound batch latency and truncation.
 - Made Library loading proportional to the visible collection instead of the
   owner's complete private library. The initial response now contains counts,
   playlist metadata, and at most 24 papers from the selected collection;
