@@ -33,6 +33,7 @@ type PaperCardProps = {
   onDismissSubmit?: (
     paperId: string,
     recommendationImpressionId?: string,
+    recommendationBatchItemId?: string,
   ) => void | Promise<void>;
   onOpen?: (paperId: string) => void;
   onPlaylistSaveComplete?: (paperId: string) => void;
@@ -67,6 +68,7 @@ export function PaperCard({
 
     try {
       await submitDeckAction(action, paper.id, {
+        recommendationBatchItemId: paper.recommendationBatchItemId,
         recommendationImpressionId: paper.recommendationImpressionId,
         selected,
       });
@@ -153,7 +155,11 @@ export function PaperCard({
           onClick={() => {
             setMutationErrorMessage(null);
             if (onDismissSubmit) {
-              void onDismissSubmit(paper.id, paper.recommendationImpressionId);
+              void onDismissSubmit(
+                paper.id,
+                paper.recommendationImpressionId,
+                paper.recommendationBatchItemId,
+              );
               return;
             }
 
@@ -169,6 +175,7 @@ export function PaperCard({
           onClick={() => {
             onOpen?.(paper.id);
             recordOpenDetail(paper.id, {
+              recommendationBatchItemId: paper.recommendationBatchItemId,
               recommendationImpressionId: paper.recommendationImpressionId,
             });
           }}
@@ -210,6 +217,7 @@ export function PaperCard({
             onPlaylistSaveComplete?.(paper.id);
           }}
           paperId={paper.id}
+          recommendationBatchItemId={paper.recommendationBatchItemId}
           recommendationImpressionId={paper.recommendationImpressionId}
           variant="icon"
         />

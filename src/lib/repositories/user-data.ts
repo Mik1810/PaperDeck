@@ -10,6 +10,7 @@ import {
   playlistItems,
   papers,
   paperNotes,
+  recommendationBatchItems,
   recommendationImpressions,
   recommendations,
   userInterests,
@@ -74,9 +75,9 @@ type InteractionRecordOptions = {
   recommendationImpressionId?: string | null;
 };
 
-type RecommendationImpressionBatch = {
+type RecommendationDeliveryBatch = {
   batchId: string | null;
-  impressionIdsByPaperId: Map<string, string>;
+  batchItemIdsByPaperId: Map<string, string>;
 };
 
 type RecommendationBatchSource = "initial_batch" | "live_batch";
@@ -143,22 +144,22 @@ function isUuid(value: string) {
   return uuidPattern.test(value);
 }
 
-async function recordRecommendationImpressions(
+async function recordRecommendationBatchItems(
   ownerId: string,
   papers: RankedPaper[],
   modelVersion: string,
-): Promise<RecommendationImpressionBatch> {
+): Promise<RecommendationDeliveryBatch> {
   if (!papers.length) {
     return {
       batchId: null,
-      impressionIdsByPaperId: new Map(),
+      batchItemIdsByPaperId: new Map(),
     };
   }
 
   const batchId = randomUUID();
-  const shownAt = new Date().toISOString();
+  const deliveredAt = new Date().toISOString();
   const rows = await db
-    .insert(recommendationImpressions)
+    .insert(recommendationBatchItems)
     .values(
       papers.map((paper, index) => ({
         ownerId,
@@ -168,44 +169,117 @@ async function recordRecommendationImpressions(
         score: paper.rankingScore,
         scoreComponents: paper.rankingScoreComponents,
         modelVersion,
-        shownAt,
+        deliveredAt,
       })),
     )
     .returning({
-      id: recommendationImpressions.id,
-      paperId: recommendationImpressions.paperId,
+      id: recommendationBatchItems.id,
+      paperId: recommendationBatchItems.paperId,
     });
 
   return {
     batchId,
-    impressionIdsByPaperId: new Map(
+    batchItemIdsByPaperId: new Map(
       rows.map((row) => [row.paperId, row.id]),
     ),
   };
 }
 
-export async function resolveRecommendationImpressionId(
+/** @user-scoped Records one actual visible-card impression idempotently. */
+export async function recordRecommendationImpression(
   ownerId: string,
   paperId: string,
-  recommendationImpressionId: string | null | undefined,
+  recommendationBatchItemId: string | null | undefined,
 ) {
-  if (!recommendationImpressionId || !isUuid(recommendationImpressionId)) {
+  if (
+    !recommendationBatchItemId ||
+    !isUuid(recommendationBatchItemId) ||
+    !isUuid(paperId)
+  ) {
     return null;
   }
 
-  const rows = await db
+  const batchItems = await db
+    .select({
+      id: recommendationBatchItems.id,
+      batchId: recommendationBatchItems.batchId,
+      rank: recommendationBatchItems.rank,
+      score: recommendationBatchItems.score,
+      scoreComponents: recommendationBatchItems.scoreComponents,
+      modelVersion: recommendationBatchItems.modelVersion,
+    })
+    .from(recommendationBatchItems)
+    .where(
+      and(
+        eq(recommendationBatchItems.id, recommendationBatchItemId),
+        eq(recommendationBatchItems.ownerId, ownerId),
+        eq(recommendationBatchItems.paperId, paperId),
+      ),
+    )
+    .limit(1);
+  const batchItem = batchItems[0];
+
+  if (!batchItem) return null;
+
+  const inserted = await db
+    .insert(recommendationImpressions)
+    .values({
+      ownerId,
+      paperId,
+      batchItemId: batchItem.id,
+      batchId: batchItem.batchId,
+      rank: batchItem.rank,
+      score: batchItem.score,
+      scoreComponents: batchItem.scoreComponents,
+      modelVersion: batchItem.modelVersion,
+    })
+    .onConflictDoNothing({ target: recommendationImpressions.batchItemId })
+    .returning({ id: recommendationImpressions.id });
+
+  if (inserted[0]?.id) return inserted[0].id;
+
+  const existing = await db
     .select({ id: recommendationImpressions.id })
     .from(recommendationImpressions)
     .where(
       and(
-        eq(recommendationImpressions.id, recommendationImpressionId),
+        eq(recommendationImpressions.batchItemId, batchItem.id),
         eq(recommendationImpressions.ownerId, ownerId),
         eq(recommendationImpressions.paperId, paperId),
       ),
     )
     .limit(1);
 
-  return rows[0]?.id ?? null;
+  return existing[0]?.id ?? null;
+}
+
+export async function resolveRecommendationImpressionId(
+  ownerId: string,
+  paperId: string,
+  recommendationImpressionId: string | null | undefined,
+  recommendationBatchItemId?: string | null,
+) {
+  if (recommendationImpressionId && isUuid(recommendationImpressionId)) {
+    const rows = await db
+      .select({ id: recommendationImpressions.id })
+      .from(recommendationImpressions)
+      .where(
+        and(
+          eq(recommendationImpressions.id, recommendationImpressionId),
+          eq(recommendationImpressions.ownerId, ownerId),
+          eq(recommendationImpressions.paperId, paperId),
+        ),
+      )
+      .limit(1);
+
+    if (rows[0]?.id) return rows[0].id;
+  }
+
+  return recordRecommendationImpression(
+    ownerId,
+    paperId,
+    recommendationBatchItemId,
+  );
 }
 
 /** @user-scoped Reads and writes user-owned profile data. */
@@ -962,10 +1036,10 @@ export async function getFeedPageData(ownerId: string) {
   const { rankedPapers, timings } = feedData;
   const visiblePapers = rankedPapers.slice(0, INITIAL_FEED_RECOMMENDATION_COUNT);
   const state = feedData.feedState.userState;
-  const impressionBatch = await measureAsync(
+  const deliveryBatch = await measureAsync(
     timings,
-    "recommendation_impressions",
-    recordRecommendationImpressions(
+    "recommendation_batch_items",
+    recordRecommendationBatchItems(
       ownerId,
       visiblePapers,
       recommendationModelVersionForFeedSource(feedData.source),
@@ -973,8 +1047,8 @@ export async function getFeedPageData(ownerId: string) {
   );
   const feedPapers: FeedPaper[] = visiblePapers.map((paper) => ({
     ...paper,
-    recommendationImpressionId:
-      impressionBatch.impressionIdsByPaperId.get(paper.id),
+    recommendationBatchItemId:
+      deliveryBatch.batchItemIdsByPaperId.get(paper.id),
   }));
   const candidateSourceCounts = Object.fromEntries(
     [...new Set(visiblePapers.map((paper) => paper.rankingScoreComponents.source))]
@@ -1007,8 +1081,8 @@ export async function getFeedPageData(ownerId: string) {
     candidateSourceCounts,
     timings,
     rankedCount: rankedPapers.length,
-    recommendationImpressionBatchId: impressionBatch.batchId,
-    recommendationImpressionCount: impressionBatch.impressionIdsByPaperId.size,
+    recommendationDeliveryBatchId: deliveryBatch.batchId,
+    recommendationBatchItemCount: deliveryBatch.batchItemIdsByPaperId.size,
   });
 
   return {

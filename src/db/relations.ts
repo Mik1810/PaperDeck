@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, researchGroupInvitations, notifications, playlists, recommendationImpressions, userPaperInteractions, userPaperFeedExclusions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes, researchGroupPaperItems, researchGroupPaperActivity } from "./schema";
+import { profiles, collaborationIdentities, collaborationSearchLimits, friendRequests, friendships, userBlocks, researchGroups, researchGroupMembers, researchGroupInvitations, notifications, playlists, recommendationBatchItems, recommendationImpressions, userPaperInteractions, userPaperFeedExclusions, papers, recommendations, digests, taxonomyTopics, paperAuthors, favorites, userInterests, playlistItems, digestItems, topicRelations, paperTopics, paperExternalIds, topicEmbeddings, userProfileEmbeddings, ingestionRuns, ingestionCursors, paperNotes, researchGroupPaperItems, researchGroupPaperActivity } from "./schema";
 
 export const playlistsRelations = relations(playlists, ({one, many}) => ({
 	profile: one(profiles, {
@@ -43,6 +43,7 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	researchGroupPaperActions: many(researchGroupPaperActivity),
 	selectedSuccessorForGroups: many(researchGroups),
 	playlists: many(playlists),
+	recommendationBatchItems: many(recommendationBatchItems),
 	recommendationImpressions: many(recommendationImpressions),
 	userPaperInteractions: many(userPaperInteractions),
 	userPaperFeedExclusions: many(userPaperFeedExclusions),
@@ -153,6 +154,18 @@ export const collaborationSearchLimitsRelations = relations(collaborationSearchL
 	}),
 }));
 
+export const recommendationBatchItemsRelations = relations(recommendationBatchItems, ({one, many}) => ({
+	profile: one(profiles, {
+		fields: [recommendationBatchItems.ownerId],
+		references: [profiles.ownerId]
+	}),
+	paper: one(papers, {
+		fields: [recommendationBatchItems.paperId],
+		references: [papers.id]
+	}),
+	recommendationImpressions: many(recommendationImpressions),
+}));
+
 export const recommendationImpressionsRelations = relations(recommendationImpressions, ({one, many}) => ({
 	profile: one(profiles, {
 		fields: [recommendationImpressions.ownerId],
@@ -161,6 +174,10 @@ export const recommendationImpressionsRelations = relations(recommendationImpres
 	paper: one(papers, {
 		fields: [recommendationImpressions.paperId],
 		references: [papers.id]
+	}),
+	batchItem: one(recommendationBatchItems, {
+		fields: [recommendationImpressions.batchItemId],
+		references: [recommendationBatchItems.id]
 	}),
 	userPaperInteractions: many(userPaperInteractions),
 }));
@@ -192,6 +209,7 @@ export const userPaperFeedExclusionsRelations = relations(userPaperFeedExclusion
 }));
 
 export const papersRelations = relations(papers, ({many}) => ({
+	recommendationBatchItems: many(recommendationBatchItems),
 	recommendationImpressions: many(recommendationImpressions),
 	userPaperInteractions: many(userPaperInteractions),
 	userPaperFeedExclusions: many(userPaperFeedExclusions),

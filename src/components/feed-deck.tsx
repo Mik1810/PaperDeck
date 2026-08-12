@@ -19,6 +19,7 @@ import {
 import { PaperSourceBadge } from "@/components/paper-source-badge";
 import {
   deckMutationErrorMessage,
+  recordRecommendationImpression,
   submitDeckAction,
 } from "@/lib/client/deck-mutations";
 import { resolveDeckSwipe } from "@/lib/client/deck-swipe";
@@ -127,7 +128,23 @@ export function FeedDeck({
   const visibleNextPapers = visiblePapers.slice(1, 6);
 
   const exitingRef = useRef(false);
+  const impressionRequestsRef = useRef(new Set<string>());
   const prefersReducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    const batchItemId = visibleActivePaper?.recommendationBatchItemId;
+
+    if (!visibleActivePaper || !batchItemId) return;
+    if (impressionRequestsRef.current.has(batchItemId)) return;
+
+    impressionRequestsRef.current.add(batchItemId);
+    void recordRecommendationImpression(
+      visibleActivePaper.id,
+      batchItemId,
+    ).catch(() => {
+      impressionRequestsRef.current.delete(batchItemId);
+    });
+  }, [visibleActivePaper]);
 
   useEffect(() => {
     const prev = document.body.style.overflowX;
@@ -191,12 +208,14 @@ export function FeedDeck({
   const handleDismissSubmit = useCallback(async function (
     paperId: string,
     recommendationImpressionId?: string,
+    recommendationBatchItemId?: string,
   ) {
     setDismissError(null);
     setPaperDismissed(paperId, true);
 
     try {
       await submitDeckAction("dismiss", paperId, {
+        recommendationBatchItemId,
         recommendationImpressionId,
       });
     } catch {
@@ -211,12 +230,14 @@ export function FeedDeck({
   const handleReadLaterSubmit = useCallback(async function (
     paperId: string,
     recommendationImpressionId?: string,
+    recommendationBatchItemId?: string,
   ) {
     setDismissError(null);
     setPaperDismissed(paperId, true);
 
     try {
       await submitDeckAction("read_later", paperId, {
+        recommendationBatchItemId,
         recommendationImpressionId,
         selected: true,
       });
@@ -255,11 +276,13 @@ export function FeedDeck({
           void handleReadLaterSubmit(
             visibleActivePaper.id,
             visibleActivePaper.recommendationImpressionId,
+            visibleActivePaper.recommendationBatchItemId,
           );
         } else {
           void handleDismissSubmit(
             visibleActivePaper.id,
             visibleActivePaper.recommendationImpressionId,
+            visibleActivePaper.recommendationBatchItemId,
           );
         }
         dragX.set(0);

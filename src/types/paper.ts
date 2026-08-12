@@ -52,6 +52,7 @@ export type Paper = {
 };
 
 export type FeedPaper = Paper & {
+  recommendationBatchItemId?: string;
   recommendationImpressionId?: string;
 };
 

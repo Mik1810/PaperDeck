@@ -110,6 +110,7 @@ Aggiornato al 2026-08-04:
   - RPC `match_papers_by_embedding` per cosine similarity search attiva con default MiniLM.
 - Feed semantico: profilo utente generato su write da onboarding/settings, con primo batch feed e batch live breve salvati in `recommendations` per evitare reranking completo a ogni refresh.
   - Retrieval IVFFlat con 10 probe; batch cache sotto 10 risultati visibili vengono rigenerati e deck semantici sotto 50 candidati non visti vengono completati da un pool catalogo limitato e pesato. Il ranking trasferisce soltanto descrittori e topic dei candidati, poi carica autori, abstract e summary per i 50 finalisti, mantenendo e persistendo la provenienza del candidato.
+  - La consegna del deck e' persistita come batch item distinta dall'impression: soltanto una carta diventata attiva produce un'impression idempotente e attribuibile alle successive azioni utente.
 - Gate stabilita' raccomandazioni: App CI mantiene un sanity check sintetico separato da una baseline discriminante con rilevanza graduata, profili sovrapposti, feedback, paper gia' visti e segnali in conflitto; blocca regressioni medie e del profilo peggiore su NDCG/recall, exposure coverage, sovrapposizione e seen-paper leakage. Un workflow separato riporta il p95 del reranker senza renderlo inizialmente bloccante.
 - Onboarding interessi: wizard full-screen scuro e guidato, senza navigazione libera tra step, con controlli separati a destra su desktop.
 - LLM triage summary: implementato.

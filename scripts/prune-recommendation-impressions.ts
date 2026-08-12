@@ -34,10 +34,27 @@ async function main() {
 
   try {
     if (dryRun) {
-      const rows = await sql<{ count: string }[]>`
-        select count(*)::text as count
-        from recommendation_impressions
-        where shown_at < ${cutoff.toISOString()}
+      const rows = await sql<{
+        batch_item_count: string;
+        impression_count: string;
+      }[]>`
+        select
+          (
+            select count(*)::text
+            from recommendation_batch_items as batch_item
+            where delivered_at < ${cutoff.toISOString()}
+              and not exists (
+                select 1
+                from recommendation_impressions as impression
+                where impression.batch_item_id = batch_item.id
+                  and impression.shown_at >= ${cutoff.toISOString()}
+              )
+          ) as batch_item_count,
+          (
+            select count(*)::text
+            from recommendation_impressions
+            where shown_at < ${cutoff.toISOString()}
+          ) as impression_count
       `;
 
       console.log(
@@ -45,24 +62,43 @@ async function main() {
           mode: "dry-run",
           retentionDays: days,
           cutoff: cutoff.toISOString(),
-          prunableCount: Number(rows[0]?.count ?? 0),
+          prunableBatchItemCount: Number(rows[0]?.batch_item_count ?? 0),
+          prunableImpressionCount: Number(rows[0]?.impression_count ?? 0),
         }),
       );
       return;
     }
 
-    const rows = await sql<{ id: string }[]>`
-      delete from recommendation_impressions
-      where shown_at < ${cutoff.toISOString()}
-      returning id
-    `;
+    const deleted = await sql.begin(async (transaction) => {
+      const impressions = await transaction<{ id: string }[]>`
+        delete from recommendation_impressions
+        where shown_at < ${cutoff.toISOString()}
+        returning id
+      `;
+      const batchItems = await transaction<{ id: string }[]>`
+        delete from recommendation_batch_items as batch_item
+        where delivered_at < ${cutoff.toISOString()}
+          and not exists (
+            select 1
+            from recommendation_impressions as impression
+            where impression.batch_item_id = batch_item.id
+          )
+        returning id
+      `;
+
+      return {
+        batchItemCount: batchItems.length,
+        impressionCount: impressions.length,
+      };
+    });
 
     console.log(
       JSON.stringify({
         mode: "write",
         retentionDays: days,
         cutoff: cutoff.toISOString(),
-        deletedCount: rows.length,
+        deletedBatchItemCount: deleted.batchItemCount,
+        deletedImpressionCount: deleted.impressionCount,
       }),
     );
   } finally {
