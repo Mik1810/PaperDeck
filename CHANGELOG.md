@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made fresh recommendation batches a true feed fast path. Initial and live
+  cache lookups now run before taxonomy, semantic candidates, or full user
+  ranking state; PostgreSQL filters current Favorites, playlist membership,
+  and durable exclusions in the lookup, paper hydration starts only after the
+  usable-batch threshold is met, and presentation state loads independently.
 - Removed overlapping catalog reads from sparse digest generation. The digest
   now fetches ranked candidates from the maximum 30-day recency window once,
   then selects the first sufficient 7-, 14-, or 30-day window in memory while
