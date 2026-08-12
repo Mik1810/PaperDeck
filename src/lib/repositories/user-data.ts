@@ -36,6 +36,10 @@ import {
   type CatalogRankingCandidate,
 } from "@/lib/repositories/catalog";
 import { topicDisplayLabel } from "@/lib/arxiv-categories";
+import {
+  type DigestRecencyCandidate,
+  selectDigestPaperIdsByRecency,
+} from "@/lib/digest-selection";
 import { isDefaultOnboardingTopic } from "@/lib/topic-taxonomy";
 import {
   INITIAL_FEED_RECOMMENDATION_COUNT,
@@ -1161,27 +1165,30 @@ export async function getFeedPageData(ownerId: string) {
 
 const DIGEST_PAPER_COUNT = 10;
 const DIGEST_MIN_PAPER_COUNT = 3;
-const DIGEST_RECENCY_WINDOWS_DAYS = [7, 14, 30];
 
 export type DigestGroup = {
   topicLabel: string;
   papers: Paper[];
 };
 
-async function getRecentPaperIds(
+async function getDigestRecencyCandidates(
   paperIds: string[],
-  sinceDays: number,
-): Promise<Set<string>> {
+  maximumWindowDays: number,
+  nowMs: number,
+): Promise<DigestRecencyCandidate[]> {
   if (!paperIds.length) {
-    return new Set();
+    return [];
   }
 
   const since = new Date(
-    Date.now() - sinceDays * 24 * 60 * 60 * 1000,
+    nowMs - maximumWindowDays * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const rows = await db
-    .select({ id: papers.id })
+  return db
+    .select({
+      availableAt: sql<string>`coalesce(${papers.publishedAt}, ${papers.ingestedAt})`,
+      paperId: papers.id,
+    })
     .from(papers)
     .where(
       and(
@@ -1189,8 +1196,6 @@ async function getRecentPaperIds(
         sql`coalesce(${papers.publishedAt}, ${papers.ingestedAt}) >= ${since}`,
       ),
     );
-
-  return new Set(rows.map((row) => row.id));
 }
 
 /** @admin */
@@ -1201,19 +1206,13 @@ export async function getDigestPageData(ownerId: string) {
     feedData.presentationState ?? (await getFeedPresentationState(ownerId));
   const rankedById = new Map(rankedPapers.map((paper) => [paper.id, paper]));
 
-  let recentPapers: RankedPaper[] = [];
-
-  for (const windowDays of DIGEST_RECENCY_WINDOWS_DAYS) {
-    const recentIds = await getRecentPaperIds(
-      rankedPapers.map((paper) => paper.id),
-      windowDays,
-    );
-    recentPapers = rankedPapers.filter((paper) => recentIds.has(paper.id));
-
-    if (recentPapers.length >= DIGEST_MIN_PAPER_COUNT) {
-      break;
-    }
-  }
+  const recentSelection = await selectDigestPaperIdsByRecency({
+    loadCandidates: getDigestRecencyCandidates,
+    minimumPaperCount: DIGEST_MIN_PAPER_COUNT,
+    rankedPaperIds: rankedPapers.map((paper) => paper.id),
+  });
+  const recentIds = new Set(recentSelection.paperIds);
+  const recentPapers = rankedPapers.filter((paper) => recentIds.has(paper.id));
 
   const selectedPapers = recentPapers.slice(0, DIGEST_PAPER_COUNT);
 

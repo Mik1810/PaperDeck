@@ -13,6 +13,10 @@ This project follows Semantic Versioning.
   ranking state; PostgreSQL filters current Favorites, playlist membership,
   and durable exclusions in the lookup, paper hydration starts only after the
   usable-batch threshold is met, and presentation state loads independently.
+- Removed overlapping catalog reads from sparse digest generation. The digest
+  now fetches ranked candidates from the maximum 30-day recency window once,
+  then selects the first sufficient 7-, 14-, or 30-day window in memory while
+  preserving ranking and feed-exclusion semantics.
 - Made Library loading proportional to the visible collection instead of the
   owner's complete private library. The initial response now contains counts,
   playlist metadata, and at most 24 papers from the selected collection;

@@ -436,6 +436,9 @@ MVP semplice:
 
 - Digest giornaliero o settimanale solo in app.
 - Lista "New for you".
+- La finestra adattiva 7/14/30 giorni legge una sola volta i candidati del
+  range massimo e sceglie in memoria la prima finestra con almeno tre paper,
+  preservando l'ordine del ranking e le esclusioni del feed.
 
 Futuro:
 
