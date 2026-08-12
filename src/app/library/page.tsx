@@ -2,6 +2,10 @@ import { AppShell } from "@/components/app-shell";
 import { LibraryWorkspace } from "@/components/library-workspace";
 import { requireOwnerId } from "@/lib/auth/session";
 import {
+  isLibraryCollectionKey,
+  type LibraryCollectionKey,
+} from "@/lib/library-collections";
+import {
   getLibraryInitialData,
   hasUsableOnboardingState,
 } from "@/lib/repositories/user-data";
@@ -21,27 +25,26 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   }
 
   const { playlist: requestedPlaylistId, view } = await searchParams;
-  const {
-    favoriteCount,
-    ignoredCount,
-    playlists,
-    readLaterPapers,
-    readLaterCount,
-  } = await getLibraryInitialData(ownerId);
-
-  const selectedPlaylist = requestedPlaylistId
-    ? playlists.find(
-        (playlist) =>
-          playlist.id === requestedPlaylistId && !playlist.isDefault,
-      ) ?? null
-    : null;
-  const selectedView = selectedPlaylist
-    ? "playlist"
+  const requestedCollectionKey = requestedPlaylistId
+    ? `playlist:${requestedPlaylistId}`
     : view === "favorites"
       ? "favorites"
       : view === "ignored"
         ? "ignored"
         : "read-later";
+  const safeRequestedCollectionKey: LibraryCollectionKey =
+    isLibraryCollectionKey(requestedCollectionKey)
+      ? requestedCollectionKey
+      : "read-later";
+  const {
+    favoriteCount,
+    ignoredCount,
+    initialCollectionPage,
+    playlists,
+    readLaterCount,
+    selectedCollectionKey,
+  } = await getLibraryInitialData(ownerId, safeRequestedCollectionKey);
+
   return (
     <AppShell
       title="Library"
@@ -51,10 +54,10 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
       <LibraryWorkspace
         initialFavoriteCount={favoriteCount}
         initialIgnoredCount={ignoredCount}
+        initialCollectionPage={initialCollectionPage}
         initialPlaylists={playlists}
-        initialReadLaterPapers={readLaterPapers}
-        initialSelectedPlaylistId={selectedPlaylist?.id ?? null}
-        initialSelectedView={selectedView}
+        initialReadLaterCount={readLaterCount}
+        initialSelectedKey={selectedCollectionKey}
       />
     </AppShell>
   );

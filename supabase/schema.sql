@@ -209,7 +209,12 @@ create unique index papers_openalex_unique_idx on papers(openalex_id) where open
 create index paper_topics_topic_idx on paper_topics(topic_id);
 create index paper_authors_paper_idx on paper_authors(paper_id);
 create index playlist_items_paper_idx on playlist_items(paper_id);
+create index playlist_items_order_idx on playlist_items(playlist_id, position, added_at desc, paper_id);
+create index favorites_owner_created_paper_idx on favorites(owner_id, created_at desc, paper_id);
 create index user_paper_interactions_owner_created_idx on user_paper_interactions(owner_id, created_at desc);
+create index user_paper_interactions_ignored_history_idx
+on user_paper_interactions(owner_id, paper_id, created_at desc, id desc)
+where action in ('dismiss', 'not_interested');
 create index recommendations_owner_score_idx on recommendations(owner_id, score desc);
 create index digests_owner_generated_idx on digests(owner_id, generated_at desc);
 

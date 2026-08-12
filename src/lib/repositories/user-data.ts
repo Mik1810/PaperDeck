@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
-import { and, desc, eq, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   profiles,
@@ -53,6 +53,16 @@ import {
   reorderOwnedPlaylistItems,
 } from "@/lib/repositories/playlist-items";
 import { logger } from "@/lib/logging/logger";
+import type {
+  LibraryCollectionItem,
+  LibraryCollectionKey,
+  LibraryCollectionPage,
+  LibraryPlaylistSummary,
+} from "@/lib/library-collections";
+import {
+  decodeLibraryCursor,
+  encodeLibraryCursor,
+} from "@/lib/repositories/library-cursor";
 import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import {
   getSemanticPaperCandidates,
@@ -60,7 +70,7 @@ import {
   type SemanticRetrievalFallbackReason,
 } from "@/lib/repositories/semantic-retrieval";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
-import type { FeedPaper, InteractionType, Paper, Playlist } from "@/types/paper";
+import type { FeedPaper, InteractionType, Paper } from "@/types/paper";
 
 type TopicRow = Awaited<ReturnType<typeof getTopics>>[number];
 
@@ -1176,174 +1186,309 @@ export async function getDigestPageData(ownerId: string) {
   };
 }
 
-type IgnoredPaperHistoryRow = {
+export const LIBRARY_COLLECTION_PAGE_SIZE = 24;
+
+type PlaylistPageRow = {
+  addedAt: string;
   paperId: string;
-  ignoredAt: string;
+  position: number;
+};
+
+type DatedPageRow = {
+  paperId: string;
+  timestamp: string;
+};
+
+type IgnoredPageRow = DatedPageRow & {
   action: IgnoredInteractionAction;
 };
 
-async function getIgnoredPaperHistoryRows(
-  ownerId: string,
-  limit = 50,
-): Promise<IgnoredPaperHistoryRow[]> {
-  const rows = await db
-    .select({
-      paperId: userPaperInteractions.paperId,
-      action: userPaperInteractions.action,
-      ignoredAt: userPaperInteractions.createdAt,
-    })
-    .from(userPaperInteractions)
-    .where(
-      and(
-        eq(userPaperInteractions.ownerId, ownerId),
-        inArray(userPaperInteractions.action, ignoredInteractionActions),
+async function getLibraryMetadata(ownerId: string) {
+  const [playlistRows, favoriteCountRows, ignoredCountRows] = await Promise.all([
+    db
+      .select({
+        count: sql<number>`(
+          select count(*)::integer
+          from ${playlistItems} as counted_item
+          where counted_item.playlist_id = ${playlists.id}
+        )`,
+        id: playlists.id,
+        isDefault: playlists.isDefault,
+        name: playlists.name,
+      })
+      .from(playlists)
+      .where(eq(playlists.ownerId, ownerId))
+      .orderBy(playlists.createdAt),
+    db
+      .select({ count: sql<number>`count(*)::integer` })
+      .from(favorites)
+      .where(eq(favorites.ownerId, ownerId)),
+    db
+      .select({ count: sql<number>`count(distinct ${userPaperInteractions.paperId})::integer` })
+      .from(userPaperInteractions)
+      .where(
+        and(
+          eq(userPaperInteractions.ownerId, ownerId),
+          inArray(userPaperInteractions.action, ignoredInteractionActions),
+        ),
       ),
-    )
-    .orderBy(desc(userPaperInteractions.createdAt))
-    .limit(limit * 4);
-
-  const latestByPaperId = new Map<
-    string,
-    { action: IgnoredInteractionAction; ignoredAt: string }
-  >();
-
-  for (const row of rows) {
-    if (latestByPaperId.has(row.paperId)) {
-      continue;
-    }
-
-    latestByPaperId.set(row.paperId, {
-      action: row.action as IgnoredInteractionAction,
-      ignoredAt: row.ignoredAt,
-    });
-
-    if (latestByPaperId.size >= limit) {
-      break;
-    }
-  }
-
-  return [...latestByPaperId].map(([paperId, ignored]) => ({
-    paperId,
-    ignoredAt: ignored.ignoredAt,
-    action: ignored.action,
-  }));
-}
-
-async function getLibraryCollectionSnapshot(ownerId: string) {
-  const playlistRowsPromise = db
-    .select({
-      id: playlists.id,
-      name: playlists.name,
-      isDefault: playlists.isDefault,
-    })
-    .from(playlists)
-    .where(eq(playlists.ownerId, ownerId))
-    .orderBy(playlists.createdAt);
-
-  const favoriteRowsPromise = db
-    .select({ paperId: favorites.paperId })
-    .from(favorites)
-    .where(eq(favorites.ownerId, ownerId))
-    .orderBy(desc(favorites.createdAt));
-
-  const ignoredRowsPromise = getIgnoredPaperHistoryRows(ownerId);
-  const [playlistRows, favoriteRows, ignoredRows] = await Promise.all([
-    playlistRowsPromise,
-    favoriteRowsPromise,
-    ignoredRowsPromise,
   ]);
 
-  const playlistIds = playlistRows.map((playlist) => playlist.id);
-
-  const allPlaylistItems = playlistIds.length
-    ? await db
-        .select({
-          playlistId: playlistItems.playlistId,
-          paperId: playlistItems.paperId,
-        })
-        .from(playlistItems)
-        .where(inArray(playlistItems.playlistId, playlistIds))
-        .orderBy(
-          playlistItems.playlistId,
-          playlistItems.position,
-          desc(playlistItems.addedAt),
-        )
-    : [];
-
-  const paperIdsByPlaylist = new Map<string, string[]>();
-  for (const item of allPlaylistItems) {
-    const existing = paperIdsByPlaylist.get(item.playlistId);
-    if (existing) {
-      existing.push(item.paperId);
-    } else {
-      paperIdsByPlaylist.set(item.playlistId, [item.paperId]);
-    }
-  }
-
-  const playlistSummaries: Playlist[] = playlistRows.map((playlist) => ({
-    id: playlist.id,
-    name: playlist.name,
-    paperIds: paperIdsByPlaylist.get(playlist.id) ?? [],
-    isDefault: playlist.isDefault ?? false,
-  }));
-
-  const readLaterPlaylist = playlistSummaries.find(
-    (playlist) => playlist.isDefault,
+  const libraryPlaylists: LibraryPlaylistSummary[] = playlistRows.map(
+    (playlist) => ({
+      count: Number(playlist.count),
+      id: playlist.id,
+      isDefault: playlist.isDefault,
+      name: playlist.name,
+    }),
   );
 
   return {
-    playlists: playlistSummaries,
-    favoritePaperIds: favoriteRows.map((row) => row.paperId),
-    ignoredRows,
-    readLaterPaperIds: readLaterPlaylist?.paperIds ?? [],
+    favoriteCount: Number(favoriteCountRows[0]?.count ?? 0),
+    ignoredCount: Number(ignoredCountRows[0]?.count ?? 0),
+    playlists: libraryPlaylists,
+    readLaterCount:
+      libraryPlaylists.find((playlist) => playlist.isDefault)?.count ?? 0,
   };
 }
 
-export type LibraryBackgroundData = {
-  favoritePaperIds: string[];
-  ignoredItems: Array<{
-    action: IgnoredInteractionAction;
-    ignoredAt: string;
-    paperId: string;
-  }>;
-  papers: Paper[];
-};
-
-/** @user-scoped */
-export async function getLibraryInitialData(ownerId: string) {
-  const snapshot = await getLibraryCollectionSnapshot(ownerId);
-  const readLaterPapers = await getPapersByIds(snapshot.readLaterPaperIds);
-
-  return {
-    favoriteCount: snapshot.favoritePaperIds.length,
-    ignoredCount: snapshot.ignoredRows.length,
-    playlists: snapshot.playlists,
-    readLaterPapers,
-    readLaterCount: snapshot.readLaterPaperIds.length,
-  };
-}
-
-/** @user-scoped */
-export async function getLibraryBackgroundData(
+async function getPlaylistCollectionRows(
   ownerId: string,
-): Promise<LibraryBackgroundData> {
-  const snapshot = await getLibraryCollectionSnapshot(ownerId);
-  const readLaterIds = new Set(snapshot.readLaterPaperIds);
-  const backgroundPaperIds = new Set<string>(snapshot.favoritePaperIds);
+  collectionKey: "read-later" | `playlist:${string}`,
+  encodedCursor?: string | null,
+): Promise<PlaylistPageRow[]> {
+  const decodedCursor = decodeLibraryCursor(encodedCursor, "playlist");
+  const cursor =
+    decodedCursor?.sort === "playlist" ? decodedCursor : undefined;
+  const isReadLater = collectionKey === "read-later";
+  const playlistId = isReadLater
+    ? null
+    : collectionKey.slice("playlist:".length);
+  const cursorCondition = cursor
+    ? or(
+        gt(playlistItems.position, cursor.position),
+        and(
+          eq(playlistItems.position, cursor.position),
+          lt(playlistItems.addedAt, cursor.timestamp),
+        ),
+        and(
+          eq(playlistItems.position, cursor.position),
+          eq(playlistItems.addedAt, cursor.timestamp),
+          gt(playlistItems.paperId, cursor.paperId),
+        ),
+      )
+    : undefined;
 
-  for (const item of snapshot.ignoredRows) {
-    backgroundPaperIds.add(item.paperId);
+  return db
+    .select({
+      addedAt: playlistItems.addedAt,
+      paperId: playlistItems.paperId,
+      position: playlistItems.position,
+    })
+    .from(playlistItems)
+    .innerJoin(playlists, eq(playlists.id, playlistItems.playlistId))
+    .where(
+      and(
+        eq(playlists.ownerId, ownerId),
+        isReadLater
+          ? eq(playlists.isDefault, true)
+          : and(eq(playlists.id, playlistId!), eq(playlists.isDefault, false)),
+        cursorCondition,
+      ),
+    )
+    .orderBy(
+      asc(playlistItems.position),
+      desc(playlistItems.addedAt),
+      asc(playlistItems.paperId),
+    )
+    .limit(LIBRARY_COLLECTION_PAGE_SIZE + 1);
+}
+
+async function getFavoriteCollectionRows(
+  ownerId: string,
+  encodedCursor?: string | null,
+): Promise<DatedPageRow[]> {
+  const decodedCursor = decodeLibraryCursor(encodedCursor, "favorites");
+  const cursor =
+    decodedCursor?.sort === "favorites" ? decodedCursor : undefined;
+  const cursorCondition = cursor
+    ? or(
+        lt(favorites.createdAt, cursor.timestamp),
+        and(
+          eq(favorites.createdAt, cursor.timestamp),
+          gt(favorites.paperId, cursor.paperId),
+        ),
+      )
+    : undefined;
+
+  const rows = await db
+    .select({
+      paperId: favorites.paperId,
+      timestamp: favorites.createdAt,
+    })
+    .from(favorites)
+    .where(and(eq(favorites.ownerId, ownerId), cursorCondition))
+    .orderBy(desc(favorites.createdAt), asc(favorites.paperId))
+    .limit(LIBRARY_COLLECTION_PAGE_SIZE + 1);
+
+  return rows;
+}
+
+async function getIgnoredCollectionRows(
+  ownerId: string,
+  encodedCursor?: string | null,
+): Promise<IgnoredPageRow[]> {
+  const decodedCursor = decodeLibraryCursor(encodedCursor, "ignored");
+  const cursor = decodedCursor?.sort === "ignored" ? decodedCursor : undefined;
+  const cursorBoundary = cursor
+    ? sql`(
+        latest.ignored_at < ${cursor.timestamp}::timestamptz
+        or (
+          latest.ignored_at = ${cursor.timestamp}::timestamptz
+          and latest.paper_id > ${cursor.paperId}::uuid
+        )
+      )`
+    : sql`true`;
+
+  const result = await db.execute<{
+    action: IgnoredInteractionAction;
+    ignored_at: string;
+    paper_id: string;
+  }>(sql`
+    with latest as (
+      select distinct on (interaction.paper_id)
+        interaction.paper_id,
+        interaction.action,
+        interaction.created_at as ignored_at
+      from ${userPaperInteractions} as interaction
+      where interaction.owner_id = ${ownerId}
+        and interaction.action in ('dismiss', 'not_interested')
+      order by interaction.paper_id, interaction.created_at desc, interaction.id desc
+    )
+    select
+      latest.paper_id,
+      latest.action,
+      latest.ignored_at::text as ignored_at
+    from latest
+    where ${cursorBoundary}
+    order by latest.ignored_at desc, latest.paper_id
+    limit ${LIBRARY_COLLECTION_PAGE_SIZE + 1}
+  `);
+
+  return result.rows.map((row) => ({
+    action: row.action,
+    paperId: row.paper_id,
+    timestamp: row.ignored_at,
+  }));
+}
+
+async function collectionItemsFromRows(
+  rows: Array<DatedPageRow | IgnoredPageRow>,
+): Promise<LibraryCollectionItem[]> {
+  const papersForRows = await getPapersByIds(rows.map((row) => row.paperId));
+  const paperById = new Map(papersForRows.map((paper) => [paper.id, paper]));
+
+  return rows.flatMap((row) => {
+    const paper = paperById.get(row.paperId);
+    if (!paper) return [];
+    return [
+      "action" in row
+        ? {
+            ignoredAction: row.action,
+            ignoredAt: row.timestamp,
+            paper,
+          }
+        : { paper },
+    ];
+  });
+}
+
+/** @user-scoped */
+export async function getLibraryCollectionPage(
+  ownerId: string,
+  collectionKey: LibraryCollectionKey,
+  encodedCursor?: string | null,
+): Promise<LibraryCollectionPage> {
+  if (collectionKey === "read-later" || collectionKey.startsWith("playlist:")) {
+    const playlistCollectionKey = collectionKey as
+      | "read-later"
+      | `playlist:${string}`;
+    const rows = await getPlaylistCollectionRows(
+      ownerId,
+      playlistCollectionKey,
+      encodedCursor,
+    );
+    const visibleRows = rows.slice(0, LIBRARY_COLLECTION_PAGE_SIZE);
+    const lastRow = visibleRows.at(-1);
+
+    return {
+      collectionKey,
+      items: await collectionItemsFromRows(
+        visibleRows.map((row) => ({
+          paperId: row.paperId,
+          timestamp: row.addedAt,
+        })),
+      ),
+      nextCursor:
+        rows.length > LIBRARY_COLLECTION_PAGE_SIZE && lastRow
+          ? encodeLibraryCursor({
+              paperId: lastRow.paperId,
+              position: lastRow.position,
+              sort: "playlist",
+              timestamp: lastRow.addedAt,
+              version: 1,
+            })
+          : null,
+    };
   }
-  for (const playlist of snapshot.playlists) {
-    if (playlist.isDefault) continue;
-    for (const paperId of playlist.paperIds) backgroundPaperIds.add(paperId);
-  }
-  for (const paperId of readLaterIds) backgroundPaperIds.delete(paperId);
+
+  const datedCollectionKey =
+    collectionKey === "favorites" ? "favorites" : "ignored";
+  const rows =
+    datedCollectionKey === "favorites"
+      ? await getFavoriteCollectionRows(ownerId, encodedCursor)
+      : await getIgnoredCollectionRows(ownerId, encodedCursor);
+  const visibleRows = rows.slice(0, LIBRARY_COLLECTION_PAGE_SIZE);
+  const lastRow = visibleRows.at(-1);
 
   return {
-    favoritePaperIds: snapshot.favoritePaperIds,
-    ignoredItems: snapshot.ignoredRows,
-    papers: await getPapersByIds([...backgroundPaperIds]),
+    collectionKey,
+    items: await collectionItemsFromRows(visibleRows),
+    nextCursor:
+      rows.length > LIBRARY_COLLECTION_PAGE_SIZE && lastRow
+        ? encodeLibraryCursor({
+            paperId: lastRow.paperId,
+            sort: datedCollectionKey,
+            timestamp: lastRow.timestamp,
+            version: 1,
+          })
+        : null,
+  };
+}
+
+/** @user-scoped */
+export async function getLibraryInitialData(
+  ownerId: string,
+  requestedCollectionKey: LibraryCollectionKey = "read-later",
+) {
+  const metadata = await getLibraryMetadata(ownerId);
+  const selectedCollectionKey = requestedCollectionKey.startsWith("playlist:")
+    ? metadata.playlists.some(
+        (playlist) =>
+          !playlist.isDefault &&
+          playlist.id === requestedCollectionKey.slice("playlist:".length),
+      )
+      ? requestedCollectionKey
+      : "read-later"
+    : requestedCollectionKey;
+
+  return {
+    ...metadata,
+    initialCollectionPage: await getLibraryCollectionPage(
+      ownerId,
+      selectedCollectionKey,
+    ),
+    selectedCollectionKey,
   };
 }
 
