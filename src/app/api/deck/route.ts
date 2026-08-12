@@ -5,6 +5,7 @@ import {
   resolveRecommendationImpressionId,
   setFavoriteState,
   setReadLaterState,
+  withOwnerProfileFallback,
 } from "@/lib/repositories/user-data";
 import { logger } from "@/lib/logging/logger";
 
@@ -27,82 +28,87 @@ export async function POST(request: Request) {
   }
 
   try {
-    let response: NextResponse;
-    const resolvedRecommendationImpressionId =
-      await resolveRecommendationImpressionId(
-        ownerId,
-        paperId,
-        recommendationImpressionId,
-        recommendationBatchItemId,
-      );
-    const interactionOptions = {
-      recommendationImpressionId: resolvedRecommendationImpressionId,
-    };
+    return await withOwnerProfileFallback(ownerId, async () => {
+      let response: NextResponse;
+      const resolvedRecommendationImpressionId =
+        await resolveRecommendationImpressionId(
+          ownerId,
+          paperId,
+          recommendationImpressionId,
+          recommendationBatchItemId,
+        );
+      const interactionOptions = {
+        recommendationImpressionId: resolvedRecommendationImpressionId,
+      };
 
-    switch (action) {
-      case "favorite": {
-        if (typeof body.selected !== "boolean") {
+      switch (action) {
+        case "favorite": {
+          if (typeof body.selected !== "boolean") {
+            return NextResponse.json(
+              { ok: false, error: "Missing selected state" },
+              { status: 400 },
+            );
+          }
+          const result = await setFavoriteState(
+            ownerId,
+            paperId,
+            body.selected,
+            interactionOptions,
+          );
+          response = NextResponse.json({ ok: true, action: "favorite", ...result });
+          break;
+        }
+        case "read_later": {
+          if (typeof body.selected !== "boolean") {
+            return NextResponse.json(
+              { ok: false, error: "Missing selected state" },
+              { status: 400 },
+            );
+          }
+          const result = await setReadLaterState(
+            ownerId,
+            paperId,
+            body.selected,
+            interactionOptions,
+          );
+          response = NextResponse.json({
+            ok: true,
+            action: "read_later",
+            ...result,
+          });
+          break;
+        }
+        case "dismiss": {
+          await recordPaperInteraction(
+            ownerId,
+            paperId,
+            "dismiss",
+            "feed",
+            interactionOptions,
+          );
+          response = NextResponse.json({ ok: true, action: "dismiss" });
+          break;
+        }
+        case "open_detail": {
+          await recordPaperInteraction(
+            ownerId,
+            paperId,
+            "open_detail",
+            "feed",
+            interactionOptions,
+          );
+          response = NextResponse.json({ ok: true, action: "open_detail" });
+          break;
+        }
+        default:
           return NextResponse.json(
-            { ok: false, error: "Missing selected state" },
+            { ok: false, error: `Unknown action: ${action}` },
             { status: 400 },
           );
-        }
-        const result = await setFavoriteState(
-          ownerId,
-          paperId,
-          body.selected,
-          interactionOptions,
-        );
-        response = NextResponse.json({ ok: true, action: "favorite", ...result });
-        break;
       }
-      case "read_later": {
-        if (typeof body.selected !== "boolean") {
-          return NextResponse.json(
-            { ok: false, error: "Missing selected state" },
-            { status: 400 },
-          );
-        }
-        const result = await setReadLaterState(
-          ownerId,
-          paperId,
-          body.selected,
-          interactionOptions,
-        );
-        response = NextResponse.json({
-          ok: true,
-          action: "read_later",
-          ...result,
-        });
-        break;
-      }
-      case "dismiss": {
-        await recordPaperInteraction(
-          ownerId,
-          paperId,
-          "dismiss",
-          "feed",
-          interactionOptions,
-        );
-        response = NextResponse.json({ ok: true, action: "dismiss" });
-        break;
-      }
-      case "open_detail": {
-        await recordPaperInteraction(
-          ownerId,
-          paperId,
-          "open_detail",
-          "feed",
-          interactionOptions,
-        );
-        response = NextResponse.json({ ok: true, action: "open_detail" });
-        break;
-      }
-      default:
-        return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
-    }
 
-    return response;
+      return response;
+    });
   } catch (error) {
     logger.error("deck_action_failed", {
       ownerId,

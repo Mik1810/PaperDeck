@@ -2,7 +2,6 @@ import { OnboardingTopicPicker } from "@/components/onboarding-topic-picker";
 import { requireUserContext } from "@/lib/auth/session";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 import {
-  ensureUserProfile,
   getOnboardingData,
   hasUsableOnboardingState,
 } from "@/lib/repositories/user-data";
@@ -12,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
   const user = await requireUserContext();
-  await ensureUserProfile(user);
 
   if (await hasUsableOnboardingState(user.ownerId)) {
     redirect("/feed");

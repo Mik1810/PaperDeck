@@ -64,6 +64,60 @@ async function seedCompletedDevOwner() {
   });
 }
 
+async function seedCompletedDevOwnerWithReadLater() {
+  await withDb(async (sql) => {
+    await sql`delete from profiles where owner_id = ${devOwnerId}`;
+    await sql`
+      insert into profiles (owner_id, onboarding_completed_at)
+      values (${devOwnerId}, now())
+    `;
+    await sql`
+      insert into playlists (owner_id, name, is_default)
+      values (${devOwnerId}, 'Read later', true)
+    `;
+  });
+}
+
+async function profileBootstrapSnapshot() {
+  return withDb(async (sql) => {
+    const [state] = await sql<{
+      playlist_rows: Array<Record<string, unknown>>;
+      profile_rows: Array<Record<string, unknown>>;
+    }[]>`
+      select
+        (
+          select coalesce(
+            jsonb_agg(
+              jsonb_build_object(
+                'id', id,
+                'xmin', xmin::text,
+                'updated_at', updated_at
+              ) order by id
+            ),
+            '[]'::jsonb
+          )
+          from playlists
+          where owner_id = ${devOwnerId}
+        ) as playlist_rows,
+        (
+          select coalesce(
+            jsonb_agg(
+              jsonb_build_object(
+                'owner_id', owner_id,
+                'xmin', xmin::text,
+                'updated_at', updated_at
+              ) order by owner_id
+            ),
+            '[]'::jsonb
+          )
+          from profiles
+          where owner_id = ${devOwnerId}
+        ) as profile_rows
+    `;
+    return state;
+  });
+}
+
 async function seedLegacyInterestDevOwner() {
   await withDb(async (sql) => {
     const topicId = await getSeedTopicId(sql);
@@ -173,6 +227,10 @@ async function completeDevOnboardingWithTopics(page: Page) {
   const response = await page.goto("/onboarding");
 
   expect(response?.status()).toBeLessThan(500);
+  expect(await profileBootstrapSnapshot()).toEqual({
+    playlist_rows: [],
+    profile_rows: [],
+  });
   await expect(
     page.getByRole("heading", { exact: true, name: "Your public name" }),
   ).toBeVisible();
@@ -206,6 +264,9 @@ async function completeDevOnboardingWithTopics(page: Page) {
   );
   await expect(page).toHaveURL(/\/feed/);
   await expectFeedReady(page);
+  const provisioned = await profileBootstrapSnapshot();
+  expect(provisioned.profile_rows).toHaveLength(1);
+  expect(provisioned.playlist_rows).toHaveLength(1);
 }
 
 async function expectFeedReady(page: Page) {
@@ -289,6 +350,26 @@ test.describe("dev-auth app smoke", () => {
     expect(response?.status()).toBeLessThan(500);
     await expect(page).toHaveURL(/\/feed/);
     await expectFeedReady(page);
+  });
+
+  test("search and settings renders do not write profile bootstrap rows", async ({
+    page,
+  }) => {
+    test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
+
+    await seedCompletedDevOwnerWithReadLater();
+    const before = await profileBootstrapSnapshot();
+
+    await page.goto("/search");
+    await expect(
+      page.getByRole("heading", { exact: true, name: "Search" }),
+    ).toBeVisible();
+    await page.goto("/settings");
+    await expect(
+      page.getByRole("heading", { exact: true, name: "Settings" }),
+    ).toBeVisible();
+
+    expect(await profileBootstrapSnapshot()).toEqual(before);
   });
 
   test("library shows ignored paper history", async ({ page }) => {
