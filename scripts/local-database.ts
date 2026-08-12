@@ -221,7 +221,9 @@ async function verifyCurrentSchema(client: InstanceType<typeof Client>, migratio
           and indexname in (
             'papers_search_vector_gin_idx',
             'papers_title_trgm_idx',
-            'paper_authors_name_trgm_idx'
+            'paper_authors_name_trgm_idx',
+            'papers_arxiv_id_trgm_idx',
+            'papers_doi_trgm_idx'
           )
       ) as search_index_count
   `);
@@ -230,7 +232,7 @@ async function verifyCurrentSchema(client: InstanceType<typeof Client>, migratio
   if (
     !schema?.has_pg_trgm ||
     !schema.has_search_vector ||
-    Number(schema.search_index_count) !== 3
+    Number(schema.search_index_count) !== 5
   ) {
     throw new Error(
       "The rebuilt local schema is missing the catalog search migration.",

@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Completed catalog-search access paths for substring DOI and arXiv-ID
+  matching, removed index-defeating identifier wrappers, and split full-text,
+  paper, author, and topic matches into planner-friendly branches. Search now
+  uses query-bound bidirectional keyset cursors on `(rank, year, id)` instead of
+  increasingly expensive deep `OFFSET` pages.
 - Made Library loading proportional to the visible collection instead of the
   owner's complete private library. The initial response now contains counts,
   playlist metadata, and at most 24 papers from the selected collection;

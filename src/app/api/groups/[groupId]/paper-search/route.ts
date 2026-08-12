@@ -28,7 +28,7 @@ export async function GET(
 
   try {
     await requireResearchGroupPermission(ownerId, groupId, "member", "read");
-    const { results } = await searchPapers(query, 1);
+    const { results } = await searchPapers(query);
     return NextResponse.json(
       { items: results },
       { headers: { "Cache-Control": "private, no-store" } },
