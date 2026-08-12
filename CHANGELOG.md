@@ -14,6 +14,11 @@ This project follows Semantic Versioning.
   bounded database workers reduce round trips without weakening the shared
   arXiv request gate, and a separate `updated` cursor refreshes new versions of
   older papers.
+- Removed profile and default-playlist bootstrap writes from authenticated
+  `/onboarding`, `/search`, and `/settings` renders. Explicit onboarding and
+  settings mutations remain the normal provisioning boundary, while other
+  owner mutations retry once after a narrowly recognized missing-profile
+  foreign-key failure and create only the minimal profile required to proceed.
 - Bounded recommendation-analytics retention to independently committed,
   ordered 10,000-row batches with `SKIP LOCKED`, capped each table pass at 100
   batches, and counted PostgreSQL command results without transferring deleted
