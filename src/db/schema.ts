@@ -752,6 +752,7 @@ export const ingestionCursors = pgTable("ingestion_cursors", {
 	cursorKey: text("cursor_key").notNull(),
 	cursorValue: text("cursor_value"),
 	lastSeenPublishedAt: timestamp("last_seen_published_at", { withTimezone: true, mode: 'string' }),
+	lastSeenUpdatedAt: timestamp("last_seen_updated_at", { withTimezone: true, mode: 'string' }),
 	lastSeenExternalId: text("last_seen_external_id"),
 	lastSuccessfulRunId: uuid("last_successful_run_id"),
 	importedCount: integer("imported_count").default(0).notNull(),

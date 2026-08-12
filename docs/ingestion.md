@@ -19,8 +19,10 @@ It:
 - links to arXiv abstract/PDF URLs instead of copying or serving PDFs;
 - upserts papers by normalized `arxiv_id`;
 - deduplicates papers by normalized `arxiv_id` when the same paper appears in multiple selected categories;
-- refreshes authors and topic links for each imported paper;
-- tracks one incremental cursor per arXiv category;
+- commits the paper, versioned external ID, ordered authors, and arXiv category links in one atomic database RPC;
+- retries transient database failures for the entire paper bundle, never a partial sub-operation;
+- writes paper bundles with bounded database concurrency (4 by default) while all arXiv requests remain behind one serialized rate gate;
+- tracks independent new-publication and `updated` revision cursors per arXiv category, so new versions of old papers are refreshed;
 - records runs in `ingestion_runs`.
 
 The implementation lives in [`scripts/ingest-arxiv.ts`](../scripts/ingest-arxiv.ts).
@@ -34,6 +36,9 @@ NEXT_PUBLIC_SUPABASE_URL=https://replace-me.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=replace_me
 ARXIV_CATEGORIES=cs.AI,cs.CL,cs.CR,cs.CC,cs.DS,cs.LG,cs.LO,cs.PL,cs.SE,cs.SY
 ARXIV_MAX_RESULTS=25
+ARXIV_DATABASE_CONCURRENCY=4
+ARXIV_REVISION_SWEEP=true
+ARXIV_REVISION_PAGES=10
 ARXIV_USER_AGENT=PaperDeck/0.1.0 (https://paperdeck.example.com)
 ```
 
@@ -67,6 +72,7 @@ Manual dispatch supports:
 categories
 max_results
 dry_run
+revision_sweep
 ```
 
 When `dry_run=true`, the workflow passes `--dry-run` to `npm run ingest:arxiv`.
@@ -92,6 +98,9 @@ Optional GitHub repository variables:
 ```text
 ARXIV_CATEGORIES
 ARXIV_MAX_RESULTS
+ARXIV_DATABASE_CONCURRENCY
+ARXIV_REVISION_SWEEP
+ARXIV_REVISION_PAGES
 ARXIV_USER_AGENT
 ```
 
@@ -221,7 +230,28 @@ Example:
 arxiv:cs.CC
 ```
 
-Each successful run updates the cursor to the newest `publishedAt` timestamp seen for that category. Subsequent runs import only papers newer than that cursor. This keeps the daily job idempotent for the newest slice. `ARXIV_MAX_RESULTS` is applied per category.
+Each successful run updates the publication cursor to the newest `publishedAt`
+timestamp seen for that category. Subsequent runs import only papers newer than
+that cursor. `ARXIV_MAX_RESULTS` is applied per category.
+
+Normal runs also query each category by arXiv `lastUpdatedDate`. The independent
+revision cursor is:
+
+```text
+arxiv_revisions:<category>
+```
+
+The `(updatedAt, arxivId)` pair is the revision checkpoint, including a stable
+tie-breaker for papers updated at the same time. The first sweep initializes
+from one newest page; later sweeps paginate until they reach that checkpoint.
+Use `--no-revision-sweep` for an exceptional one-off run, or configure
+`ARXIV_REVISION_SWEEP=false`. `ARXIV_REVISION_PAGES` bounds one sweep.
+
+Database persistence is deliberately independent from network pacing.
+`ARXIV_DATABASE_CONCURRENCY` controls the bounded RPC worker pool (1-16), but a
+single shared gate keeps all arXiv requests and retries at least three seconds
+apart. Each paper requires one application-to-database RPC instead of a chain
+of paper, external-ID, author, and topic writes.
 
 References:
 
