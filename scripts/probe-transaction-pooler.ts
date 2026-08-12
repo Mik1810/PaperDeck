@@ -197,7 +197,7 @@ async function main() {
         actorOwnerId,
         groupId,
       );
-      return workspace.papers.length + workspace.members.length;
+      return workspace.paperPage.items.length + workspace.members.length;
     },
   };
   const load = loads[routeShape];
