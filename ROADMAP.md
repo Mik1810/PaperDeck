@@ -95,6 +95,10 @@ Aggiornato al 2026-08-04:
   - Script `scripts/ingest-arxiv.ts` con 10 categorie CS di default.
   - Workflow GitHub Actions giornaliero/manuale.
   - Modalita' backfill storico con `--backfill` e `--backfill-pages`.
+  - Persistenza atomica per paper con un RPC service-role, retry dell'intero
+    bundle e concorrenza database limitata indipendente dal rate limit arXiv.
+  - Sweep incrementale separato su `updated`, con cursore per categoria, per
+    aggiornare anche nuove versioni di paper storici.
   - Discovery automatica mensile di paper classici/alto impatto tramite Semantic Scholar, separata dal worker incrementale.
   - Discovery classici organizzata per aree CS descritte, con query seed mirate e filtro opzionale per categoria.
   - 447 paper arXiv nel database, 0 duplicati `arxiv_id`.

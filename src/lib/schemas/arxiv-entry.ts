@@ -19,6 +19,14 @@ export const IngestionCursorSchema = z.object({
 
 export type IngestionCursor = z.infer<typeof IngestionCursorSchema>;
 
+export const RevisionCursorSchema = z.object({
+  cursor_value: z.string().nullable(),
+  last_seen_updated_at: z.string().nullable(),
+  last_seen_external_id: z.string().nullable(),
+}).nullable();
+
+export type RevisionCursor = z.infer<typeof RevisionCursorSchema>;
+
 export const TopicRowSchema = z.object({
   id: z.string().uuid(),
   arxiv_category: z.string().nullable(),
