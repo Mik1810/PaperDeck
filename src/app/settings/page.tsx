@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/app-shell";
-import { requireUserContext } from "@/lib/auth/session";
+import { requireOwnerId } from "@/lib/auth/session";
 import {
-  ensureUserProfile,
   getSettingsPageData,
   hasUsableOnboardingState,
 } from "@/lib/repositories/user-data";
@@ -17,9 +16,7 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const user = await requireUserContext();
-  const ownerId = user.ownerId;
-  await ensureUserProfile(user);
+  const ownerId = await requireOwnerId();
 
   if (!(await hasUsableOnboardingState(ownerId))) {
     redirect("/onboarding");

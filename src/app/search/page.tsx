@@ -8,19 +8,13 @@ import { AppShell } from "@/components/app-shell";
 import { MathContent } from "@/components/math-content";
 import { PaperListItem } from "@/components/paper-list-item";
 import { PeopleEmailSearch } from "@/components/people-email-search";
-import { requireUserContext } from "@/lib/auth/session";
+import { requireOwnerId } from "@/lib/auth/session";
 import { searchPapers } from "@/lib/repositories/catalog";
 import { InvalidCatalogSearchCursorError } from "@/lib/repositories/catalog-search";
 import {
   getReadLaterCount,
   hasUsableOnboardingState,
-  ensureUserProfile,
 } from "@/lib/repositories/user-data";
-import {
-  getCollaborationSettings,
-  syncCollaborationIdentity,
-} from "@/lib/repositories/collaboration";
-import { validatePublicDisplayName } from "@/lib/collaboration/profile";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -40,19 +34,7 @@ function searchHref(query: string, cursor?: string | null) {
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const user = await requireUserContext();
-  const ownerId = user.ownerId;
-  await ensureUserProfile(user);
-
-  const collaboration = await getCollaborationSettings(ownerId);
-  try {
-    validatePublicDisplayName(collaboration.displayName);
-    if (!collaboration.hasIdentity) {
-      await syncCollaborationIdentity(user);
-    }
-  } catch {
-    // Settings provides the recoverable public-name prompt for legacy accounts.
-  }
+  const ownerId = await requireOwnerId();
 
   if (!(await hasUsableOnboardingState(ownerId))) {
     redirect("/onboarding");

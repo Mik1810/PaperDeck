@@ -251,6 +251,7 @@ export const recommendationBatchItems = pgTable("recommendation_batch_items", {
 }, (table) => [
 	index("recommendation_batch_items_owner_batch_rank_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.batchId.asc().nullsLast().op("uuid_ops"), table.rank.asc().nullsLast().op("int4_ops")),
 	index("recommendation_batch_items_owner_delivered_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.deliveredAt.desc().nullsFirst().op("timestamptz_ops")),
+	index("recommendation_batch_items_delivered_id_idx").using("btree", table.deliveredAt.asc().nullsLast().op("timestamptz_ops"), table.id.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
 			columns: [table.ownerId],
 			foreignColumns: [profiles.ownerId],
@@ -280,6 +281,7 @@ export const recommendationImpressions = pgTable("recommendation_impressions", {
 	uniqueIndex("recommendation_impressions_batch_item_unique_idx").using("btree", table.batchItemId.asc().nullsLast().op("uuid_ops")),
 	index("recommendation_impressions_owner_batch_rank_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.batchId.asc().nullsLast().op("uuid_ops"), table.rank.asc().nullsLast().op("int4_ops")),
 	index("recommendation_impressions_owner_shown_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.shownAt.desc().nullsFirst().op("timestamptz_ops")),
+	index("recommendation_impressions_shown_id_idx").using("btree", table.shownAt.asc().nullsLast().op("timestamptz_ops"), table.id.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
 			columns: [table.ownerId],
 			foreignColumns: [profiles.ownerId],
