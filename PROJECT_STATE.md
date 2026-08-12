@@ -13,7 +13,7 @@ Last reviewed: 2026-08-12
 - Heart = Favorite.
 - Swipe right = save to default `Read later`.
 - Bookmark = private multi-playlist picker.
-- Private research groups are post-MVP collaboration infrastructure and must remain isolated from personal ranking signals.
+- Private research groups must remain isolated from personal ranking signals.
 
 ## Stack
 
@@ -28,7 +28,7 @@ Last reviewed: 2026-08-12
 ## Data and security invariants
 
 - User-owned rows identify the Clerk user with `owner_id text`.
-- Privileged user operations are server-side and must enforce resource ownership/auth.
+- Privileged user operations are server-side and enforce resource ownership/auth.
 - Never expose `.env.local`, service-role credentials, or private database URLs to browser code/logs.
 - Production/Preview database access uses the Transaction pooler; maintenance/migrations use the appropriate Session connection.
 - Local/CI schema parity is reconstructed from the initial baseline plus ordered Supabase migrations.
@@ -72,7 +72,9 @@ Feature-specific scripts exist in `package.json`; inspect them before defaulting
 ## Context policy
 
 - One coherent issue/problem per Codex task/thread.
+- Only one active PaperDeck coding session at a time.
+- Use the main checkout with a dedicated issue branch; no separate worktree by default.
 - Search before reading large files.
-- Read only the relevant sections of `ROADMAP.md`, `docs/`, and old session logs.
-- Put durable knowledge here; put implementation history in `sessions/`.
-- If a task pivots into a materially different issue, finish with a compact handoff and start a new task rather than growing one long-running thread.
+- Read only relevant sections of `ROADMAP.md`, `docs/`, and old session logs.
+- Put durable knowledge here; implementation history belongs in `sessions/`.
+- If a task pivots into materially different work, finish with a compact handoff and start a fresh task.

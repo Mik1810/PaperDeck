@@ -19,13 +19,18 @@ set +e
 "$@" >"$log" 2>&1
 status=$?
 set -e
-end="$(date +%s)"
-duration=$((end - start))
+duration=$(( $(date +%s) - start ))
 
-# Remove ANSI escapes for compact terminal diagnostics while retaining the raw log.
 clean="$(mktemp)"
 trap 'rm -f "$clean"' EXIT
-sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$log" >"$clean" 2>/dev/null || cp "$log" "$clean"
+
+sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$log" 2>/dev/null \
+  | awk '
+      /NO_COLOR.*FORCE_COLOR/ { next }
+      /node --trace-warnings/ { next }
+      length($0) > 1200 { printf("[omitted long line: %d chars]\\n", length($0)); next }
+      { print }
+    ' >"$clean" || cp "$log" "$clean"
 
 printf 'status: %d\n' "$status"
 printf 'duration_s: %d\n' "$duration"
@@ -33,20 +38,22 @@ printf 'full_log: %s\n' "${log#$root/}"
 
 if [[ $status -eq 0 ]]; then
   echo "--- compact tail ---"
-  tail -n 30 "$clean"
+  tail -n 20 "$clean"
 else
-  echo "--- likely diagnostics ---"
+  echo "--- diagnostics ---"
   if command -v rg >/dev/null 2>&1; then
-    rg -n -i -m 80 \
-      '(^|[^a-z])(error|failed|failure|exception|fatal|assert|expected|received|TS[0-9]{4})([^a-z]|$)' \
+    rg -n -i -m 60 \
+      'error context:|test-failed|trace\.zip|(^|[^a-z])(error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4})([^a-z]|$)' \
       "$clean" || true
   else
-    grep -Ein -m 80 \
-      'error|failed|failure|exception|fatal|assert|expected|received|TS[0-9]{4}' \
+    grep -Ein -m 60 \
+      'error context:|test-failed|trace\.zip|error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4}' \
       "$clean" || true
   fi
-  echo "--- final 60 lines ---"
-  tail -n 60 "$clean"
+  echo "--- final 30 lines ---"
+  tail -n 30 "$clean"
+  echo "--- next ---"
+  echo "Use: scripts/pd-log ${log#$root/} [pattern]"
 fi
 
 exit "$status"

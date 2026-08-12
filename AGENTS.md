@@ -13,7 +13,7 @@ Use the smallest relevant source instead of loading everything:
 - `ROADMAP.md`: product and architecture decisions.
 - `docs/`: feature-specific specifications.
 - `CHANGELOG.md`: notable repository changes.
-- `sessions/`: historical work logs; read only the relevant/recent session when needed.
+- `sessions/`: historical work logs; search first and read only relevant sections.
 - `supabase/schema.sql` + ordered migrations: database schema history.
 - `package.json`: available validation commands.
 
@@ -31,6 +31,15 @@ Do not preload large documents. Search first, then read only relevant sections/f
 - Preserve LaTeX/math notation in abstracts.
 - Semantic relevance is the primary ranking objective.
 
+## Repository workflow preferences
+
+- Use one coherent GitHub issue/problem per Codex task/thread.
+- Work in the main PaperDeck checkout; do not create separate worktrees unless the user explicitly asks.
+- Assume only one active PaperDeck coding session at a time.
+- Use a dedicated issue branch when implementation requires changes.
+- Do **not** use the `codex/` prefix for branches. Prefer names such as `issue-173-notification-polling`.
+- Never stash, move, commit, discard, or overwrite unrelated user changes merely to make the tree clean.
+
 ## Work discipline
 
 For a GitHub issue, prefer a fresh Codex task/thread and use the `paperdeck-issue` skill.
@@ -41,24 +50,27 @@ Before implementation:
 3. Keep the change scoped to the requested issue.
 
 During implementation:
-- Search (`rg`, symbol/dependency tools) before opening large files.
-- Read targeted regions; do not dump entire logs or documents when a smaller slice answers the question.
-- Preserve unrelated user changes in a dirty worktree.
+- Search before opening large files.
+- Read targeted regions; do not dump entire logs/documents when a smaller slice answers the question.
+- Preserve unrelated user changes.
 - Prefer deterministic local tools for discovery; use model reasoning for decisions and synthesis.
-- Run targeted checks while iterating. Run broader checks once near completion when justified by scope/risk.
-- For noisy commands, prefer `scripts/pd-run` so full output is saved while Codex receives a compact summary.
+- Run targeted checks while iterating; broader checks once near completion when justified.
+- Use `scripts/pd-run` for noisy commands.
+- Never bypass a compact `pd-run` failure by dumping the raw log; use `scripts/pd-log`.
+- For commands expected to run longer than a couple seconds, use about 30 seconds of tool yield/wait. Do not poll every 1–5 seconds.
 
 Documentation:
 - Update `ROADMAP.md` only for durable product/architecture decisions.
-- Update `CHANGELOG.md` only for notable user- or architecture-visible changes.
-- Create/update one `sessions/SESSIONi.md` summary near the end of meaningful work; do not append after every micro-edit.
-- After completing a GitHub issue, post one concise Markdown summary with validation and next steps; close it when complete.
+- Update `CHANGELOG.md` only for notable changes.
+- Create/update one `sessions/SESSIONi.md` summary near the end of meaningful work.
+- After completing a GitHub issue, post one concise Markdown summary with validation and next steps.
 
 Validation:
-- Choose the narrowest relevant test/typecheck/lint command from `package.json`.
+- Choose the narrowest relevant command from `package.json`.
 - Do not repeatedly run the entire suite when targeted evidence is sufficient.
 - Before finalizing, run `git diff --check` plus appropriate targeted checks.
 - For frontend work, verify the affected responsive/mobile flow.
+- After a locally validated draft PR, do not watch remote CI by default. Report pending checks unless the user explicitly asks to wait, merge, or close.
 
 ## Next.js repository rule
 
