@@ -13,6 +13,11 @@ This project follows Semantic Versioning.
   Library removal, inline playlist creation, and group private saves now share
   playlist-row serialization, duplicate-safe `max(position) + 1` ordering,
   append-only interaction recording, and profile-refresh scheduling.
+- Removed profile and default-playlist bootstrap writes from authenticated
+  `/onboarding`, `/search`, and `/settings` renders. Explicit onboarding and
+  settings mutations remain the normal provisioning boundary, while other
+  owner mutations retry once after a narrowly recognized missing-profile
+  foreign-key failure and create only the minimal profile required to proceed.
 - Bounded recommendation-analytics retention to independently committed,
   ordered 10,000-row batches with `SKIP LOCKED`, capped each table pass at 100
   batches, and counted PostgreSQL command results without transferring deleted

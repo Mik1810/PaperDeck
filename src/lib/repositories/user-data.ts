@@ -18,6 +18,7 @@ import {
   userPaperFeedExclusions,
   userPaperInteractions,
 } from "@/db/schema";
+import { isMissingOwnerProfileError } from "@/lib/profile-bootstrap";
 import {
   buildCandidateTopicWeights,
   buildSeenPaperIds,
@@ -332,6 +333,24 @@ export async function ensureUserProfileForOwner(ownerId: string) {
     .insert(profiles)
     .values({ ownerId })
     .onConflictDoNothing({ target: profiles.ownerId });
+}
+
+/**
+ * Retries an explicit owner mutation once after a profile FK miss. The common
+ * path performs no bootstrap read or write; unrelated FK failures are never
+ * retried.
+ */
+export async function withOwnerProfileFallback<T>(
+  ownerId: string,
+  mutation: () => Promise<T>,
+) {
+  try {
+    return await mutation();
+  } catch (error) {
+    if (!isMissingOwnerProfileError(error)) throw error;
+    await ensureUserProfileForOwner(ownerId);
+    return mutation();
+  }
 }
 
 async function findReadLaterPlaylistId(ownerId: string) {

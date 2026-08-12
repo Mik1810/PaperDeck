@@ -24,6 +24,7 @@ import {
   addPaperNote,
   deletePaperNote,
   PAPER_NOTE_MAX_LENGTH,
+  withOwnerProfileFallback,
 } from "@/lib/repositories/user-data";
 import { refreshUserProfileEmbedding } from "@/lib/repositories/user-profile-embeddings";
 import { logger } from "@/lib/logging/logger";
@@ -465,9 +466,11 @@ export async function unblockProfileAction(
 export async function saveSettingsInterestsAction(topicIds: string[]) {
   const ownerId = await requireOwnerId();
 
-  await saveSelectedTopics(ownerId, topicIds);
-  await refreshUserProfileEmbedding(ownerId);
-  await clearFeedRecommendations(ownerId);
+  await withOwnerProfileFallback(ownerId, async () => {
+    await saveSelectedTopics(ownerId, topicIds);
+    await refreshUserProfileEmbedding(ownerId);
+    await clearFeedRecommendations(ownerId);
+  });
 
   revalidatePath("/feed");
   revalidatePath("/settings");
@@ -476,7 +479,9 @@ export async function saveSettingsInterestsAction(topicIds: string[]) {
 
 export async function dismissPaperAction(formData: FormData) {
   const ownerId = await requireOwnerId();
-  await recordPaperInteraction(ownerId, requirePaperId(formData), "dismiss");
+  await withOwnerProfileFallback(ownerId, () =>
+    recordPaperInteraction(ownerId, requirePaperId(formData), "dismiss"),
+  );
 
   revalidatePath(sourcePathFrom(formData, "/feed"));
 }
@@ -601,6 +606,24 @@ export async function createPlaylistWithPaperAction(
       { recommendationImpressionId },
     );
     if (!result.option) throw new Error("Created playlist is unavailable");
+    const option = await withOwnerProfileFallback(ownerId, async () => {
+      const recommendationImpressionId =
+        input.context === "feed"
+          ? await resolveRecommendationImpressionId(
+              ownerId,
+              input.paperId,
+              input.recommendationImpressionId ?? null,
+              input.recommendationBatchItemId ?? null,
+            )
+          : null;
+      return createPlaylistWithPaper(
+        ownerId,
+        input.paperId,
+        name,
+        input.context,
+        { recommendationImpressionId },
+      );
+    });
     revalidatePlaylistPickerPaths(input.paperId, input.context);
     return { ok: true, created: true, option: result.option };
   } catch {
@@ -642,7 +665,9 @@ export async function createPlaylistAction(formData: FormData) {
     throw new Error("Playlist name is required");
   }
 
-  await createPlaylist(ownerId, name.trim());
+  await withOwnerProfileFallback(ownerId, () =>
+    createPlaylist(ownerId, name.trim()),
+  );
   revalidatePath("/library");
 }
 
@@ -717,7 +742,9 @@ export async function addPaperNoteAction(formData: FormData) {
     throw new Error("Missing note body");
   }
 
-  await addPaperNote(ownerId, paperId, body.slice(0, PAPER_NOTE_MAX_LENGTH));
+  await withOwnerProfileFallback(ownerId, () =>
+    addPaperNote(ownerId, paperId, body.slice(0, PAPER_NOTE_MAX_LENGTH)),
+  );
   revalidatePath(`/papers/${paperId}`);
 }
 
