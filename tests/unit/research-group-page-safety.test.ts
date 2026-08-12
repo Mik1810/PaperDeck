@@ -27,13 +27,14 @@ test("research-group cards do not prefetch expensive workspaces", () => {
   assert.match(pageSource, /prefetch=\{false\}/);
 });
 
-test("research-group detail uses one authorized workspace statement", () => {
+test("research-group detail and paper pages stay authorization-rooted", () => {
   assert.match(detailPageSource, /loadResearchGroupWorkspace/);
   assert.doesNotMatch(detailPageSource, /Promise\.all/);
-  assert.equal(workspaceRepositorySource.match(/db\.execute/g)?.length, 1);
+  assert.equal(workspaceRepositorySource.match(/db\.execute/g)?.length, 2);
   assert.match(
     workspaceRepositorySource,
-    /with authorized_group as materialized/,
+    /authorized_group as materialized/,
   );
   assert.match(workspaceRepositorySource, /from authorized_group/);
+  assert.match(workspaceRepositorySource, /loadResearchGroupPaperPage/);
 });

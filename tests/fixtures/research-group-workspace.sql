@@ -110,6 +110,42 @@ values
     'local-fixture'
   );
 
+insert into public.papers (
+  id,
+  title,
+  abstract,
+  year,
+  source,
+  url,
+  access,
+  is_open_access
+)
+select
+  ('50000000-0000-4000-8000-' || lpad(item::text, 12, '0'))::uuid,
+  'Synthetic paginated group paper ' || lpad(item::text, 2, '0'),
+  'A disposable catalog record used to verify bounded research-group pages.',
+  2026,
+  'manual',
+  'https://example.invalid/papers/group-page-' || item,
+  'open',
+  true
+from generate_series(1, 45) as item;
+
+insert into public.paper_authors (paper_id, name, position)
+select
+  ('50000000-0000-4000-8000-' || lpad(item::text, 12, '0'))::uuid,
+  'Synthetic Pagination Author',
+  0
+from generate_series(1, 45) as item;
+
+insert into public.paper_topics (paper_id, topic_id, confidence, source)
+select
+  ('50000000-0000-4000-8000-' || lpad(item::text, 12, '0'))::uuid,
+  '20000000-0000-4000-8000-000000000001'::uuid,
+  1,
+  'local-fixture'
+from generate_series(1, 45) as item;
+
 insert into public.research_groups (id, name, description)
 values (
   '40000000-0000-4000-8000-000000000001',
@@ -150,6 +186,19 @@ values (
   'local-group-admin',
   now() - interval '1 hour'
 );
+
+insert into public.research_group_paper_items (
+  group_id,
+  paper_id,
+  added_by,
+  added_at
+)
+select
+  '40000000-0000-4000-8000-000000000001'::uuid,
+  ('50000000-0000-4000-8000-' || lpad(item::text, 12, '0'))::uuid,
+  'local-group-admin',
+  now() - ((item + 1) / 2) * interval '1 hour'
+from generate_series(1, 45) as item;
 
 update private.research_group_runtime_settings
 set reads_enabled = true,

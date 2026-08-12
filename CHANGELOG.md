@@ -13,6 +13,11 @@ This project follows Semantic Versioning.
   Library removal, inline playlist creation, and group private saves now share
   playlist-row serialization, duplicate-safe `max(position) + 1` ordering,
   append-only interaction recording, and profile-refresh scheduling.
+- Bounded private research-group workspaces to 40 shared papers per response.
+  Later papers now load through authenticated private no-store keyset pages on
+  `(added_at, paper_id)`, while group controls and membership remain eager and
+  the authorization-rooted query shape is preserved. The local group runner
+  now rebuilds the current baseline-plus-migrations schema before browser tests.
 - Completed catalog-search access paths for substring DOI and arXiv-ID
   matching, removed index-defeating identifier wrappers, and split full-text,
   paper, author, and topic matches into planner-friendly branches. Search now
