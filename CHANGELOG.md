@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Removed profile and default-playlist bootstrap writes from authenticated
+  `/onboarding`, `/search`, and `/settings` renders. Explicit onboarding and
+  settings mutations remain the normal provisioning boundary, while other
+  owner mutations retry once after a narrowly recognized missing-profile
+  foreign-key failure and create only the minimal profile required to proceed.
 - Made Library loading proportional to the visible collection instead of the
   owner's complete private library. The initial response now contains counts,
   playlist metadata, and at most 24 papers from the selected collection;

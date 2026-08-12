@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwnerId } from "@/lib/auth/session";
-import { recordPaperInteraction } from "@/lib/repositories/user-data";
+import {
+  recordPaperInteraction,
+  withOwnerProfileFallback,
+} from "@/lib/repositories/user-data";
 
 const detailFeedbackActions = ["already_read", "not_interested"] as const;
 
@@ -27,7 +30,9 @@ export async function POST(
     });
   }
 
-  await recordPaperInteraction(ownerId, paperId, action, "detail");
+  await withOwnerProfileFallback(ownerId, () =>
+    recordPaperInteraction(ownerId, paperId, action, "detail"),
+  );
 
   return NextResponse.redirect(new URL("/feed", request.url), { status: 303 });
 }
