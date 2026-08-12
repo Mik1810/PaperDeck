@@ -8,6 +8,12 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Bounded recommendation-analytics retention to independently committed,
+  ordered 10,000-row batches with `SKIP LOCKED`, capped each table pass at 100
+  batches, and counted PostgreSQL command results without transferring deleted
+  IDs. Global `(shown_at, id)` and `(delivered_at, id)` indexes now support the
+  pruning keysets, while statement/lock timeouts and workflow output expose and
+  bound batch latency and truncation.
 - Made fresh recommendation batches a true feed fast path. Initial and live
   cache lookups now run before taxonomy, semantic candidates, or full user
   ranking state; PostgreSQL filters current Favorites, playlist membership,
