@@ -17,6 +17,7 @@ type FetchLike = (
 type BeaconLike = Pick<Navigator, "sendBeacon">;
 
 type DeckMutationOptions = {
+  recommendationBatchItemId?: string;
   recommendationImpressionId?: string;
   selected?: boolean;
 };
@@ -24,6 +25,13 @@ type DeckMutationOptions = {
 type RecordOpenDetailOptions = {
   fetchImpl?: FetchLike;
   navigatorImpl?: BeaconLike;
+  recommendationBatchItemId?: string;
+  recommendationImpressionId?: string;
+};
+
+type RecommendationImpressionPayload = {
+  error?: string;
+  ok?: boolean;
   recommendationImpressionId?: string;
 };
 
@@ -65,6 +73,9 @@ export async function submitDeckAction(
       ...(options.recommendationImpressionId
         ? { recommendationImpressionId: options.recommendationImpressionId }
         : {}),
+      ...(options.recommendationBatchItemId
+        ? { recommendationBatchItemId: options.recommendationBatchItemId }
+        : {}),
     }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
@@ -85,6 +96,9 @@ export function recordOpenDetail(
     paperId,
     ...(options.recommendationImpressionId
       ? { recommendationImpressionId: options.recommendationImpressionId }
+      : {}),
+    ...(options.recommendationBatchItemId
+      ? { recommendationBatchItemId: options.recommendationBatchItemId }
       : {}),
   });
   const beaconTarget =
@@ -107,6 +121,31 @@ export function recordOpenDetail(
   }).catch(() => undefined);
 
   return "fetch";
+}
+
+export async function recordRecommendationImpression(
+  paperId: string,
+  recommendationBatchItemId: string,
+  fetchImpl: FetchLike = fetch,
+) {
+  const response = await fetchImpl("/api/recommendation-impressions", {
+    body: JSON.stringify({ paperId, recommendationBatchItemId }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | RecommendationImpressionPayload
+    | null;
+
+  if (
+    !response.ok ||
+    payload?.ok === false ||
+    typeof payload?.recommendationImpressionId !== "string"
+  ) {
+    throw new Error(payload?.error ?? "Recommendation impression failed");
+  }
+
+  return payload.recommendationImpressionId;
 }
 
 export function deckMutationErrorMessage(action: DeckMutationAction) {

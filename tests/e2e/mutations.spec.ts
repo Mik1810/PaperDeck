@@ -141,6 +141,34 @@ async function getLatestRecommendationImpressions() {
   });
 }
 
+async function getLatestRecommendationDelivery() {
+  return withDb(async (sql) => {
+    const latest = await sql<{ batch_id: string }[]>`
+      select batch_id
+      from recommendation_batch_items
+      where owner_id = ${devOwnerId}
+      order by delivered_at desc
+      limit 1
+    `;
+
+    if (!latest.length) return null;
+
+    const items = await sql<{
+      id: string;
+      paper_id: string;
+      rank: number;
+    }[]>`
+      select id, paper_id, rank
+      from recommendation_batch_items
+      where owner_id = ${devOwnerId}
+        and batch_id = ${latest[0].batch_id}
+      order by rank asc
+    `;
+
+    return { batchId: latest[0].batch_id, items };
+  });
+}
+
 test.describe("deck API mutations", () => {
   test.beforeAll(async () => {
     await cleanupTestData();
@@ -649,7 +677,7 @@ test.describe("recommendation analytics", () => {
     await seedTestProfile();
   });
 
-  test("links a rendered deck action to its feed impression", async ({ page }) => {
+  test("records only visible cards and links a deck action idempotently", async ({ page }) => {
     test.skip(!devAuthEnabled, "Requires dev auth.");
     test.skip(!hasDb, "Requires DATABASE_URL.");
 
@@ -660,28 +688,44 @@ test.describe("recommendation analytics", () => {
       page.getByRole("heading", { exact: true, name: "Today" }),
     ).toBeVisible();
 
+    const delivery = await getLatestRecommendationDelivery();
+    expect(delivery).not.toBeNull();
+    expect(delivery?.items).toHaveLength(50);
+
+    await expect.poll(async () =>
+      (await getLatestRecommendationImpressions()).length,
+    ).toBe(1);
+
+    const firstPaperHref = await page
+      .getByRole("link", { name: "Open" })
+      .getAttribute("href");
+    const firstPaperId = firstPaperHref?.split("/").at(-1);
+
+    await page.getByRole("button", { name: "Dismiss paper" }).click();
+    await expect.poll(async () =>
+      (await getLatestRecommendationImpressions()).length,
+    ).toBe(2);
+    await page.getByRole("button", { name: "Dismiss paper" }).click();
+    await expect.poll(async () =>
+      (await getLatestRecommendationImpressions()).length,
+    ).toBe(3);
+
     const impressions = await getLatestRecommendationImpressions();
-    expect(impressions.length).toBeGreaterThan(0);
+    expect(impressions).toHaveLength(3);
     expect(impressions[0].rank).toBe(1);
     expect(impressions[0].score).toEqual(expect.any(Number));
     expect(impressions[0].model_version).toMatch(/paperdeck-.+-feed-v1/);
     expect(typeof impressions[0].score_components).toBe("object");
 
-    const activePaperHref = await page
-      .getByRole("link", { name: "Open" })
-      .getAttribute("href");
-    const activePaperId = activePaperHref?.split("/").at(-1);
-    const activeImpression = impressions.find(
-      (impression) => impression.paper_id === activePaperId,
+    const firstImpression = impressions.find(
+      (impression) => impression.paper_id === firstPaperId,
     );
 
-    expect(activeImpression).toBeDefined();
+    expect(firstImpression).toBeDefined();
 
-    if (!activeImpression) {
-      throw new Error("The rendered active paper has no recommendation impression");
+    if (!firstImpression) {
+      throw new Error("The first visible paper has no recommendation impression");
     }
-
-    await page.getByRole("button", { name: "Dismiss paper" }).click();
 
     await expect.poll(async () => {
       const interactions = await withDb(async (sql) =>
@@ -689,7 +733,7 @@ test.describe("recommendation analytics", () => {
           select recommendation_impression_id
           from user_paper_interactions
           where owner_id = ${devOwnerId}
-            and paper_id = ${activeImpression.paper_id}
+            and paper_id = ${firstImpression.paper_id}
             and action = 'dismiss'
           order by created_at desc
           limit 1
@@ -697,7 +741,35 @@ test.describe("recommendation analytics", () => {
       );
 
       return interactions[0]?.recommendation_impression_id;
-    }).toBe(activeImpression.id);
+    }).toBe(firstImpression.id);
+
+    const thirdItem = delivery?.items[2];
+    expect(thirdItem).toBeDefined();
+    const retryResponses = await Promise.all([
+      page.request.post("/api/recommendation-impressions", {
+        data: {
+          paperId: thirdItem?.paper_id,
+          recommendationBatchItemId: thirdItem?.id,
+        },
+      }),
+      page.request.post("/api/recommendation-impressions", {
+        data: {
+          paperId: thirdItem?.paper_id,
+          recommendationBatchItemId: thirdItem?.id,
+        },
+      }),
+    ]);
+
+    expect(retryResponses.every((retry) => retry.ok())).toBe(true);
+    expect(await retryResponses[0].json()).toMatchObject({
+      ok: true,
+      recommendationImpressionId: impressions[2].id,
+    });
+    expect(await retryResponses[1].json()).toMatchObject({
+      ok: true,
+      recommendationImpressionId: impressions[2].id,
+    });
+    expect(await getLatestRecommendationImpressions()).toHaveLength(3);
   });
 
   test("browser back advances past a paper opened from the deck", async ({

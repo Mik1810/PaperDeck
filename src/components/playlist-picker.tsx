@@ -18,6 +18,7 @@ type PlaylistPickerProps = {
   initialSaved: boolean;
   onSaveComplete?: () => void;
   paperId: string;
+  recommendationBatchItemId?: string;
   recommendationImpressionId?: string;
   savedLabel?: string;
   unsavedLabel?: string;
@@ -33,6 +34,7 @@ export function PlaylistPicker({
   initialSaved,
   onSaveComplete,
   paperId,
+  recommendationBatchItemId,
   recommendationImpressionId,
   savedLabel = "Saved",
   unsavedLabel = "Save to playlist",
@@ -135,6 +137,7 @@ export function PlaylistPicker({
         context,
         paperId,
         playlistId: option.id,
+        recommendationBatchItemId,
         recommendationImpressionId,
         selected,
       });
@@ -163,6 +166,7 @@ export function PlaylistPicker({
         context,
         name,
         paperId,
+        recommendationBatchItemId,
         recommendationImpressionId,
       });
       if (!result.ok || !result.option) throw new Error(result.message);

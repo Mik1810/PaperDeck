@@ -4,6 +4,7 @@ import { MutationAlert } from "../../src/components/mutation-alert";
 import {
   deckMutationErrorMessage,
   recordOpenDetail,
+  recordRecommendationImpression,
   submitDeckAction,
 } from "../../src/lib/client/deck-mutations";
 import { isDurableFeedExclusionAction } from "../../src/lib/ranking/feed-ranking";
@@ -54,6 +55,27 @@ describe("submitDeckAction", () => {
     });
   });
 
+  test("posts recommendation batch item ids when the impression is pending", async () => {
+    const calls: Array<{ init?: RequestInit; input: RequestInfo | URL }> = [];
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ init, input });
+      return Response.json({ action: "dismiss", ok: true });
+    };
+
+    await submitDeckAction(
+      "dismiss",
+      "paper-1",
+      { recommendationBatchItemId: "44444444-4444-4444-8444-444444444444" },
+      fetchImpl,
+    );
+
+    assert.deepEqual(JSON.parse(calls[0].init?.body as string), {
+      action: "dismiss",
+      paperId: "paper-1",
+      recommendationBatchItemId: "44444444-4444-4444-8444-444444444444",
+    });
+  });
+
   test("rejects failed API responses", async () => {
     await assert.rejects(
       () =>
@@ -94,6 +116,48 @@ describe("submitDeckAction", () => {
   });
 });
 
+describe("recordRecommendationImpression", () => {
+  test("records one visible batch item and returns its impression id", async () => {
+    const calls: Array<{ init?: RequestInit; input: RequestInfo | URL }> = [];
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ init, input });
+      return Response.json({
+        ok: true,
+        recommendationImpressionId: "55555555-5555-4555-8555-555555555555",
+      });
+    };
+
+    const impressionId = await recordRecommendationImpression(
+      "paper-5",
+      "44444444-4444-4444-8444-444444444444",
+      fetchImpl,
+    );
+
+    assert.equal(impressionId, "55555555-5555-4555-8555-555555555555");
+    assert.equal(calls[0].input, "/api/recommendation-impressions");
+    assert.deepEqual(JSON.parse(calls[0].init?.body as string), {
+      paperId: "paper-5",
+      recommendationBatchItemId: "44444444-4444-4444-8444-444444444444",
+    });
+  });
+
+  test("rejects unsuccessful impression writes", async () => {
+    await assert.rejects(
+      () =>
+        recordRecommendationImpression(
+          "paper-5",
+          "44444444-4444-4444-8444-444444444444",
+          async () =>
+            Response.json(
+              { error: "Invalid recommendation batch item", ok: false },
+              { status: 400 },
+            ),
+        ),
+      /Invalid recommendation batch item/,
+    );
+  });
+});
+
 describe("recordOpenDetail", () => {
   test("queues best-effort open tracking without awaiting navigation", () => {
     const calls: Array<{ init?: RequestInit; input: RequestInfo | URL }> = [];
@@ -105,6 +169,7 @@ describe("recordOpenDetail", () => {
     const mode = recordOpenDetail("paper-2", {
       fetchImpl,
       navigatorImpl: { sendBeacon: () => false },
+      recommendationBatchItemId: "44444444-4444-4444-8444-444444444444",
       recommendationImpressionId: "22222222-2222-4222-8222-222222222222",
     });
 
@@ -115,6 +180,7 @@ describe("recordOpenDetail", () => {
     assert.deepEqual(JSON.parse(calls[0].init?.body as string), {
       action: "open_detail",
       paperId: "paper-2",
+      recommendationBatchItemId: "44444444-4444-4444-8444-444444444444",
       recommendationImpressionId: "22222222-2222-4222-8222-222222222222",
     });
   });

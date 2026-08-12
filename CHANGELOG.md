@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Separated delivered recommendation batch items from actual feed impressions.
+  Loading a 50-paper deck no longer records exposure for hidden cards; an
+  authenticated, idempotent visible-card write now creates one impression when
+  a card becomes active while preserving deck-action attribution and the
+  existing analytics retention window.
 - Reduced background notification work: the closed header bell now polls only
   the unread count, loads the latest notification page on demand when opened,
   cancels or shares overlapping requests, and debounces browser lifecycle

@@ -238,7 +238,7 @@ export const playlists = pgTable("playlists", {
 	pgPolicy("playlists_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
 ]);
 
-export const recommendationImpressions = pgTable("recommendation_impressions", {
+export const recommendationBatchItems = pgTable("recommendation_batch_items", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	ownerId: text("owner_id").notNull(),
 	paperId: uuid("paper_id").notNull(),
@@ -247,8 +247,37 @@ export const recommendationImpressions = pgTable("recommendation_impressions", {
 	score: real().notNull(),
 	scoreComponents: jsonb("score_components").default(sql`'{}'::jsonb`).notNull(),
 	modelVersion: text("model_version").notNull(),
+	deliveredAt: timestamp("delivered_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("recommendation_batch_items_owner_batch_rank_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.batchId.asc().nullsLast().op("uuid_ops"), table.rank.asc().nullsLast().op("int4_ops")),
+	index("recommendation_batch_items_owner_delivered_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.deliveredAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.ownerId],
+			foreignColumns: [profiles.ownerId],
+			name: "recommendation_batch_items_owner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.paperId],
+			foreignColumns: [papers.id],
+			name: "recommendation_batch_items_paper_id_fkey"
+		}).onDelete("cascade"),
+	unique("recommendation_batch_items_owner_id_paper_id_batch_id_key").on(table.ownerId, table.paperId, table.batchId),
+	pgPolicy("recommendation_batch_items_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
+]);
+
+export const recommendationImpressions = pgTable("recommendation_impressions", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	ownerId: text("owner_id").notNull(),
+	paperId: uuid("paper_id").notNull(),
+	batchItemId: uuid("batch_item_id").notNull(),
+	batchId: uuid("batch_id").notNull(),
+	rank: integer().notNull(),
+	score: real().notNull(),
+	scoreComponents: jsonb("score_components").default(sql`'{}'::jsonb`).notNull(),
+	modelVersion: text("model_version").notNull(),
 	shownAt: timestamp("shown_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
+	uniqueIndex("recommendation_impressions_batch_item_unique_idx").using("btree", table.batchItemId.asc().nullsLast().op("uuid_ops")),
 	index("recommendation_impressions_owner_batch_rank_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.batchId.asc().nullsLast().op("uuid_ops"), table.rank.asc().nullsLast().op("int4_ops")),
 	index("recommendation_impressions_owner_shown_idx").using("btree", table.ownerId.asc().nullsLast().op("text_ops"), table.shownAt.desc().nullsFirst().op("timestamptz_ops")),
 	foreignKey({
@@ -260,6 +289,11 @@ export const recommendationImpressions = pgTable("recommendation_impressions", {
 			columns: [table.paperId],
 			foreignColumns: [papers.id],
 			name: "recommendation_impressions_paper_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.batchItemId],
+			foreignColumns: [recommendationBatchItems.id],
+			name: "recommendation_impressions_batch_item_id_fkey"
 		}).onDelete("cascade"),
 	unique("recommendation_impressions_owner_id_paper_id_batch_id_key").on(table.ownerId, table.paperId, table.batchId),
 	pgPolicy("recommendation_impressions_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),

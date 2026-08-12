@@ -366,13 +366,15 @@ test.describe("dev-auth app smoke", () => {
     test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
 
     await seedCompletedDevOwner();
-    const response = await page.goto("/search?q=Synthetic%20research%20paper");
+    const response = await page.goto(
+      "/search?q=Synthetic%20research%20paper%2060",
+    );
 
     expect(response?.status()).toBeLessThan(500);
     await expect(
       page.getByRole("heading", {
         exact: true,
-        name: "Synthetic research paper 1",
+        name: "Synthetic research paper 60",
       }),
     ).toBeVisible();
   });

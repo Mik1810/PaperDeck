@@ -496,6 +496,7 @@ export async function removeFavoriteAction(formData: FormData) {
 type PlaylistPickerMutationInput = {
   context: PlaylistSaveContext;
   paperId: string;
+  recommendationBatchItemId?: string;
   recommendationImpressionId?: string;
 };
 
@@ -511,8 +512,10 @@ function validatePlaylistPickerInput(input: PlaylistPickerMutationInput) {
     throw new Error("Invalid playlist request");
   }
   if (
-    input.recommendationImpressionId &&
-    !uuidPattern.test(input.recommendationImpressionId)
+    (input.recommendationBatchItemId &&
+      !uuidPattern.test(input.recommendationBatchItemId)) ||
+    (input.recommendationImpressionId &&
+      !uuidPattern.test(input.recommendationImpressionId))
   ) {
     throw new Error("Invalid playlist request");
   }
@@ -553,6 +556,7 @@ export async function setPaperPlaylistMembershipAction(
             ownerId,
             input.paperId,
             input.recommendationImpressionId ?? null,
+            input.recommendationBatchItemId ?? null,
           )
         : null;
     const result = await setPaperPlaylistMembership(
@@ -588,6 +592,7 @@ export async function createPlaylistWithPaperAction(
             ownerId,
             input.paperId,
             input.recommendationImpressionId ?? null,
+            input.recommendationBatchItemId ?? null,
           )
         : null;
     const option = await createPlaylistWithPaper(

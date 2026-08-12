@@ -273,25 +273,26 @@ run("direct writes remain denied and friendship has no ranking side effects", as
       insert into friend_requests (requester_id, recipient_id)
       values (${ownerA}, ${ownerB})
     `),
-    /row-level security|policy/i,
+    /row-level security|policy|permission denied/i,
   );
   await assert.rejects(
     asUser(ownerA, (transaction) => transaction`
       insert into friendships (user_low_id, user_high_id)
       values (${[ownerA, ownerB].sort()[0]}, ${[ownerA, ownerB].sort()[1]})
     `),
-    /row-level security|policy/i,
+    /row-level security|policy|permission denied/i,
   );
   await assert.rejects(
     asUser(ownerA, (transaction) => transaction`
       insert into user_blocks (blocker_id, blocked_id)
       values (${ownerA}, ${ownerB})
     `),
-    /row-level security|policy/i,
+    /row-level security|policy|permission denied/i,
   );
 
   const before = await sql!<{ source: string; count: string }[]>`
     select 'interactions' as source, count(*)::text from user_paper_interactions where owner_id in ${sql!(owners)}
+    union all select 'batch_items', count(*)::text from recommendation_batch_items where owner_id in ${sql!(owners)}
     union all select 'impressions', count(*)::text from recommendation_impressions where owner_id in ${sql!(owners)}
     union all select 'recommendations', count(*)::text from recommendations where owner_id in ${sql!(owners)}
     union all select 'profile_embeddings', count(*)::text from user_profile_embeddings where owner_id in ${sql!(owners)}
@@ -301,6 +302,7 @@ run("direct writes remain denied and friendship has no ranking side effects", as
   );
   const afterRows = await sql!<{ source: string; count: string }[]>`
     select 'interactions' as source, count(*)::text from user_paper_interactions where owner_id in ${sql!(owners)}
+    union all select 'batch_items', count(*)::text from recommendation_batch_items where owner_id in ${sql!(owners)}
     union all select 'impressions', count(*)::text from recommendation_impressions where owner_id in ${sql!(owners)}
     union all select 'recommendations', count(*)::text from recommendations where owner_id in ${sql!(owners)}
     union all select 'profile_embeddings', count(*)::text from user_profile_embeddings where owner_id in ${sql!(owners)}

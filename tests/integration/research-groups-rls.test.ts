@@ -393,11 +393,13 @@ run("group lifecycle never mutates private playlists or ranking signals", async 
     returning id
   `;
   const before = await sql<{
+    batchItems: number;
     interactions: number;
     impressions: number;
     recommendations: number;
   }[]>`
     select
+      (select count(*)::int from recommendation_batch_items where owner_id in ${sql(owners)}) as "batchItems",
       (select count(*)::int from user_paper_interactions where owner_id in ${sql(owners)}) as interactions,
       (select count(*)::int from recommendation_impressions where owner_id in ${sql(owners)}) as impressions,
       (select count(*)::int from recommendations where owner_id in ${sql(owners)}) as recommendations
@@ -406,11 +408,13 @@ run("group lifecycle never mutates private playlists or ranking signals", async 
   await sql`select * from handle_research_group_account_closure(${ownerA})`;
 
   const afterSignals = await sql<{
+    batchItems: number;
     interactions: number;
     impressions: number;
     recommendations: number;
   }[]>`
     select
+      (select count(*)::int from recommendation_batch_items where owner_id in ${sql(owners)}) as "batchItems",
       (select count(*)::int from user_paper_interactions where owner_id in ${sql(owners)}) as interactions,
       (select count(*)::int from recommendation_impressions where owner_id in ${sql(owners)}) as impressions,
       (select count(*)::int from recommendations where owner_id in ${sql(owners)}) as recommendations

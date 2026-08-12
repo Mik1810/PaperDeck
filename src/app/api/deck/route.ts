@@ -17,6 +17,10 @@ export async function POST(request: Request) {
     typeof body.recommendationImpressionId === "string"
       ? body.recommendationImpressionId
       : null;
+  const recommendationBatchItemId =
+    typeof body.recommendationBatchItemId === "string"
+      ? body.recommendationBatchItemId
+      : null;
 
   if (!paperId || typeof paperId !== "string") {
     return NextResponse.json({ ok: false, error: "Missing paperId" }, { status: 400 });
@@ -29,6 +33,7 @@ export async function POST(request: Request) {
         ownerId,
         paperId,
         recommendationImpressionId,
+        recommendationBatchItemId,
       );
     const interactionOptions = {
       recommendationImpressionId: resolvedRecommendationImpressionId,

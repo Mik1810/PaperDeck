@@ -42,7 +42,11 @@ test.describe("Clerk auth smoke", () => {
     });
     expect(await rsc.text()).toContain("NEXT_REDIRECT");
 
-    for (const path of ["/api/deck", "/papers/not-a-paper/feedback"]) {
+    for (const path of [
+      "/api/deck",
+      "/api/recommendation-impressions",
+      "/papers/not-a-paper/feedback",
+    ]) {
       const response = await request.post(path, {
         data: {},
         maxRedirects: 0,

@@ -61,7 +61,7 @@ select
   384,
   md5('synthetic-paper-' || series) || md5('fixture-' || series),
   timestamptz '2026-02-01 00:00:00+00'
-from generate_series(1, 24) as series;
+from generate_series(1, 60) as series;
 
 insert into public.paper_authors (paper_id, name, position)
 select
