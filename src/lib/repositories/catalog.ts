@@ -1,14 +1,14 @@
 import "server-only";
 
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { papers, paperAuthors, paperTopics, taxonomyTopics } from "@/db/schema";
 import { topicDisplayLabel } from "@/lib/arxiv-categories";
 import { paperSourceFromDatabase } from "@/lib/paper-sources";
 import {
   SEARCH_PAGE_SIZE,
-  normalizeSearchPage,
-  searchPageOffset,
+  decodeCatalogSearchCursor,
+  encodeCatalogSearchCursor,
 } from "@/lib/repositories/catalog-search";
 import { PaperAccessSchema, TriageSummarySchema } from "@/lib/schemas/paper-access";
 import { INITIAL_FEED_RECOMMENDATION_COUNT } from "@/lib/recommendation-batches";
@@ -87,8 +87,9 @@ export { SEARCH_PAGE_SIZE };
 
 export type SearchPapersResult = {
   results: Awaited<ReturnType<typeof getPapersByIds>>;
+  nextCursor: string | null;
   page: number;
-  hasMore: boolean;
+  previousCursor: string | null;
 };
 
 function topicFromRow(row: PaperPresentationTopic): PaperTopic {
@@ -421,52 +422,150 @@ function normalizeCatalogSearchQuery(query: string) {
 /** @admin */
 export async function searchPapers(
   query: string,
-  page = 1,
+  encodedCursor?: string | null,
 ): Promise<SearchPapersResult> {
   const normalizedQuery = normalizeCatalogSearchQuery(query);
-  const currentPage = normalizeSearchPage(page);
+  const cursor = decodeCatalogSearchCursor(encodedCursor, normalizedQuery);
 
   if (normalizedQuery.length < 2) {
-    return { results: [], page: currentPage, hasMore: false };
+    return {
+      results: [],
+      nextCursor: null,
+      page: 1,
+      previousCursor: null,
+    };
   }
 
   const pattern = `%${normalizedQuery}%`;
-  const offset = searchPageOffset(currentPage);
   const tsquery = sql`plainto_tsquery('english', ${normalizedQuery})`;
-  const rank = sql<number>`coalesce(ts_rank(${papers}."search_vector", ${tsquery}), 0)`;
+  const boundary = cursor
+    ? cursor.direction === "next"
+      ? sql`where
+          scored.rank < ${cursor.rank}::real
+          or (
+            scored.rank = ${cursor.rank}::real
+            and ${
+              cursor.year === null
+                ? sql`scored.year is null and scored.id > ${cursor.id}::uuid`
+                : sql`(
+                    scored.year < ${cursor.year}
+                    or scored.year is null
+                    or (
+                      scored.year = ${cursor.year}
+                      and scored.id > ${cursor.id}::uuid
+                    )
+                  )`
+            }
+          )`
+      : sql`where
+          scored.rank > ${cursor.rank}::real
+          or (
+            scored.rank = ${cursor.rank}::real
+            and ${
+              cursor.year === null
+                ? sql`scored.year is not null or (
+                    scored.year is null and scored.id < ${cursor.id}::uuid
+                  )`
+                : sql`scored.year > ${cursor.year} or (
+                    scored.year = ${cursor.year}
+                    and scored.id < ${cursor.id}::uuid
+                  )`
+            }
+          )`
+    : sql``;
+  const ordering = cursor?.direction === "previous"
+    ? sql`scored.rank, scored.year nulls first, scored.id desc`
+    : sql`scored.rank desc, scored.year desc nulls last, scored.id`;
 
-  const paperMatches = await db
-    .select({ id: papers.id, rank })
-    .from(papers)
-    .where(sql`
-      ${papers}."search_vector" @@ ${tsquery}
-      or ${papers.title} ilike ${pattern}
-      or coalesce(${papers.arxivId}, '') ilike ${pattern}
-      or coalesce(${papers.doi}, '') ilike ${pattern}
-      or exists (
-        select 1
-        from ${paperAuthors}
-        where ${paperAuthors.paperId} = ${papers.id}
-          and ${paperAuthors.name} ilike ${pattern}
-      )
-      or exists (
-        select 1
-        from ${paperTopics}
-        join ${taxonomyTopics}
-          on ${taxonomyTopics.id} = ${paperTopics.topicId}
-        where ${paperTopics.paperId} = ${papers.id}
-          and ${taxonomyTopics.label} ilike ${pattern}
-      )
-    `)
-    .orderBy(desc(rank), desc(papers.year))
-    .offset(offset)
-    .limit(SEARCH_PAGE_SIZE + 1);
+  const result = await db.execute<{
+    id: string;
+    rank: number;
+    year: number | null;
+  }>(sql`
+    with candidate_matches as materialized (
+      select
+        ${papers.id} as id,
+        ${papers.year} as year,
+        coalesce(ts_rank(${papers}."search_vector", ${tsquery}), 0)::real as rank
+      from ${papers}
+      where ${papers}."search_vector" @@ ${tsquery}
+        or ${papers.title} ilike ${pattern}
+        or ${papers.arxivId} ilike ${pattern}
+        or ${papers.doi} ilike ${pattern}
 
-  const hasMore = paperMatches.length > SEARCH_PAGE_SIZE;
-  const pageMatches = paperMatches.slice(0, SEARCH_PAGE_SIZE);
+      union all
+
+      select ${papers.id}, ${papers.year}, 0::real
+      from ${paperAuthors}
+      inner join ${papers} on ${papers.id} = ${paperAuthors.paperId}
+      where ${paperAuthors.name} ilike ${pattern}
+
+      union all
+
+      select ${papers.id}, ${papers.year}, 0::real
+      from ${taxonomyTopics}
+      inner join ${paperTopics}
+        on ${paperTopics.topicId} = ${taxonomyTopics.id}
+      inner join ${papers} on ${papers.id} = ${paperTopics.paperId}
+      where ${taxonomyTopics.label} ilike ${pattern}
+    ),
+    scored as materialized (
+      select id, year, max(rank)::real as rank
+      from candidate_matches
+      group by id, year
+    )
+    select scored.id, scored.year, scored.rank
+    from scored
+    ${boundary}
+    order by ${ordering}
+    limit ${SEARCH_PAGE_SIZE + 1}
+  `);
+
+  const hasBeyondBoundary = result.rows.length > SEARCH_PAGE_SIZE;
+  const selectedRows = result.rows.slice(0, SEARCH_PAGE_SIZE);
+  const pageMatches =
+    cursor?.direction === "previous" ? selectedRows.reverse() : selectedRows;
   const results = await getPapersByIds(pageMatches.map((match) => match.id));
+  const first = pageMatches.at(0);
+  const last = pageMatches.at(-1);
+  const page = cursor?.page ?? 1;
+  const hasPrevious = cursor
+    ? cursor.direction === "previous"
+      ? hasBeyondBoundary
+      : true
+    : false;
+  const hasNext = cursor?.direction === "previous" ? true : hasBeyondBoundary;
 
-  return { results, page: currentPage, hasMore };
+  return {
+    results,
+    nextCursor:
+      hasNext && last
+        ? encodeCatalogSearchCursor(
+            {
+              direction: "next",
+              id: last.id,
+              page: page + 1,
+              rank: Number(last.rank),
+              year: last.year,
+            },
+            normalizedQuery,
+          )
+        : null,
+    page,
+    previousCursor:
+      hasPrevious && first
+        ? encodeCatalogSearchCursor(
+            {
+              direction: "previous",
+              id: first.id,
+              page: Math.max(1, page - 1),
+              rank: Number(first.rank),
+              year: first.year,
+            },
+            normalizedQuery,
+          )
+        : null,
+  };
 }
 
 /** @admin */

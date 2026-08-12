@@ -535,6 +535,37 @@ test.describe("dev-auth app smoke", () => {
     ).toBeVisible();
   });
 
+  test("search keyset pagination moves forward and backward", async ({ page }) => {
+    test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
+
+    await seedCompletedDevOwner();
+    await page.goto("/search?q=Synthetic%20research%20paper");
+    await expect(page.getByRole("article")).toHaveCount(20);
+    const firstPageTitles = await page
+      .getByRole("article")
+      .getByRole("heading", { level: 2 })
+      .allTextContents();
+
+    await page.getByRole("link", { exact: true, name: "Next" }).click();
+    await expect(page.getByText("Page 2", { exact: true })).toBeVisible();
+    await expect(page.getByRole("article")).toHaveCount(20);
+    const secondPageTitles = await page
+      .getByRole("article")
+      .getByRole("heading", { level: 2 })
+      .allTextContents();
+    expect(
+      secondPageTitles.some((title) => firstPageTitles.includes(title)),
+    ).toBe(false);
+    await expect(page).toHaveURL(/cursor=/);
+    await expect(page).not.toHaveURL(/[?&]page=/);
+
+    await page.getByRole("link", { exact: true, name: "Previous" }).click();
+    await expect(page.getByText("20 shown", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("article").getByRole("heading", { level: 2 }),
+    ).toHaveText(firstPageTitles);
+  });
+
   for (const { path, heading } of [
     { path: "/feed", heading: "Today" },
     { path: "/digest", heading: "Digest" },

@@ -13,6 +13,17 @@ This project follows Semantic Versioning.
   `(added_at, paper_id)`, while group controls and membership remain eager and
   the authorization-rooted query shape is preserved. The local group runner
   now rebuilds the current baseline-plus-migrations schema before browser tests.
+- Completed catalog-search access paths for substring DOI and arXiv-ID
+  matching, removed index-defeating identifier wrappers, and split full-text,
+  paper, author, and topic matches into planner-friendly branches. Search now
+  uses query-bound bidirectional keyset cursors on `(rank, year, id)` instead of
+  increasingly expensive deep `OFFSET` pages.
+- Made arXiv paper ingestion atomic and revision-aware. One service-role-only
+  database RPC now commits the paper, versioned identifier, ordered authors,
+  and category links together; transient retries repeat the whole bundle,
+  bounded database workers reduce round trips without weakening the shared
+  arXiv request gate, and a separate `updated` cursor refreshes new versions of
+  older papers.
 - Removed profile and default-playlist bootstrap writes from authenticated
   `/onboarding`, `/search`, and `/settings` renders. Explicit onboarding and
   settings mutations remain the normal provisioning boundary, while other

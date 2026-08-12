@@ -467,7 +467,9 @@ export const papers = pgTable("papers", {
 	triageSummaryGeneratedAt: timestamp("triage_summary_generated_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	uniqueIndex("papers_arxiv_unique_idx").using("btree", table.arxivId.asc().nullsLast().op("text_ops")).where(sql`(arxiv_id IS NOT NULL)`),
+	index("papers_arxiv_id_trgm_idx").using("gin", table.arxivId.asc().nullsLast().op("gin_trgm_ops")).where(sql`${table.arxivId} is not null`),
 	uniqueIndex("papers_doi_unique_idx").using("btree", table.doi.asc().nullsLast().op("text_ops")).where(sql`(doi IS NOT NULL)`),
+	index("papers_doi_trgm_idx").using("gin", table.doi.asc().nullsLast().op("gin_trgm_ops")).where(sql`${table.doi} is not null`),
 	index("papers_embedding_content_hash_idx").using("btree", table.embeddingContentHash.asc().nullsLast().op("text_ops")).where(sql`(embedding_content_hash IS NOT NULL)`),
 	index("papers_embedding_cosine_idx").using("ivfflat", table.embedding.asc().nullsLast().op("vector_cosine_ops")).with({lists: "100"}),
 	uniqueIndex("papers_openalex_unique_idx").using("btree", table.openalexId.asc().nullsLast().op("text_ops")).where(sql`(openalex_id IS NOT NULL)`),
@@ -750,6 +752,7 @@ export const ingestionCursors = pgTable("ingestion_cursors", {
 	cursorKey: text("cursor_key").notNull(),
 	cursorValue: text("cursor_value"),
 	lastSeenPublishedAt: timestamp("last_seen_published_at", { withTimezone: true, mode: 'string' }),
+	lastSeenUpdatedAt: timestamp("last_seen_updated_at", { withTimezone: true, mode: 'string' }),
 	lastSeenExternalId: text("last_seen_external_id"),
 	lastSuccessfulRunId: uuid("last_successful_run_id"),
 	importedCount: integer("imported_count").default(0).notNull(),
