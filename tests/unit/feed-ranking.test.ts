@@ -179,17 +179,15 @@ test("impression-only seen events are not loaded as feedback helpers", () => {
   assert.equal(isRankingFeedbackAction("not_interested"), true);
 });
 
-test("current favorites and Read later items remain hidden without interaction history", () => {
+test("current collections and durable exclusions remain hidden without interaction history", () => {
   const seenIds = buildSeenPaperIds(
     ["favorite"],
-    ["read-later"],
-    [
-      { action: "open_detail", paperId: "opened" },
-      { action: "seen", paperId: "impression-only" },
-    ],
+    ["read-later", "custom-playlist"],
+    ["opened"],
   );
 
   assert.deepEqual([...seenIds].sort(), [
+    "custom-playlist",
     "favorite",
     "opened",
     "read-later",

@@ -43,5 +43,5 @@
 - `npm run lint`
 - `bash scripts/run-e2e-local.sh tests/e2e/notifications.spec.ts` (`4/4`
   desktop/mobile tests passed after rebuilding the local test database from all
-  29 migrations)
+  30 migrations)
 - `git diff --check`

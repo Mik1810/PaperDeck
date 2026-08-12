@@ -295,6 +295,28 @@ export const userPaperInteractions = pgTable("user_paper_interactions", {
 	pgPolicy("user_paper_interactions_own", { as: "permissive", for: "all", to: ["public"], using: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`, withCheck: sql`(owner_id = (auth.jwt() ->> 'sub'::text))`  }),
 ]);
 
+export const userPaperFeedExclusions = pgTable("user_paper_feed_exclusions", {
+	ownerId: text("owner_id").notNull(),
+	paperId: uuid("paper_id").notNull(),
+	cause: interactionType().notNull(),
+	excludedAt: timestamp("excluded_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.ownerId, table.paperId], name: "user_paper_feed_exclusions_pkey" }),
+	index("user_paper_feed_exclusions_paper_idx").using("btree", table.paperId.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+		columns: [table.ownerId],
+		foreignColumns: [profiles.ownerId],
+		name: "user_paper_feed_exclusions_owner_id_fkey"
+	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.paperId],
+		foreignColumns: [papers.id],
+		name: "user_paper_feed_exclusions_paper_id_fkey"
+	}).onDelete("cascade"),
+	check("user_paper_feed_exclusions_cause_check", sql`${table.cause} = ANY (ARRAY['open_detail'::interaction_type, 'dismiss'::interaction_type, 'not_interested'::interaction_type, 'read'::interaction_type, 'already_read'::interaction_type])`),
+	pgPolicy("user_paper_feed_exclusions_own", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(owner_id = (( SELECT auth.jwt() AS jwt) ->> 'sub'::text))`, withCheck: sql`(owner_id = (( SELECT auth.jwt() AS jwt) ->> 'sub'::text))` }),
+]);
+
 export const recommendations = pgTable("recommendations", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	ownerId: text("owner_id").notNull(),
