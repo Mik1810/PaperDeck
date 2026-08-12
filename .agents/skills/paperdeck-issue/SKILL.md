@@ -29,6 +29,7 @@ If implementation requires changes:
 
 Inspect only relevant `ROADMAP.md`/`docs/` sections when needed.
 Search before opening source files. Search historical sessions first; do not bulk-read them.
+Do not query `~/.codex/memories/MEMORY.md` for normal issue work; use repository-local context.
 
 ## 2. Plan briefly
 
@@ -44,6 +45,7 @@ Keep the plan short.
 
 Default per reasoning step:
 - aim for <= ~12k characters of returned tool output;
+- for ordinary discovery calls, set `max_output_tokens` to about 3000 (raise it only for a targeted need);
 - do not concatenate more than two substantial source-file bodies;
 - begin with focused ~80–160 line windows around relevant symbols;
 - expand only when evidence is insufficient.
@@ -105,16 +107,49 @@ Near completion:
 
 Do not rerun expensive suites when no relevant code changed after a successful run.
 
-## 7. Publish efficiently
+For the final repository-wide baseline checks, prefer:
 
-Publication must not trigger a broad tool-registry dump.
-Use the installed GitHub workflow/tool directly, or an authenticated `gh` fallback.
-Never enumerate `ALL_TOOLS` merely to discover PR actions.
+```bash
+scripts/pd-final-check
+```
 
-After a locally validated draft PR:
-- take at most one non-watching CI/status snapshot;
-- report pending checks accurately;
-- do not `--watch` or repeatedly poll CI unless the user explicitly asks.
+or, when a production build is warranted:
+
+```bash
+scripts/pd-final-check --build
+```
+
+This batches independent typecheck/lint/unit checks and returns only a compact summary. Keep feature-specific integration/E2E checks separate and targeted.
+
+## 7. Publish and finish the issue efficiently
+
+When implementation and local validation are complete:
+
+1. Commit and push the scoped issue branch.
+2. Create a **non-draft PR** when the work is complete, with `Closes #<issue>` in the PR body.
+3. Post **one concise final comment** on the issue containing:
+   - what changed;
+   - the important implementation decisions;
+   - validation performed;
+   - the PR reference;
+   - any remaining rollout/operational note that genuinely matters.
+4. Take **one PR status snapshot**. Do not watch CI.
+
+Then apply this decision:
+
+- **Merge now** when the PR is mergeable/conflict-free, has no blocking review/change request, and all required checks are successful.
+- **Enable auto-merge** when the PR is otherwise ready but required checks are still pending and repository auto-merge is available. Stop after enabling it; do not poll.
+- **Stop without merging** when any required check failed, the PR has conflicts, a blocking review exists, branch protection prevents the merge, or the implementation is not actually complete. Report the blocker precisely.
+
+Never bypass failed checks, conflicts, branch protection, or blocking reviews.
+
+After a successful merge:
+- verify the issue state once;
+- `Closes #<issue>` should normally close it automatically;
+- if it is unexpectedly still open, close it explicitly;
+- do not start a second task solely to close an issue that GitHub already closed.
+
+Publication must not trigger broad tool-registry enumeration. Use the installed GitHub workflow/tool directly, or authenticated `gh` commands when appropriate.
 
 ## 8. Document once
 
@@ -122,8 +157,7 @@ At the end of meaningful work:
 - update `ROADMAP.md` only for durable decisions;
 - update `CHANGELOG.md` only for notable changes;
 - create/update one `sessions/SESSIONi.md`;
-- post one concise issue summary;
-- close only when completion criteria are actually satisfied.
+- reuse the single issue comment from the publication step rather than posting duplicate summaries.
 
 ## 9. Stop context growth
 

@@ -58,6 +58,7 @@ During implementation:
 - Use `scripts/pd-run` for noisy commands.
 - Never bypass a compact `pd-run` failure by dumping the raw log; use `scripts/pd-log`.
 - For commands expected to run longer than a couple seconds, use about 30 seconds of tool yield/wait. Do not poll every 1–5 seconds.
+- Do not inspect `~/.codex/memories/MEMORY.md` for normal issue work; repository state and `PROJECT_STATE.md` are the issue sources of truth.
 
 Documentation:
 - Update `ROADMAP.md` only for durable product/architecture decisions.
@@ -68,9 +69,14 @@ Documentation:
 Validation:
 - Choose the narrowest relevant command from `package.json`.
 - Do not repeatedly run the entire suite when targeted evidence is sufficient.
-- Before finalizing, run `git diff --check` plus appropriate targeted checks.
+- Before finalizing, prefer `scripts/pd-final-check` to batch `git diff --check`, typecheck, lint, and unit tests into one compact tool round-trip; add `--build` when a production build is warranted.
 - For frontend work, verify the affected responsive/mobile flow.
-- After a locally validated draft PR, do not watch remote CI by default. Report pending checks unless the user explicitly asks to wait, merge, or close.
+- Finish completed issue work end-to-end when safe: create the PR with `Closes #<issue>`, post one concise implementation/validation comment on the issue, and take one PR status snapshot.
+- If the PR is non-draft, conflict-free/mergeable, has no blocking review, and all required checks are successful, merge it without asking again.
+- If required checks are still pending and repository auto-merge is available, enable auto-merge instead of polling; then stop and report that merge is pending.
+- Never bypass failed checks, conflicts, branch protection, or blocking reviews.
+- Never watch/poll remote CI repeatedly just to reach mergeability.
+- After merge, verify the issue is closed; close it explicitly only if `Closes #<issue>` did not already do so.
 
 ## Next.js repository rule
 

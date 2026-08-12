@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$root"
+
+with_build=0
+case "${1:-}" in
+  "") ;;
+  --build) with_build=1 ;;
+  *)
+    echo "usage: $0 [--build]" >&2
+    exit 2
+    ;;
+esac
+
+log_dir="$root/.codex-logs"
+mkdir -p "$log_dir"
+stamp="$(date +%Y%m%d-%H%M%S)"
+result_dir="$(mktemp -d)"
+trap 'rm -rf "$result_dir"' EXIT
+
+clean_tail() {
+  local file="$1"
+  sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$file" 2>/dev/null \
+    | awk '
+        /NO_COLOR.*FORCE_COLOR/ { next }
+        /node --trace-warnings/ { next }
+        length($0) > 1200 { printf("[omitted long line: %d chars]\n", length($0)); next }
+        { print }
+      ' \
+    | tail -n 30
+}
+
+run_one() {
+  local name="$1"
+  shift
+  local log="$log_dir/${stamp}-${name}.log"
+  local start end status
+  start="$(date +%s)"
+  "$@" >"$log" 2>&1
+  status=$?
+  end="$(date +%s)"
+  printf '%s %s %s\n' "$status" "$((end-start))" "${log#$root/}" >"$result_dir/$name"
+  return 0
+}
+
+overall=0
+
+echo "== diff check =="
+diff_log="$log_dir/${stamp}-diff-check.log"
+start="$(date +%s)"
+git diff --check >"$diff_log" 2>&1
+diff_status=$?
+diff_duration=$(( $(date +%s) - start ))
+if [[ $diff_status -eq 0 ]]; then
+  echo "PASS diff-check (${diff_duration}s)"
+else
+  echo "FAIL diff-check (${diff_duration}s) log=${diff_log#$root/}"
+  clean_tail "$diff_log"
+  overall=1
+fi
+
+echo
+echo "== parallel baseline checks =="
+run_one typecheck npm run typecheck &
+p_type=$!
+run_one lint npm run lint &
+p_lint=$!
+run_one unit npm run test:unit &
+p_unit=$!
+
+wait "$p_type" || true
+wait "$p_lint" || true
+wait "$p_unit" || true
+
+for name in typecheck lint unit; do
+  read -r status duration log <"$result_dir/$name"
+  if [[ "$status" -eq 0 ]]; then
+    echo "PASS $name (${duration}s)"
+  else
+    echo "FAIL $name (${duration}s) log=$log"
+    clean_tail "$root/$log"
+    overall=1
+  fi
+done
+
+if [[ $with_build -eq 1 ]]; then
+  echo
+  echo "== build =="
+  build_log="$log_dir/${stamp}-build.log"
+  start="$(date +%s)"
+  TMPDIR="${TMPDIR:-/tmp}" npm run build >"$build_log" 2>&1
+  status=$?
+  duration=$(( $(date +%s) - start ))
+  if [[ $status -eq 0 ]]; then
+    echo "PASS build (${duration}s)"
+  else
+    echo "FAIL build (${duration}s) log=${build_log#$root/}"
+    clean_tail "$build_log"
+    overall=1
+  fi
+fi
+
+echo
+if [[ $overall -eq 0 ]]; then
+  echo "FINAL_CHECK: PASS"
+else
+  echo "FINAL_CHECK: FAIL"
+fi
+
+exit "$overall"
