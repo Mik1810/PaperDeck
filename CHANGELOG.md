@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made fresh recommendation batches a true feed fast path. Initial and live
+  cache lookups now run before taxonomy, semantic candidates, or full user
+  ranking state; PostgreSQL filters current Favorites, playlist membership,
+  and durable exclusions in the lookup, paper hydration starts only after the
+  usable-batch threshold is met, and presentation state loads independently.
 - Made Library loading proportional to the visible collection instead of the
   owner's complete private library. The initial response now contains counts,
   playlist metadata, and at most 24 papers from the selected collection;

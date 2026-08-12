@@ -18,6 +18,7 @@
     "evaluate:recommendations": "tsx scripts/evaluate-recommendations.ts",
     "evaluate:recommendations:latency": "tsx scripts/evaluate-recommendations.ts --measure-latency",
     "benchmark:library": "node --expose-gc --conditions react-server --import tsx scripts/benchmark-library-pagination.ts",
+    "benchmark:feed-cache": "node --conditions react-server --import tsx scripts/benchmark-feed-cache-fast-path.ts",
     "discover:classics": "tsx scripts/discover-classic-papers.ts",
     "generate:summaries": "tsx scripts/generate-summaries.ts",
     "generate:summaries:py": "uv run scripts/generate_summaries.py",
