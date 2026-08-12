@@ -35,6 +35,7 @@ test("durable opens survive the ranking window while playlist state remains reve
 }) => {
   const sql = database();
   let durablePaperId = "";
+  let favoritePaperId = "";
   let playlistPaperId = "";
   let expectedVisiblePaperId = "";
   let playlistId = "";
@@ -44,12 +45,13 @@ test("durable opens survive the ranking window while playlist state remains reve
       select id
       from papers
       order by published_at desc nulls last, id
-      limit 12
+      limit 13
     `;
-    expect(papers).toHaveLength(12);
+    expect(papers).toHaveLength(13);
     durablePaperId = papers[0].id;
     playlistPaperId = papers[1].id;
-    expectedVisiblePaperId = papers[2].id;
+    favoritePaperId = papers[2].id;
+    expectedVisiblePaperId = papers[3].id;
 
     await sql`
       insert into profiles (owner_id, onboarding_completed_at)
@@ -64,6 +66,10 @@ test("durable opens survive the ranking window while playlist state remains reve
     await sql`
       insert into playlist_items (playlist_id, paper_id)
       values (${playlistId}, ${playlistPaperId}::uuid)
+    `;
+    await sql`
+      insert into favorites (owner_id, paper_id)
+      values (${ownerId}, ${favoritePaperId}::uuid)
     `;
 
     await sql`
@@ -106,7 +112,7 @@ test("durable opens survive the ranking window while playlist state remains reve
       )
       select
         ${ownerId},
-        ${papers[11].id}::uuid,
+        ${papers[12].id}::uuid,
         'seen',
         'feed',
         now() - interval '30 minutes' + sequence * interval '1 second'
@@ -120,8 +126,8 @@ test("durable opens survive the ranking window while playlist state remains reve
         context,
         created_at
       ) values
-        (${ownerId}, ${papers[10].id}::uuid, 'favorite', 'feed', now()),
-        (${ownerId}, ${papers[10].id}::uuid, 'save_to_playlist', 'feed', now())
+        (${ownerId}, ${papers[11].id}::uuid, 'favorite', 'feed', now()),
+        (${ownerId}, ${papers[11].id}::uuid, 'save_to_playlist', 'feed', now())
     `;
 
     const generatedAt = new Date().toISOString();
