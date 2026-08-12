@@ -45,6 +45,9 @@ actions, and make repeated visible-card writes idempotent.
 - Recommendation analytics E2E (Chromium) — 3 passed.
 - 50-card regression — 3 viewed cards produced 3 impressions; two concurrent
   retries returned the same third impression ID and the count remained 3.
+- Full Playwright E2E suite after synchronizing with `main` — 47 passed, 3
+  skipped. The search smoke test now uses the unique 60th fixture title instead
+  of assuming a generic title query returns paper 1 on the first page.
 - `npm run db:test:prepare` — baseline plus 31 migrations, 60 synthetic papers.
 - `npm run analytics:prune -- --dry-run` against local `paperdeck_test` — passed.
 - Friendship and research-group RLS integration checks — 17 passed.
