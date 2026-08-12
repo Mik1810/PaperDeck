@@ -5,7 +5,7 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 schema="$repo_root/supabase/schema.sql"
 fixture="$repo_root/tests/fixtures/research-group-workspace.sql"
-search_migration="$repo_root/supabase/migrations/20260714210105_add_search_indexes.sql"
+migrations_dir="$repo_root/supabase/migrations"
 
 if command -v initdb >/dev/null 2>&1; then
   postgres_bin=$(dirname "$(command -v initdb)")
@@ -79,7 +79,14 @@ sed \
     { print }
   ' | "$postgres_bin/psql" "${psql_args[@]}" >/dev/null
 
-"$postgres_bin/psql" "${psql_args[@]}" -f "$search_migration" >/dev/null
+while IFS= read -r migration; do
+  sed -e 's/vector(384)/text/g' "$migration" | awk '
+    /create or replace function match_papers_by_embedding\(/ { skip_function=1 }
+    skip_function && /^\$\$;$/ { skip_function=0; next }
+    skip_function { next }
+    { print }
+  ' | "$postgres_bin/psql" "${psql_args[@]}" >/dev/null
+done < <(find "$migrations_dir" -maxdepth 1 -type f -name '*.sql' -print | sort)
 "$postgres_bin/psql" "${psql_args[@]}" -f "$fixture" >/dev/null
 
 db_user=$(id -un)

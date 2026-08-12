@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Bounded private research-group workspaces to 40 shared papers per response.
+  Later papers now load through authenticated private no-store keyset pages on
+  `(added_at, paper_id)`, while group controls and membership remain eager and
+  the authorization-rooted query shape is preserved. The local group runner
+  now rebuilds the current baseline-plus-migrations schema before browser tests.
 - Made Library loading proportional to the visible collection instead of the
   owner's complete private library. The initial response now contains counts,
   playlist metadata, and at most 24 papers from the selected collection;

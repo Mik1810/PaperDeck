@@ -7,17 +7,23 @@ import {
   type PaperPresentationRow,
   type PaperPresentationTopic,
 } from "@/lib/repositories/catalog";
+import { type ResearchGroupPaperNotificationPreference } from "@/lib/repositories/research-group-papers";
 import {
-  RESEARCH_GROUP_PAPER_LIMIT,
-  type ResearchGroupPaperNotificationPreference,
-} from "@/lib/repositories/research-group-papers";
+  decodeResearchGroupPaperCursor,
+  encodeResearchGroupPaperCursor,
+  type ResearchGroupPaperCursor,
+} from "@/lib/repositories/research-group-cursor";
 import {
   type ResearchGroupMemberSummary,
   type ResearchGroupSummary,
 } from "@/lib/repositories/research-groups";
 import { requireOwnerId } from "@/lib/repositories/owner-guard";
 import { ResearchGroupUnavailableError } from "@/lib/research-groups/permissions";
-import type { Paper } from "@/types/paper";
+import {
+  RESEARCH_GROUP_PAPER_PAGE_SIZE,
+  type ResearchGroupPaperPage,
+  type ResearchGroupPaperPageItem,
+} from "@/lib/research-group-paper-page";
 
 type WorkspacePaperProjection = PaperPresentationRow & {
   authors: string[];
@@ -45,38 +51,41 @@ type WorkspaceRow = {
   updated_at: string;
   paper_notification_preference: ResearchGroupPaperNotificationPreference;
   papers: WorkspacePaperRow[];
+  paper_count: number;
   members: ResearchGroupMemberSummary[];
   read_later_count: number;
 };
 
 export type ResearchGroupWorkspace = {
   group: ResearchGroupSummary;
-  papers: Array<{
-    paper: Paper;
-    contributor: WorkspacePaperRow["contributor"];
-    addedAt: string;
-    canRemove: boolean;
-  }>;
+  paperPage: ResearchGroupPaperPage;
   members: ResearchGroupMemberSummary[];
   preference: ResearchGroupPaperNotificationPreference;
   readLaterCount: number;
 };
 
-/**
- * Loads the complete visible group workspace in one authorized PostgreSQL
- * statement. The materialized CTE is the only root for every nested result, so
- * an inactive group, disabled read switch, or revoked membership yields no
- * group, paper, member, or private-library data.
- */
-/** @user-scoped */
-export async function loadResearchGroupWorkspace(
+type PaperPageRow = {
+  papers: WorkspacePaperRow[];
+  paper_count: number;
+};
+
+function workspaceCtes(
   actorOwnerId: string,
   groupId: string,
-): Promise<ResearchGroupWorkspace> {
-  requireOwnerId(actorOwnerId, "loadResearchGroupWorkspace");
+  cursor: ResearchGroupPaperCursor | null,
+) {
+  const cursorBoundary = cursor
+    ? sql`and (
+        group_paper.added_at < ${cursor.addedAt}::timestamptz
+        or (
+          group_paper.added_at = ${cursor.addedAt}::timestamptz
+          and group_paper.paper_id > ${cursor.paperId}::uuid
+        )
+      )`
+    : sql``;
 
-  const rows = await db.execute<WorkspaceRow>(sql`
-    with authorized_group as materialized (
+  return sql`
+    authorized_group as materialized (
       select
         group_row.id,
         group_row.name,
@@ -107,8 +116,10 @@ export async function loadResearchGroupWorkspace(
       from research_group_paper_items as group_paper
       inner join authorized_group
         on authorized_group.id = group_paper.group_id
-      order by group_paper.added_at desc, group_paper.paper_id desc
-      limit ${RESEARCH_GROUP_PAPER_LIMIT}
+      where true
+        ${cursorBoundary}
+      order by group_paper.added_at desc, group_paper.paper_id
+      limit ${RESEARCH_GROUP_PAPER_PAGE_SIZE + 1}
     ),
     paper_authors_by_paper as (
       select
@@ -138,6 +149,109 @@ export async function loadResearchGroupWorkspace(
         on topic.id = paper_topic.topic_id
       group by paper_topic.paper_id
     )
+  `;
+}
+
+function paperPageProjection(actorOwnerId: string) {
+  return sql`
+    coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'paper', jsonb_build_object(
+            'id', paper.id,
+            'title', paper.title,
+            'abstract', paper.abstract,
+            'year', paper.year,
+            'source', paper.source,
+            'url', paper.url,
+            'pdfUrl', paper.pdf_url,
+            'venue', paper.venue,
+            'doi', paper.doi,
+            'citationCount', paper.citation_count,
+            'isClassic', paper.is_classic,
+            'access', paper.access,
+            'triageSummary', paper.triage_summary,
+            'authors', coalesce(author_bundle.authors, '[]'::jsonb),
+            'topics', coalesce(topic_bundle.topics, '[]'::jsonb)
+          ),
+          'contributor', case
+            when contributor_identity.public_id is null then null
+            else jsonb_build_object(
+              'publicId', contributor_identity.public_id,
+              'displayName', contributor_profile.display_name,
+              'imageUrl', contributor_profile.image_url
+            )
+          end,
+          'addedAt', group_paper.added_at,
+          'canRemove',
+            authorized_group.role in ('owner', 'admin')
+            or group_paper.added_by = ${actorOwnerId}
+        )
+        order by group_paper.added_at desc, group_paper.paper_id
+      )
+      from limited_group_papers as group_paper
+      inner join papers as paper
+        on paper.id = group_paper.paper_id
+      left join paper_authors_by_paper as author_bundle
+        on author_bundle.paper_id = group_paper.paper_id
+      left join paper_topics_by_paper as topic_bundle
+        on topic_bundle.paper_id = group_paper.paper_id
+      left join research_group_members as contributor_membership
+        on contributor_membership.group_id = group_paper.group_id
+       and contributor_membership.member_id = group_paper.added_by
+       and contributor_membership.revoked_at is null
+      left join profiles as contributor_profile
+        on contributor_profile.owner_id = contributor_membership.member_id
+      left join collaboration_identities as contributor_identity
+        on contributor_identity.owner_id = contributor_membership.member_id
+    ), '[]'::jsonb)
+  `;
+}
+
+function paperPageFromRow(row: PaperPageRow): ResearchGroupPaperPage {
+  const visibleRows = row.papers.slice(0, RESEARCH_GROUP_PAPER_PAGE_SIZE);
+  const lastRow = visibleRows.at(-1);
+
+  const items: ResearchGroupPaperPageItem[] = visibleRows.map((item) => ({
+    paper: paperFromRow(
+      item.paper,
+      item.paper.authors,
+      item.paper.topics,
+    ),
+    contributor: item.contributor,
+    addedAt: item.addedAt,
+    canRemove: item.canRemove,
+  }));
+
+  return {
+    items,
+    nextCursor:
+      row.papers.length > RESEARCH_GROUP_PAPER_PAGE_SIZE && lastRow
+        ? encodeResearchGroupPaperCursor({
+            addedAt: lastRow.addedAt,
+            paperId: lastRow.paper.id,
+            version: 1,
+          })
+        : null,
+    totalCount: Number(row.paper_count),
+  };
+}
+
+/**
+ * Loads the visible group workspace and its first bounded paper page in one
+ * authorized PostgreSQL statement. The materialized CTE is the only root for
+ * every nested result, so an inactive group, disabled read switch, or revoked
+ * membership yields no group, paper, member, or private-library data.
+ */
+/** @user-scoped */
+export async function loadResearchGroupWorkspace(
+  actorOwnerId: string,
+  groupId: string,
+): Promise<ResearchGroupWorkspace> {
+  requireOwnerId(actorOwnerId, "loadResearchGroupWorkspace");
+
+  const rows = await db.execute<WorkspaceRow>(sql`
+    with ${workspaceCtes(actorOwnerId, groupId, null)}
     select
       authorized_group.id,
       authorized_group.name,
@@ -147,57 +261,12 @@ export async function loadResearchGroupWorkspace(
       authorized_group.created_at,
       authorized_group.updated_at,
       authorized_group.paper_notification_preference,
-      coalesce((
-        select jsonb_agg(
-          jsonb_build_object(
-            'paper', jsonb_build_object(
-              'id', paper.id,
-              'title', paper.title,
-              'abstract', paper.abstract,
-              'year', paper.year,
-              'source', paper.source,
-              'url', paper.url,
-              'pdfUrl', paper.pdf_url,
-              'venue', paper.venue,
-              'doi', paper.doi,
-              'citationCount', paper.citation_count,
-              'isClassic', paper.is_classic,
-              'access', paper.access,
-              'triageSummary', paper.triage_summary,
-              'authors', coalesce(author_bundle.authors, '[]'::jsonb),
-              'topics', coalesce(topic_bundle.topics, '[]'::jsonb)
-            ),
-            'contributor', case
-              when contributor_identity.public_id is null then null
-              else jsonb_build_object(
-                'publicId', contributor_identity.public_id,
-                'displayName', contributor_profile.display_name,
-                'imageUrl', contributor_profile.image_url
-              )
-            end,
-            'addedAt', group_paper.added_at,
-            'canRemove',
-              authorized_group.role in ('owner', 'admin')
-              or group_paper.added_by = ${actorOwnerId}
-          )
-          order by group_paper.added_at desc, group_paper.paper_id desc
-        )
-        from limited_group_papers as group_paper
-        inner join papers as paper
-          on paper.id = group_paper.paper_id
-        left join paper_authors_by_paper as author_bundle
-          on author_bundle.paper_id = group_paper.paper_id
-        left join paper_topics_by_paper as topic_bundle
-          on topic_bundle.paper_id = group_paper.paper_id
-        left join research_group_members as contributor_membership
-          on contributor_membership.group_id = group_paper.group_id
-         and contributor_membership.member_id = group_paper.added_by
-         and contributor_membership.revoked_at is null
-        left join profiles as contributor_profile
-          on contributor_profile.owner_id = contributor_membership.member_id
-        left join collaboration_identities as contributor_identity
-          on contributor_identity.owner_id = contributor_membership.member_id
-      ), '[]'::jsonb) as papers,
+      ${paperPageProjection(actorOwnerId)} as papers,
+      (
+        select count(*)::integer
+        from research_group_paper_items as group_paper_count
+        where group_paper_count.group_id = authorized_group.id
+      ) as paper_count,
       coalesce((
         select jsonb_agg(
           jsonb_build_object(
@@ -252,18 +321,35 @@ export async function loadResearchGroupWorkspace(
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     },
-    papers: row.papers.map((item) => ({
-      paper: paperFromRow(
-        item.paper,
-        item.paper.authors,
-        item.paper.topics,
-      ),
-      contributor: item.contributor,
-      addedAt: item.addedAt,
-      canRemove: item.canRemove,
-    })),
+    paperPage: paperPageFromRow(row),
     members: row.members,
     preference: row.paper_notification_preference,
     readLaterCount: Number(row.read_later_count),
   };
+}
+
+/** @user-scoped */
+export async function loadResearchGroupPaperPage(
+  actorOwnerId: string,
+  groupId: string,
+  encodedCursor: string,
+): Promise<ResearchGroupPaperPage> {
+  requireOwnerId(actorOwnerId, "loadResearchGroupPaperPage");
+  const cursor = decodeResearchGroupPaperCursor(encodedCursor);
+  if (!cursor) throw new Error("A research-group paper cursor is required.");
+
+  const rows = await db.execute<PaperPageRow>(sql`
+    with ${workspaceCtes(actorOwnerId, groupId, cursor)}
+    select
+      ${paperPageProjection(actorOwnerId)} as papers,
+      (
+        select count(*)::integer
+        from research_group_paper_items as group_paper_count
+        where group_paper_count.group_id = authorized_group.id
+      ) as paper_count
+    from authorized_group
+  `);
+  const row = rows.rows[0];
+  if (!row) throw new ResearchGroupUnavailableError();
+  return paperPageFromRow(row);
 }
