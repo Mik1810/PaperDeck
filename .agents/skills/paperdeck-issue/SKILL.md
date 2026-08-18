@@ -123,9 +123,21 @@ The same initial `context.sh` output reports `paperdeck_local_db_prereq`. This i
 
 Before database integration tests or performance benchmarks that need that canonical local database:
 - if `paperdeck_local_db_prereq: available`, use the repository's documented canonical local/database setup only as justified by the issue;
+- when `paperdeck_test_db_endpoint` is reported, treat it as the current Docker-published host/port/database and do not hard-code a different local port from stale documentation or source defaults;
+- prefer the repository-configured `PAPERDECK_TEST_DATABASE_URL`/database helper for execution. Do not print a full database URL or credentials just to learn the endpoint;
+- if the endpoint is `not-running-or-unresolved`, start/inspect only the canonical Docker Compose database path when the issue requires it, then resolve `docker compose port database 5432`; do not probe alternative database infrastructure;
 - if `paperdeck_local_db_prereq: blocked`, record that blocker once and do **not** probe system PostgreSQL, alternate ports, local database users/clusters, Podman/nerdctl, or ad-hoc substitute databases unless the issue itself is diagnosing that infrastructure;
 - when blocked, it is fine to add or validate deterministic benchmark/test harness code that does not require fabricated measurements;
 - if actual measured database evidence is an explicit acceptance requirement, do not publish/close the issue without it. Report the blocker and stop after preserving the issue-scoped work.
+
+### Final baseline gate
+
+Before `scripts/pd-final-check`:
+- finish the issue-scoped design/risk review and final diff review;
+- finish required feature-specific integration/E2E/performance evidence;
+- finish `ROADMAP.md`, `CHANGELOG.md`, and the single session note when they are warranted.
+
+Treat the first passing `pd-final-check` as the final repository baseline gate. After it passes, move directly to the issue-scoped commit and `pd-publish`; do not reopen broad source discovery, dependency internals, or architecture investigation merely for extra confidence. If a concrete defect is discovered after the gate and code changes, run the narrow affected evidence and then `pd-final-check` once more.
 
 For the final repository-wide baseline checks, prefer:
 

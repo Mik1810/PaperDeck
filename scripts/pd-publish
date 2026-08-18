@@ -247,18 +247,33 @@ if [[ "$review_decision" == "CHANGES_REQUESTED" || "$review_decision" == "REVIEW
   exit 0
 fi
 
-set +e
-checks_tsv="$(gh pr checks "$pr_number" --repo "$repo" --json name,bucket,state \
-  --jq '.[] | [.bucket,.name,.state] | @tsv' 2>"$tmp/checks.err")"
-checks_rc=$?
-set -e
-if [[ $checks_rc -ne 0 && $checks_rc -ne 8 ]]; then
-  if grep -qiE 'no checks|no status checks' "$tmp/checks.err"; then
-    checks_tsv=""
-  else
-    fatal_cmd "read PR checks" "$tmp/checks.err"
-  fi
-fi
+checks_tsv="$(gh pr view "$pr_number" --repo "$repo" --json statusCheckRollup \
+  --jq '.statusCheckRollup[]? |
+    if .__typename == "CheckRun" then
+      [
+        (if .status != "COMPLETED" then "pending"
+         elif .conclusion == "SUCCESS" then "pass"
+         elif .conclusion == "SKIPPED" or .conclusion == "NEUTRAL" then "skipping"
+         elif .conclusion == "CANCELLED" then "cancel"
+         elif .conclusion == null or .conclusion == "" then "unknown"
+         else "fail"
+         end),
+        .name,
+        ((.status // "") + ":" + (.conclusion // ""))
+      ]
+    elif .__typename == "StatusContext" then
+      [
+        (if .state == "SUCCESS" then "pass"
+         elif .state == "PENDING" or .state == "EXPECTED" then "pending"
+         elif .state == "ERROR" or .state == "FAILURE" then "fail"
+         else "unknown"
+         end),
+        .context,
+        (.state // "")
+      ]
+    else
+      ["unknown", (.name // .context // .__typename // "unknown"), .__typename]
+    end | @tsv' 2>"$tmp/checks.err")" || fatal_cmd "read PR checks" "$tmp/checks.err"
 
 count_bucket() {
   local bucket="$1"
@@ -292,19 +307,24 @@ if (( check_total == 0 )); then
 fi
 
 if (( check_pending > 0 )); then
+  # gh 2.46 supports --required and exit code 8 for pending checks, but not
+  # `gh pr checks --json`. We only need to know whether any pending check is
+  # required, so keep this probe text-only and avoid parsing presentation text.
   set +e
-  required_tsv="$(gh pr checks "$pr_number" --repo "$repo" --required --json name,bucket,state \
-    --jq '.[] | [.bucket,.name,.state] | @tsv' 2>"$tmp/required.err")"
+  gh pr checks "$pr_number" --repo "$repo" --required \
+    >"$tmp/required.out" 2>"$tmp/required.err"
   required_rc=$?
   set -e
-  if [[ $required_rc -ne 0 && $required_rc -ne 8 ]]; then
-    if grep -qiE 'no checks|no required' "$tmp/required.err"; then
-      required_tsv=""
-    else
-      fatal_cmd "read required PR checks" "$tmp/required.err"
-    fi
+  required_pending=0
+  if [[ $required_rc -eq 8 ]]; then
+    required_pending=1
+  elif [[ $required_rc -eq 0 ]]; then
+    required_pending=0
+  elif grep -qiE 'no checks|no required|no status checks' "$tmp/required.out" "$tmp/required.err"; then
+    required_pending=0
+  else
+    fatal_cmd "read required PR checks" "$tmp/required.err"
   fi
-  required_pending="$(awk -F '\t' '$1 == "pending" { n++ } END { print n+0 }' <<<"$required_tsv")"
   if (( required_pending > 0 )); then
     merge_flag="--$merge_method"
     if gh pr merge "$pr_number" --repo "$repo" --auto "$merge_flag" --match-head-commit "$head_oid" \

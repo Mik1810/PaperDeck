@@ -49,13 +49,33 @@ fi
 if [[ "$docker_ready" -eq 1 ]]; then
   echo "paperdeck_local_e2e_db: available"
   echo "paperdeck_local_db_prereq: available"
+
+  # Resolve the currently published canonical database endpoint once. This is
+  # intentionally credential-free: agents can avoid stale hard-coded ports
+  # without printing DATABASE_URL or local passwords into model context.
+  db_endpoint=""
+  if command -v timeout >/dev/null 2>&1; then
+    db_endpoint="$(timeout 3s docker compose port database 5432 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ -n "$db_endpoint" ]]; then
+    case "$db_endpoint" in
+      0.0.0.0:*) db_endpoint="127.0.0.1:${db_endpoint#0.0.0.0:}" ;;
+      \[::\]:*) db_endpoint="127.0.0.1:${db_endpoint#\[::\]:}" ;;
+    esac
+    printf 'paperdeck_test_db_endpoint: %s/paperdeck_test\n' "$db_endpoint"
+    echo "paperdeck_test_db_endpoint_source: docker-compose"
+  else
+    echo "paperdeck_test_db_endpoint: not-running-or-unresolved"
+  fi
 else
   echo "paperdeck_local_e2e_db: blocked"
   echo "paperdeck_local_db_prereq: blocked"
+  echo "paperdeck_test_db_endpoint: blocked"
 fi
 
 echo "e2e_preflight_policy: if blocked, skip browser/E2E setup unless the issue itself requires diagnosing that infrastructure"
 echo "db_preflight_policy: if blocked, do not probe system PostgreSQL, alternate ports/users/clusters, Podman/nerdctl, or ad-hoc databases; record the canonical local-DB blocker once"
+echo "db_target_policy: when an endpoint is reported, use that current canonical mapping rather than a stale hard-coded local port; never print a full DATABASE_URL"
 
 echo
 echo "== issue #$issue =="

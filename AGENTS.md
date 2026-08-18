@@ -69,11 +69,14 @@ Documentation:
 Validation:
 - Choose the narrowest relevant command from `package.json`.
 - Do not repeatedly run the entire suite when targeted evidence is sufficient.
+- Complete the issue-scoped design/risk review, final diff review, feature-specific validation, and documentation **before** `scripts/pd-final-check`.
+- Treat a passing `scripts/pd-final-check` as the final repository baseline gate. After it passes, proceed to commit/publication; do not reopen broad discovery or architecture investigation unless a concrete defect is discovered. If code changes after the gate, rerun the affected targeted check and `pd-final-check` once.
 - Before finalizing, prefer `scripts/pd-final-check` to batch `git diff --check`, typecheck, lint, and unit tests into one compact tool round-trip; add `--build` when a production build is warranted.
 - For frontend work, verify the affected responsive/mobile flow when the local environment supports it.
 - Consult the `paperdeck_local_e2e_db` result from the initial `context.sh` output before loading browser skills or inspecting the E2E harness. If it is `blocked`, do not spend context on Docker/Playwright/browser setup unless the issue itself concerns that infrastructure or browser execution is an explicit acceptance requirement.
 - When E2E is blocked by the preflight, record the blocker once and rely on the narrowest existing targeted evidence plus `pd-final-check`; do not invent brittle fallback tests merely to compensate for an unavailable environment.
 - Consult `paperdeck_local_db_prereq` before database integration/performance validation that depends on the canonical disposable PaperDeck database. If it is `blocked`, do not probe system PostgreSQL, alternate ports, local users/clusters, Podman/nerdctl, or ad-hoc substitute databases unless the issue itself is about that infrastructure.
+- When `context.sh` reports `paperdeck_test_db_endpoint`, use that current Docker-published endpoint instead of assuming the documented default port. Prefer the repository-configured test database URL when executing commands, and never print the full URL or credentials merely to discover the endpoint.
 - When the canonical local database is blocked, record the blocker once. You may still prepare deterministic benchmark/test code, but if measured database evidence is an explicit acceptance requirement, stop before publication rather than substituting unrelated local infrastructure or inventing measurements.
 - After the final issue commit, prefer one `scripts/pd-publish <issue> --summary-file -` call instead of separate `git push`, `gh pr create`, `gh issue comment`, status, and merge calls.
 - Feed `pd-publish` one concise Markdown summary (implementation + validation). It reuses that summary for the PR and final issue comment, adds `Closes #<issue>`, pushes the explicit issue branch, and emits a compact terminal status.
