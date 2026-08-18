@@ -27,6 +27,7 @@ export const PAPER_CARD_HEIGHT_CLASS_NAME =
 
 type PaperCardProps = {
   dismissErrorMessage?: string | null;
+  elevated?: boolean;
   paper: FeedPaper;
   isFavorite?: boolean;
   isSaved?: boolean;
@@ -41,6 +42,7 @@ type PaperCardProps = {
 
 export function PaperCard({
   dismissErrorMessage,
+  elevated = true,
   paper,
   isFavorite = false,
   isSaved = false,
@@ -84,7 +86,10 @@ export function PaperCard({
   const visibleErrorMessage = dismissErrorMessage ?? mutationErrorMessage;
 
   return (
-    <article className={`${PAPER_CARD_HEIGHT_CLASS_NAME} flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] md:max-w-2xl lg:max-w-none lg:rounded-xl`} style={{ touchAction: "pan-y" }}>
+    <article
+      className={`${PAPER_CARD_HEIGHT_CLASS_NAME} flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white md:max-w-2xl lg:max-w-none lg:rounded-xl ${elevated ? "shadow-[0_12px_32px_rgba(15,23,42,0.10)]" : "shadow-none"}`}
+      style={{ touchAction: "pan-y" }}
+    >
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
         <div>
           <p className="text-xs font-black uppercase tracking-normal text-teal-600">

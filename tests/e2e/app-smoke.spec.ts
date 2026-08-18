@@ -591,6 +591,17 @@ test.describe("dev-auth app smoke", () => {
       expect(response?.status()).toBeLessThan(500);
       if (path === "/feed") {
         await expectFeedReady(page);
+        const activeCard = page
+          .getByTestId("active-deck-card")
+          .getByRole("article");
+        const nextCard = page
+          .getByTestId("next-deck-card")
+          .getByRole("article");
+
+        await expect(activeCard).not.toHaveCSS("box-shadow", "none");
+        if ((await nextCard.count()) > 0) {
+          await expect(nextCard).toHaveCSS("box-shadow", "none");
+        }
       } else {
         await expect(
           page.getByRole("heading", { exact: true, name: heading }),

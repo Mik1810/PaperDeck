@@ -5,7 +5,7 @@ const cardHeightClassName =
 
 function CardSkeleton() {
   return (
-    <div className={`${cardHeightClassName} mx-auto flex w-full max-w-md animate-pulse flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.18)] lg:max-w-none`}>
+    <div className={`${cardHeightClassName} mx-auto flex w-full max-w-md animate-pulse flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.10)] lg:max-w-none`}>
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
         <div className="space-y-1.5">
           <div className="h-3.5 w-36 rounded bg-slate-100" />
