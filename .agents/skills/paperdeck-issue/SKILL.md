@@ -121,35 +121,55 @@ scripts/pd-final-check --build
 
 This batches independent typecheck/lint/unit checks and returns only a compact summary. Keep feature-specific integration/E2E checks separate and targeted.
 
-## 7. Publish and finish the issue efficiently
+## 7. Publish in one compact round-trip
 
-When implementation and local validation are complete:
+After documentation, final validation, and the issue-scoped commit are complete,
+prefer **one** publication tool call.
 
-1. Commit and push the scoped issue branch.
-2. Create a **non-draft PR** when the work is complete, with `Closes #<issue>` in the PR body.
-3. Post **one concise final comment** on the issue containing:
-   - what changed;
-   - the important implementation decisions;
-   - validation performed;
-   - the PR reference;
-   - any remaining rollout/operational note that genuinely matters.
-4. Take **one PR status snapshot**. Do not watch CI.
+Use one concise Markdown summary containing the implementation and validation
+evidence, then pipe it directly to the helper:
 
-Then apply this decision:
+```bash
+scripts/pd-publish <issue-number> --summary-file - <<'EOF'
+## Summary
+- ...
 
-- **Merge now** when the PR is mergeable/conflict-free, has no blocking review/change request, and all required checks are successful.
-- **Enable auto-merge** when the PR is otherwise ready but required checks are still pending and repository auto-merge is available. Stop after enabling it; do not poll.
-- **Stop without merging** when any required check failed, the PR has conflicts, a blocking review exists, branch protection prevents the merge, or the implementation is not actually complete. Report the blocker precisely.
+## Validation
+- ...
+EOF
+```
 
-Never bypass failed checks, conflicts, branch protection, or blocking reviews.
+Do not separately run `git push`, `gh pr create`, `gh issue comment`,
+`gh pr view`, `gh pr checks`, and `gh pr merge` when `pd-publish` can perform
+the same workflow.
 
-After a successful merge:
-- verify the issue state once;
-- `Closes #<issue>` should normally close it automatically;
-- if it is unexpectedly still open, close it explicitly;
-- do not start a second task solely to close an issue that GitHub already closed.
+`pd-publish` deterministically:
 
-Publication must not trigger broad tool-registry enumeration. Use the installed GitHub workflow/tool directly, or authenticated `gh` commands when appropriate.
+1. requires a clean worktree and the intended `issue-<number>-...` branch;
+2. pushes that explicit branch (never `HEAD:<remote-branch>`);
+3. creates or reuses its PR, defaulting the PR title to the issue title;
+4. reuses the supplied summary as the PR body and appends `Closes #<issue>`;
+5. posts one idempotent final issue comment with the PR reference;
+6. takes a compact merge/review/check snapshot;
+7. merges immediately only when every observed check is pass/skipping, the PR is
+   mergeable, and no blocking review exists;
+8. enables auto-merge only when observed CI is pending **and at least one pending
+   check is required**;
+9. never interprets zero checks as green CI;
+10. after an immediate merge, verifies the issue is closed and closes it
+    explicitly only if GitHub did not already do so.
+
+Treat its final line as the publication state:
+
+- `PUBLISH: MERGED` — done; stop the task.
+- `PUBLISH: AUTO_MERGE_ENABLED` — done for this task; do not poll.
+- `PUBLISH: WAITING_FOR_CHECKS` / `PUBLISH: WAITING_FOR_CI` — report the state
+  and stop; do not poll.
+- `PUBLISH: BLOCKED_*` — report the precise blocker and stop.
+- `PUBLISH: ERROR (...)` — only then investigate the publication command itself.
+
+Do not rerun publication just to wait for CI. Do not bypass the helper's
+worktree, branch, review, conflict, or CI guards.
 
 ## 8. Document once
 

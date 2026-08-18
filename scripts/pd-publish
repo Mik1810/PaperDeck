@@ -1,0 +1,349 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+usage: scripts/pd-publish <issue-number> --summary-file <path|-> [options]
+
+Options:
+  --title <text>            PR title (defaults to the issue title)
+  --base <branch>           Base branch (default: main)
+  --remote <name>           Git remote (default: origin)
+  --merge-method <method>   squash|merge|rebase (default: squash)
+USAGE
+}
+
+issue="${1:-}"
+if [[ -z "$issue" || ! "$issue" =~ ^[0-9]+$ ]]; then
+  usage >&2
+  exit 2
+fi
+shift
+
+summary_file=""
+title=""
+base="main"
+remote="origin"
+merge_method="squash"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --summary-file)
+      summary_file="${2:-}"
+      shift 2
+      ;;
+    --title)
+      title="${2:-}"
+      shift 2
+      ;;
+    --base)
+      base="${2:-}"
+      shift 2
+      ;;
+    --remote)
+      remote="${2:-}"
+      shift 2
+      ;;
+    --merge-method)
+      merge_method="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$summary_file" ]]; then
+  echo "error: --summary-file is required" >&2
+  exit 2
+fi
+case "$merge_method" in
+  squash|merge|rebase) ;;
+  *)
+    echo "error: --merge-method must be squash, merge, or rebase" >&2
+    exit 2
+    ;;
+esac
+
+command -v git >/dev/null || { echo "error: git not found" >&2; exit 2; }
+command -v gh >/dev/null || { echo "error: gh not found" >&2; exit 2; }
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "error: not inside a Git repository" >&2
+  exit 2
+}
+cd "$root"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+summary="$tmp/summary.md"
+if [[ "$summary_file" == "-" ]]; then
+  cat >"$summary"
+else
+  if [[ ! -f "$summary_file" ]]; then
+    echo "error: summary file not found: $summary_file" >&2
+    exit 2
+  fi
+  cp "$summary_file" "$summary"
+fi
+if [[ ! -s "$summary" ]]; then
+  echo "error: summary is empty" >&2
+  exit 2
+fi
+
+compact_error() {
+  local file="$1"
+  sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$file" 2>/dev/null \
+    | awk 'length($0) <= 1200 { print } length($0) > 1200 { print "[omitted long line]" }' \
+    | tail -n 20
+}
+
+fatal_cmd() {
+  local label="$1"
+  local file="$2"
+  echo "PUBLISH: ERROR ($label)" >&2
+  compact_error "$file" >&2
+  exit 1
+}
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "PUBLISH: BLOCKED_DIRTY_WORKTREE"
+  echo "detail: commit or otherwise resolve the current issue-scoped changes before publishing"
+  exit 0
+fi
+
+branch="$(git branch --show-current)"
+if [[ -z "$branch" ]]; then
+  echo "PUBLISH: BLOCKED_DETACHED_HEAD"
+  exit 0
+fi
+if [[ "$branch" == "$base" || "$branch" == "main" ]]; then
+  echo "PUBLISH: BLOCKED_BASE_BRANCH"
+  echo "branch: $branch"
+  exit 0
+fi
+case "$branch" in
+  "issue-${issue}"|"issue-${issue}-"*) ;;
+  *)
+    echo "PUBLISH: BLOCKED_WRONG_BRANCH"
+    echo "branch: $branch"
+    echo "expected: issue-${issue}-..."
+    exit 0
+    ;;
+esac
+
+repo="$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>"$tmp/repo.err")" || \
+  fatal_cmd "resolve repository" "$tmp/repo.err"
+
+issue_row="$(gh issue view "$issue" --repo "$repo" --json title,state \
+  --jq '[.title,.state] | @tsv' 2>"$tmp/issue.err")" || \
+  fatal_cmd "read issue #$issue" "$tmp/issue.err"
+IFS=$'\t' read -r issue_title issue_state <<<"$issue_row"
+if [[ "$issue_state" != "OPEN" ]]; then
+  echo "PUBLISH: BLOCKED_ISSUE_NOT_OPEN"
+  echo "issue: #$issue ($issue_state)"
+  exit 0
+fi
+if [[ -z "$title" ]]; then
+  title="$issue_title"
+fi
+
+if ! git push --set-upstream "$remote" "$branch" >"$tmp/push.out" 2>"$tmp/push.err"; then
+  cat "$tmp/push.out" >>"$tmp/push.err"
+  fatal_cmd "push $branch" "$tmp/push.err"
+fi
+
+pr_row="$(gh pr list --repo "$repo" --head "$branch" --state all --limit 1 \
+  --json number,url,state --jq 'if length == 0 then "" else [.[0].number,.[0].url,.[0].state] | @tsv end' \
+  2>"$tmp/pr-list.err")" || fatal_cmd "find pull request" "$tmp/pr-list.err"
+
+pr_number=""
+pr_url=""
+pr_state=""
+if [[ -n "$pr_row" ]]; then
+  IFS=$'\t' read -r pr_number pr_url pr_state <<<"$pr_row"
+  if [[ "$pr_state" == "CLOSED" ]]; then
+    echo "PUBLISH: BLOCKED_CLOSED_PR"
+    echo "pr: #$pr_number $pr_url"
+    exit 0
+  fi
+else
+  pr_body="$tmp/pr-body.md"
+  cat "$summary" >"$pr_body"
+  printf '\n\nCloses #%s\n' "$issue" >>"$pr_body"
+  if ! pr_url="$(gh pr create --repo "$repo" --base "$base" --head "$branch" \
+      --title "$title" --body-file "$pr_body" 2>"$tmp/pr-create.err")"; then
+    fatal_cmd "create pull request" "$tmp/pr-create.err"
+  fi
+  pr_number="$(gh pr view "$pr_url" --repo "$repo" --json number --jq '.number' \
+    2>"$tmp/pr-number.err")" || fatal_cmd "resolve pull request number" "$tmp/pr-number.err"
+  pr_state="OPEN"
+fi
+
+marker="<!-- pd-publish issue=${issue} pr=${pr_number} -->"
+set +e
+gh api "repos/$repo/issues/$issue/comments?per_page=100" --paginate --jq '.[].body' \
+  2>"$tmp/comments.err" | grep -Fq -- "$marker"
+marker_rc=$?
+set -e
+if [[ $marker_rc -eq 1 ]]; then
+  issue_comment="$tmp/issue-comment.md"
+  cat "$summary" >"$issue_comment"
+  printf '\n\nPR: %s\n\n%s\n' "$pr_url" "$marker" >>"$issue_comment"
+  gh issue comment "$issue" --repo "$repo" --body-file "$issue_comment" \
+    >"$tmp/comment.out" 2>"$tmp/comment.err" || fatal_cmd "comment on issue #$issue" "$tmp/comment.err"
+elif [[ $marker_rc -ne 0 ]]; then
+  fatal_cmd "inspect issue comments" "$tmp/comments.err"
+fi
+
+snapshot="$(gh pr view "$pr_number" --repo "$repo" \
+  --json state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefOid,autoMergeRequest \
+  --jq '[.state,(.isDraft|tostring),.mergeable,.mergeStateStatus,(.reviewDecision // "NONE"),.headRefOid,((.autoMergeRequest != null)|tostring)] | join("|")' \
+  2>"$tmp/snapshot.err")" || fatal_cmd "read PR status" "$tmp/snapshot.err"
+IFS='|' read -r state is_draft mergeable merge_state review_decision head_oid auto_merge_present <<<"$snapshot"
+
+if [[ "$state" == "MERGED" ]]; then
+  issue_after="$(gh issue view "$issue" --repo "$repo" --json state --jq '.state' 2>"$tmp/issue-after.err")" || \
+    fatal_cmd "verify issue state" "$tmp/issue-after.err"
+  if [[ "$issue_after" == "OPEN" ]]; then
+    gh issue close "$issue" --repo "$repo" --reason completed >"$tmp/close.out" 2>"$tmp/close.err" || \
+      fatal_cmd "close issue #$issue" "$tmp/close.err"
+    issue_after="CLOSED"
+  fi
+  echo "PR: #$pr_number $pr_url"
+  echo "issue: #$issue $issue_after"
+  echo "PUBLISH: MERGED"
+  exit 0
+fi
+
+if [[ "$is_draft" == "true" ]]; then
+  echo "PR: #$pr_number $pr_url"
+  echo "PUBLISH: BLOCKED_DRAFT"
+  exit 0
+fi
+if [[ "$mergeable" == "CONFLICTING" ]]; then
+  echo "PR: #$pr_number $pr_url"
+  echo "PUBLISH: BLOCKED_CONFLICT"
+  exit 0
+fi
+if [[ "$mergeable" != "MERGEABLE" ]]; then
+  echo "PR: #$pr_number $pr_url"
+  echo "mergeable: $mergeable ($merge_state)"
+  echo "PUBLISH: BLOCKED_MERGEABILITY_UNKNOWN"
+  exit 0
+fi
+if [[ "$review_decision" == "CHANGES_REQUESTED" || "$review_decision" == "REVIEW_REQUIRED" ]]; then
+  echo "PR: #$pr_number $pr_url"
+  echo "review: $review_decision"
+  echo "PUBLISH: BLOCKED_REVIEW"
+  exit 0
+fi
+
+set +e
+checks_tsv="$(gh pr checks "$pr_number" --repo "$repo" --json name,bucket,state \
+  --jq '.[] | [.bucket,.name,.state] | @tsv' 2>"$tmp/checks.err")"
+checks_rc=$?
+set -e
+if [[ $checks_rc -ne 0 && $checks_rc -ne 8 ]]; then
+  if grep -qiE 'no checks|no status checks' "$tmp/checks.err"; then
+    checks_tsv=""
+  else
+    fatal_cmd "read PR checks" "$tmp/checks.err"
+  fi
+fi
+
+count_bucket() {
+  local bucket="$1"
+  awk -F '\t' -v b="$bucket" '$1 == b { n++ } END { print n+0 }' <<<"$checks_tsv"
+}
+check_total="$(awk 'NF { n++ } END { print n+0 }' <<<"$checks_tsv")"
+check_pass="$(count_bucket pass)"
+check_fail="$(count_bucket fail)"
+check_pending="$(count_bucket pending)"
+check_skip="$(count_bucket skipping)"
+check_cancel="$(count_bucket cancel)"
+known_total=$((check_pass + check_fail + check_pending + check_skip + check_cancel))
+
+printf 'PR: #%s %s\n' "$pr_number" "$pr_url"
+printf 'status: mergeable=%s mergeState=%s review=%s checks=%s(pass=%s skip=%s pending=%s fail=%s cancel=%s)\n' \
+  "$mergeable" "$merge_state" "$review_decision" "$check_total" \
+  "$check_pass" "$check_skip" "$check_pending" "$check_fail" "$check_cancel"
+
+if (( check_fail > 0 || check_cancel > 0 )); then
+  awk -F '\t' '$1 == "fail" || $1 == "cancel" { print "check: " $2 " [" $1 "]" }' <<<"$checks_tsv" | head -n 8
+  echo "PUBLISH: BLOCKED_CI"
+  exit 0
+fi
+if (( known_total != check_total )); then
+  echo "PUBLISH: BLOCKED_UNKNOWN_CHECK_STATE"
+  exit 0
+fi
+if (( check_total == 0 )); then
+  echo "PUBLISH: WAITING_FOR_CHECKS"
+  exit 0
+fi
+
+if (( check_pending > 0 )); then
+  set +e
+  required_tsv="$(gh pr checks "$pr_number" --repo "$repo" --required --json name,bucket,state \
+    --jq '.[] | [.bucket,.name,.state] | @tsv' 2>"$tmp/required.err")"
+  required_rc=$?
+  set -e
+  if [[ $required_rc -ne 0 && $required_rc -ne 8 ]]; then
+    if grep -qiE 'no checks|no required' "$tmp/required.err"; then
+      required_tsv=""
+    else
+      fatal_cmd "read required PR checks" "$tmp/required.err"
+    fi
+  fi
+  required_pending="$(awk -F '\t' '$1 == "pending" { n++ } END { print n+0 }' <<<"$required_tsv")"
+  if (( required_pending > 0 )); then
+    merge_flag="--$merge_method"
+    if gh pr merge "$pr_number" --repo "$repo" --auto "$merge_flag" --match-head-commit "$head_oid" \
+      >"$tmp/auto.out" 2>"$tmp/auto.err"; then
+      echo "auto-merge: enabled (required checks pending)"
+      echo "PUBLISH: AUTO_MERGE_ENABLED"
+      exit 0
+    fi
+    echo "auto-merge: unavailable"
+    compact_error "$tmp/auto.err"
+  else
+    echo "auto-merge: not enabled because pending checks are not required"
+  fi
+  awk -F '\t' '$1 == "pending" { print "check: " $2 " [pending]" }' <<<"$checks_tsv" | head -n 8
+  echo "PUBLISH: WAITING_FOR_CI"
+  exit 0
+fi
+
+if (( check_pass + check_skip != check_total )); then
+  echo "PUBLISH: BLOCKED_UNKNOWN_CHECK_STATE"
+  exit 0
+fi
+
+merge_flag="--$merge_method"
+if ! gh pr merge "$pr_number" --repo "$repo" "$merge_flag" --match-head-commit "$head_oid" \
+    >"$tmp/merge.out" 2>"$tmp/merge.err"; then
+  echo "merge: blocked by GitHub policy"
+  compact_error "$tmp/merge.err"
+  echo "PUBLISH: BLOCKED_MERGE_POLICY"
+  exit 0
+fi
+
+issue_after="$(gh issue view "$issue" --repo "$repo" --json state --jq '.state' \
+  2>"$tmp/issue-after.err")" || fatal_cmd "verify issue state" "$tmp/issue-after.err"
+if [[ "$issue_after" == "OPEN" ]]; then
+  gh issue close "$issue" --repo "$repo" --reason completed >"$tmp/close.out" 2>"$tmp/close.err" || \
+    fatal_cmd "close issue #$issue" "$tmp/close.err"
+  issue_after="CLOSED"
+fi
+
+echo "issue: #$issue $issue_after"
+echo "PUBLISH: MERGED"

@@ -71,12 +71,12 @@ Validation:
 - Do not repeatedly run the entire suite when targeted evidence is sufficient.
 - Before finalizing, prefer `scripts/pd-final-check` to batch `git diff --check`, typecheck, lint, and unit tests into one compact tool round-trip; add `--build` when a production build is warranted.
 - For frontend work, verify the affected responsive/mobile flow.
-- Finish completed issue work end-to-end when safe: create the PR with `Closes #<issue>`, post one concise implementation/validation comment on the issue, and take one PR status snapshot.
-- If the PR is non-draft, conflict-free/mergeable, has no blocking review, and all required checks are successful, merge it without asking again.
-- If required checks are still pending and repository auto-merge is available, enable auto-merge instead of polling; then stop and report that merge is pending.
-- Never bypass failed checks, conflicts, branch protection, or blocking reviews.
-- Never watch/poll remote CI repeatedly just to reach mergeability.
-- After merge, verify the issue is closed; close it explicitly only if `Closes #<issue>` did not already do so.
+- After the final issue commit, prefer one `scripts/pd-publish <issue> --summary-file -` call instead of separate `git push`, `gh pr create`, `gh issue comment`, status, and merge calls.
+- Feed `pd-publish` one concise Markdown summary (implementation + validation). It reuses that summary for the PR and final issue comment, adds `Closes #<issue>`, pushes the explicit issue branch, and emits a compact terminal status.
+- `PUBLISH: MERGED` and `PUBLISH: AUTO_MERGE_ENABLED` are terminal success states for the task. `PUBLISH: WAITING_*` or `PUBLISH: BLOCKED_*` must be reported precisely without CI polling.
+- Never treat zero observed checks as successful CI. Merge immediately only after all observed checks are terminal pass/skipping and the PR is mergeable with no blocking review.
+- Pending CI may enable auto-merge only when at least one pending check is actually required; otherwise stop rather than risk merging while optional/unprotected CI is still running.
+- Never bypass failed checks, conflicts, branch protection, blocking reviews, or the publish helper's branch/worktree guards.
 
 ## Next.js repository rule
 
