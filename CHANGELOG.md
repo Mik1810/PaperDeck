@@ -8,6 +8,10 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Reduced paper-list hydration latency by loading each bounded paper batch's
+  independent author and topic associations concurrently. Catalog search,
+  ranked feeds, recommendation-cache hits, and single-paper details now share
+  the same two-query association helper and guarded 50-paper benchmark.
 - Reduced repeated LaTeX rendering work in paper cards. Plain text now bypasses
   delimiter parsing, stable `MathContent` props skip unrelated React rerenders,
   and a repeatable no-math/light-math/math-heavy benchmark guards the fast path.

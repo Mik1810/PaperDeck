@@ -144,6 +144,45 @@ function buildRecommendationReason(topics: PaperTopic[]) {
   return `Matches your ${topicLabels.join(" and ")} interests.`;
 }
 
+async function getPaperAssociations(paperIds: string[]) {
+  const [authorRows, topicJoinRows] = await Promise.all([
+    db
+      .select({
+        paperId: paperAuthors.paperId,
+        name: paperAuthors.name,
+        position: paperAuthors.position,
+      })
+      .from(paperAuthors)
+      .where(inArray(paperAuthors.paperId, paperIds))
+      .orderBy(asc(paperAuthors.position)),
+    db
+      .select({
+        paperId: paperTopics.paperId,
+        topic: paperPresentationTopicSelection,
+      })
+      .from(paperTopics)
+      .leftJoin(taxonomyTopics, eq(paperTopics.topicId, taxonomyTopics.id))
+      .where(inArray(paperTopics.paperId, paperIds)),
+  ]);
+
+  const authorsByPaper = new Map<string, string[]>();
+  for (const author of authorRows) {
+    const authors = authorsByPaper.get(author.paperId) ?? [];
+    authors.push(author.name);
+    authorsByPaper.set(author.paperId, authors);
+  }
+
+  const topicsByPaper = new Map<string, PaperPresentationTopic[]>();
+  for (const topicJoin of topicJoinRows) {
+    if (!topicJoin.topic) continue;
+    const topics = topicsByPaper.get(topicJoin.paperId) ?? [];
+    topics.push(topicJoin.topic);
+    topicsByPaper.set(topicJoin.paperId, topics);
+  }
+
+  return { authorsByPaper, topicsByPaper };
+}
+
 /** @admin */
 export async function getTopics() {
   return db
@@ -173,40 +212,8 @@ export async function getPapersByIds(
 
   const paperIdsFound = paperRows.map((p) => p.id);
 
-  const authorRows = await db
-    .select({
-      paperId: paperAuthors.paperId,
-      name: paperAuthors.name,
-      position: paperAuthors.position,
-    })
-    .from(paperAuthors)
-    .where(inArray(paperAuthors.paperId, paperIdsFound))
-    .orderBy(asc(paperAuthors.position));
-
-  const authorsByPaper = new Map<string, string[]>();
-  for (const a of authorRows) {
-    const list = authorsByPaper.get(a.paperId) ?? [];
-    list.push(a.name);
-    authorsByPaper.set(a.paperId, list);
-  }
-
-  const topicJoinRows = await db
-    .select({
-      paper_id: paperTopics.paperId,
-      topic_id: paperTopics.topicId,
-      topic: paperPresentationTopicSelection,
-    })
-    .from(paperTopics)
-    .leftJoin(taxonomyTopics, eq(paperTopics.topicId, taxonomyTopics.id))
-    .where(inArray(paperTopics.paperId, paperIdsFound));
-
-  const topicsByPaper = new Map<string, PaperPresentationTopic[]>();
-  for (const t of topicJoinRows) {
-    if (!t.topic) continue;
-    const list = topicsByPaper.get(t.paper_id) ?? [];
-    list.push(t.topic);
-    topicsByPaper.set(t.paper_id, list);
-  }
+  const { authorsByPaper, topicsByPaper } =
+    await getPaperAssociations(paperIdsFound);
 
   const result = await Promise.all(
     paperRows.map((row) =>
@@ -580,30 +587,11 @@ export async function getPaperById(paperId: string) {
 
   const row = paperRows[0];
 
-  const authorRows = await db
-    .select({
-      name: paperAuthors.name,
-      position: paperAuthors.position,
-    })
-    .from(paperAuthors)
-    .where(eq(paperAuthors.paperId, row.id))
-    .orderBy(asc(paperAuthors.position));
-
-  const topicJoinRows = await db
-    .select({
-      topic: paperPresentationTopicSelection,
-    })
-    .from(paperTopics)
-    .leftJoin(taxonomyTopics, eq(paperTopics.topicId, taxonomyTopics.id))
-    .where(eq(paperTopics.paperId, row.id));
-
-  const topics = topicJoinRows
-    .map((t) => t.topic)
-    .filter((t): t is PaperPresentationTopic => t !== null);
+  const { authorsByPaper, topicsByPaper } = await getPaperAssociations([row.id]);
 
   return paperFromRow(
     row,
-    authorRows.map((a) => a.name),
-    topics,
+    authorsByPaper.get(row.id) ?? [],
+    topicsByPaper.get(row.id) ?? [],
   );
 }
