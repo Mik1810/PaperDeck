@@ -31,25 +31,31 @@ fi
 
 echo
 echo "== local validation preflight =="
+docker_ready=0
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker: unavailable"
-  echo "paperdeck_local_e2e_db: blocked"
 elif command -v timeout >/dev/null 2>&1; then
   if timeout 2s docker info >/dev/null 2>&1; then
+    docker_ready=1
     echo "docker: ready"
-    echo "paperdeck_local_e2e_db: available"
   else
     echo "docker: daemon-unavailable"
-    echo "paperdeck_local_e2e_db: blocked"
   fi
-elif docker info >/dev/null 2>&1; then
-  echo "docker: ready"
-  echo "paperdeck_local_e2e_db: available"
 else
-  echo "docker: daemon-unavailable"
-  echo "paperdeck_local_e2e_db: blocked"
+  # Do not risk an unbounded daemon probe just to discover local validation capability.
+  echo "docker: probe-unavailable"
 fi
+
+if [[ "$docker_ready" -eq 1 ]]; then
+  echo "paperdeck_local_e2e_db: available"
+  echo "paperdeck_local_db_prereq: available"
+else
+  echo "paperdeck_local_e2e_db: blocked"
+  echo "paperdeck_local_db_prereq: blocked"
+fi
+
 echo "e2e_preflight_policy: if blocked, skip browser/E2E setup unless the issue itself requires diagnosing that infrastructure"
+echo "db_preflight_policy: if blocked, do not probe system PostgreSQL, alternate ports/users/clusters, Podman/nerdctl, or ad-hoc databases; record the canonical local-DB blocker once"
 
 echo
 echo "== issue #$issue =="

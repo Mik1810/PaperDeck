@@ -117,6 +117,16 @@ Before loading any browser/agent-browser skill or reading Playwright/E2E harness
 - record an environment blocker once rather than repeatedly probing it;
 - do not create ad-hoc static-render/browser tests solely to replace blocked E2E. Prefer existing targeted unit/component/static evidence and the normal final baseline.
 
+### Database validation preflight
+
+The same initial `context.sh` output reports `paperdeck_local_db_prereq`. This is the prerequisite for the repository's canonical disposable/local database path; it does not claim that the database is already running.
+
+Before database integration tests or performance benchmarks that need that canonical local database:
+- if `paperdeck_local_db_prereq: available`, use the repository's documented canonical local/database setup only as justified by the issue;
+- if `paperdeck_local_db_prereq: blocked`, record that blocker once and do **not** probe system PostgreSQL, alternate ports, local database users/clusters, Podman/nerdctl, or ad-hoc substitute databases unless the issue itself is diagnosing that infrastructure;
+- when blocked, it is fine to add or validate deterministic benchmark/test harness code that does not require fabricated measurements;
+- if actual measured database evidence is an explicit acceptance requirement, do not publish/close the issue without it. Report the blocker and stop after preserving the issue-scoped work.
+
 For the final repository-wide baseline checks, prefer:
 
 ```bash
