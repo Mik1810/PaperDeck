@@ -98,6 +98,34 @@ describe("submitDeckAction", () => {
     );
   });
 
+  test("rejects malformed successful API responses", async () => {
+    for (const payload of [{}, { action: "favorite" }, { ok: true }]) {
+      await assert.rejects(
+        () =>
+          submitDeckAction(
+            "favorite",
+            "paper-1",
+            { selected: true },
+            async () => Response.json(payload),
+          ),
+        /Deck action failed: favorite/,
+      );
+    }
+  });
+
+  test("rejects a successful payload for a different action", async () => {
+    await assert.rejects(
+      () =>
+        submitDeckAction(
+          "favorite",
+          "paper-1",
+          { selected: true },
+          async () => Response.json({ action: "dismiss", ok: true }),
+        ),
+      /Deck action failed: favorite/,
+    );
+  });
+
   test("throws on network error", async () => {
     await assert.rejects(
       () =>

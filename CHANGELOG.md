@@ -8,6 +8,10 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Hardened client deck mutations and playlist loading against ambiguous or
+  stale responses. Deck actions now require a schema-validated success payload
+  for the requested action, while playlist-picker requests are canceled and
+  sequence-guarded across rapid close and reopen cycles.
 - Made arXiv revision catch-up resumable when a category exceeds its baseline
   page budget. Partial sweeps now import the safe fetched prefix, preserve the
   revision cursor, and exponentially expand the next scan instead of failing

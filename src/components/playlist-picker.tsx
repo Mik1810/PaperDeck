@@ -52,10 +52,16 @@ export function PlaylistPicker({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const mutatedDuringOpenRef = useRef(false);
   const addedDuringOpenRef = useRef(false);
+  const optionsRequestAbortRef = useRef<AbortController | null>(null);
+  const optionsRequestSequenceRef = useRef(0);
 
   const saved = items?.some((item) => item.selected) ?? initialSaved;
 
   async function loadOptions() {
+    optionsRequestAbortRef.current?.abort();
+    const controller = new AbortController();
+    const requestSequence = ++optionsRequestSequenceRef.current;
+    optionsRequestAbortRef.current = controller;
     setLoading(true);
     setItems(null);
     setErrorMessage(null);
@@ -63,18 +69,33 @@ export function PlaylistPicker({
       const response = await fetch(`/api/papers/${paperId}/playlists`, {
         cache: "no-store",
         headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error("Playlist request failed");
       const payload = (await response.json()) as PlaylistResponse;
+      if (requestSequence !== optionsRequestSequenceRef.current) return;
       setItems(payload.items);
     } catch {
+      if (
+        controller.signal.aborted ||
+        requestSequence !== optionsRequestSequenceRef.current
+      ) {
+        return;
+      }
       setErrorMessage("Your playlists could not be loaded.");
     } finally {
-      setLoading(false);
+      if (requestSequence === optionsRequestSequenceRef.current) {
+        optionsRequestAbortRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
   const closePicker = useCallback(() => {
+    optionsRequestAbortRef.current?.abort();
+    optionsRequestAbortRef.current = null;
+    optionsRequestSequenceRef.current += 1;
+    setLoading(false);
     setOpen(false);
     setCreating(false);
     setCreateName("");
@@ -84,6 +105,14 @@ export function PlaylistPicker({
     mutatedDuringOpenRef.current = false;
     addedDuringOpenRef.current = false;
   }, [onSaveComplete, router]);
+
+  useEffect(
+    () => () => {
+      optionsRequestAbortRef.current?.abort();
+      optionsRequestSequenceRef.current += 1;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!open) return;
