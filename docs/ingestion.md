@@ -245,7 +245,18 @@ The `(updatedAt, arxivId)` pair is the revision checkpoint, including a stable
 tie-breaker for papers updated at the same time. The first sweep initializes
 from one newest page; later sweeps paginate until they reach that checkpoint.
 Use `--no-revision-sweep` for an exceptional one-off run, or configure
-`ARXIV_REVISION_SWEEP=false`. `ARXIV_REVISION_PAGES` bounds one sweep.
+`ARXIV_REVISION_SWEEP=false`.
+
+`ARXIV_REVISION_PAGES` is the baseline work budget, not a fatal cutoff. If a
+sweep cannot reach its stored cursor within that budget, the run still imports
+the fetched revisions and all new publications, preserves the revision cursor,
+and records the scanned depth in `cursor_value`. The next run rescans the
+already covered prefix for correctness and doubles the page budget until it
+reaches the cursor (10, 20, 40 pages, and so on, capped at 500). Once caught
+up, the cursor advances to the newest revision and the saved depth is cleared.
+The workflow summary reports categories that remain in catch-up. Reaching the
+500-page safety limit emits a GitHub warning for operator review while keeping
+new-publication ingestion available and the revision cursor unchanged.
 
 Database persistence is deliberately independent from network pacing.
 `ARXIV_DATABASE_CONCURRENCY` controls the bounded RPC worker pool (1-16), but a

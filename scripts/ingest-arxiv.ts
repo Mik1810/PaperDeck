@@ -14,12 +14,13 @@ import {
   type IngestionCursor,
 } from "../src/lib/schemas/arxiv-entry";
 import {
+  MAX_REVISION_CATCH_UP_PAGES,
+  collectRevisionPages,
   createRequestRateGate,
-  hasPassedRevisionCursorTimestamp,
-  isAfterRevisionCursor,
   mapWithConcurrency,
   parseBoundedPositiveInteger,
   parseIntegerInRange,
+  revisionCatchUpCheckpoint,
   withWholePaperRetry,
 } from "./lib/arxiv-ingestion";
 
@@ -571,10 +572,32 @@ async function updateRevisionCursor(
 
   const { error } = await supabase.rpc("upsert_arxiv_ingestion_cursor", {
     p_cursor_key: revisionCursorKey(category),
-    p_cursor_value: newestPaper.updatedAt,
+    p_cursor_value: null,
     p_last_seen_published_at: null,
     p_last_seen_updated_at: newestPaper.updatedAt,
     p_last_seen_external_id: newestPaper.arxivId,
+    p_last_successful_run_id: runId,
+    p_imported_count: importedCount,
+  });
+  if (error) throw error;
+}
+
+async function updateRevisionCatchUpProgress(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  category: string,
+  cursor: Awaited<ReturnType<typeof getRevisionCursor>>,
+  pageBudget: number,
+  importedCount: number,
+  runId: string | null,
+) {
+  const checkpoint = revisionCatchUpCheckpoint(cursor, pageBudget);
+
+  const { error } = await supabase.rpc("upsert_arxiv_ingestion_cursor", {
+    p_cursor_key: revisionCursorKey(category),
+    p_cursor_value: checkpoint.cursorValue,
+    p_last_seen_published_at: null,
+    p_last_seen_updated_at: checkpoint.lastSeenUpdatedAt,
+    p_last_seen_external_id: checkpoint.lastSeenExternalId,
     p_last_successful_run_id: runId,
     p_imported_count: importedCount,
   });
@@ -587,32 +610,18 @@ async function fetchRevisionPapersForCategory(
   cursor: Awaited<ReturnType<typeof getRevisionCursor>>,
   beforeRequest: () => Promise<void>,
 ) {
-  const fetchedPapers: ArxivPaper[] = [];
-  const importablePapers: ArxivPaper[] = [];
-
-  for (let page = 0; page < config.revisionPages; page += 1) {
-    const pagePapers = await fetchArxivPapersForCategory(config, category, {
-      beforeRequest,
-      sortBy: "lastUpdatedDate",
-      start: page * config.maxResults,
-    });
-    fetchedPapers.push(...pagePapers);
-    importablePapers.push(
-      ...pagePapers.filter((paper) => isAfterRevisionCursor(paper, cursor)),
-    );
-
-    if (
-      !cursor?.last_seen_updated_at ||
-      pagePapers.length < config.maxResults ||
-      hasPassedRevisionCursorTimestamp(pagePapers, cursor)
-    ) {
-      return { fetchedPapers, importablePapers };
-    }
-  }
-
-  throw new Error(
-    `arXiv revision sweep for ${category} exceeded ${config.revisionPages} pages before reaching its cursor`,
-  );
+  return collectRevisionPages<ArxivPaper>({
+    configuredPages: config.revisionPages,
+    cursor,
+    fetchPage: (page) =>
+      fetchArxivPapersForCategory(config, category, {
+        beforeRequest,
+        sortBy: "lastUpdatedDate",
+        start: page * config.maxResults,
+      }),
+    maxResults: config.maxResults,
+    storedProgress: cursor?.cursor_value,
+  });
 }
 
 async function ensureCategoryTopics(
@@ -831,7 +840,12 @@ async function main() {
       if (config.revisionSweep) {
         for (const category of config.categories) {
           const cursor = await getRevisionCursor(supabase, category);
-          const { fetchedPapers, importablePapers } =
+          const {
+            fetchedPapers,
+            importablePapers,
+            pageBudget,
+            revisionComplete,
+          } =
             await fetchRevisionPapersForCategory(
               config,
               category,
@@ -845,6 +859,8 @@ async function main() {
             importablePapers,
             revisionCursor: cursor,
             revisionSweep: true,
+            revisionComplete,
+            revisionPageBudget: pageBudget,
           });
         }
       }
@@ -867,7 +883,25 @@ async function main() {
         ? (item.fetchedPapers[item.fetchedPapers.length - 1]?.updatedAt ?? null)
         : (item.fetchedPapers[item.fetchedPapers.length - 1]?.publishedAt ??
           null),
+      revisionComplete: item.revisionSweep
+        ? (item.revisionComplete ?? true)
+        : undefined,
+      revisionPageBudget: item.revisionSweep
+        ? item.revisionPageBudget
+        : undefined,
+      revisionAtHardLimit: item.revisionSweep
+        ? !item.revisionComplete &&
+          item.revisionPageBudget >= MAX_REVISION_CATCH_UP_PAGES
+        : undefined,
     }));
+
+    for (const item of categoryBreakdown.filter(
+      (entry) => entry.revisionAtHardLimit,
+    )) {
+      console.error(
+        `::warning title=arXiv revision catch-up limit::${item.category} remains behind after ${item.revisionPageBudget} pages; the revision cursor was preserved`,
+      );
+    }
 
     const papers = uniquePapersByArxivId(
       fetchedByCategory.flatMap((item) => item.importablePapers),
@@ -917,13 +951,24 @@ async function main() {
     } else {
       for (const item of fetchedByCategory) {
         if (item.revisionSweep) {
-          await updateRevisionCursor(
-            supabase,
-            item.category,
-            item.fetchedPapers,
-            item.importablePapers.length,
-            runId,
-          );
+          if (item.revisionComplete) {
+            await updateRevisionCursor(
+              supabase,
+              item.category,
+              item.fetchedPapers,
+              item.importablePapers.length,
+              runId,
+            );
+          } else {
+            await updateRevisionCatchUpProgress(
+              supabase,
+              item.category,
+              item.revisionCursor,
+              item.revisionPageBudget,
+              item.importablePapers.length,
+              runId,
+            );
+          }
         } else {
           await updateCategoryCursor(
             supabase,
@@ -941,7 +986,9 @@ async function main() {
         fetchedByCategory.map((item) => [
           `${item.category}:${item.revisionSweep ? "revision" : config.backfill ? "backfill" : "new"}`,
           item.revisionSweep
-            ? (item.fetchedPapers[0]?.updatedAt ?? null)
+            ? item.revisionComplete
+              ? (item.fetchedPapers[0]?.updatedAt ?? null)
+              : (item.revisionCursor?.last_seen_updated_at ?? null)
             : (item.fetchedPapers[0]?.publishedAt ?? null),
         ]),
       ),
