@@ -1,40 +1,31 @@
-# Session 94 — Issue #186: LaTeX rendering fast path
+# Session 94
 
-## Problem
+## Local summary context and validation recovery
 
-Paper titles and abstracts repeatedly entered delimiter detection and KaTeX
-rendering when client-side card state changed, even if their text was stable.
-This added avoidable CPU work to the mobile-first feed.
-
-## Changes
-
-- Added a conservative delimiter-candidate check so ordinary text goes directly
-  through the existing HTML-escaping boundary without entering the parser.
-- Memoized `MathContent` by its primitive `text` prop so unrelated parent state
-  changes do not rerender stable paper text.
-- Avoided a module-global output cache, which would retain paper and private-note
-  text across requests and add eviction complexity without benchmark evidence.
-- Added `benchmark:latex-rendering` for repeatable 60-paper no-math, light-math,
-  and math-heavy comparisons.
-
-## Performance
-
-Median time for 60 papers across 10 repeated passes on the local host:
-
-| Scenario | Before | After |
-| --- | ---: | ---: |
-| No math | 1.62 ms | 0.20 ms |
-| Light math | 15.46 ms | 15.69 ms |
-| Math heavy | 133.38 ms | 132.02 ms |
-
-The fast path reduced the measured plain-text scan by about 88% while leaving
-KaTeX-dominated cases effectively unchanged.
+- Reproduced two local Gemma failures against the active Unsloth-managed
+  llama.cpp server. A nominal 20,000-character excerpt used 7,905 prompt tokens
+  and left only 287 tokens for output, truncating the JSON; another prompt used
+  8,374 tokens and was rejected by the 8,192-token context.
+- Added exact preflight budgeting through llama.cpp `/props`, `/apply-template`,
+  and `/tokenize`. The worker reserves its configured output budget and safety
+  margin, then proportionally reduces labeled opening, method, results, and
+  conclusion excerpts only when required.
+- Preserved server error details while treating paper-specific HTTP 400, 413,
+  and 422 responses as recoverable batch failures. Connectivity, authorization,
+  and invalid server envelopes remain fatal configuration/runtime failures.
+- Changed the mathematical-notation retry to edit the completed JSON directly
+  instead of regenerating from the full paper. Added explicit detection for
+  `finish_reason: length` and moved PyMuPDF to its supported `pymupdf` import.
+- Added deterministic Python unit coverage for proportional excerpt shrinking,
+  token budgeting, HTTP error extraction/classification, and response-only
+  correction.
 
 ## Validation
 
-- Focused LaTeX unit tests: 8 passed.
-- Static `MathContent` render with KaTeX and escaped HTML: passed.
-- `scripts/pd-final-check`: diff check, typecheck, lint, and unit tests passed.
-- Desktop/Pixel 5 Playwright coverage could not run because Docker Desktop WSL
-  integration was unavailable, so the disposable `paperdeck_test` database
-  could not be prepared.
+- `uv run --with-requirements requirements-summaries.txt python -m unittest discover -s tests/python -p 'test_*.py'`
+- Live `--no-write` reproduction for arXiv `2608.12150`: input reduced from
+  20,000 to 17,538 characters, prompt fit at 7,104 of 7,104 budgeted tokens, and
+  complete validated JSON generated.
+- Live `--no-write` reproduction for arXiv `2608.12194`: original 6,020-token
+  prompt fit without trimming; response-only retry replaced both forbidden
+  complexity expressions and produced validated JSON.
