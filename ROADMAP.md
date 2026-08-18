@@ -50,7 +50,10 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Database online MVP: Supabase Postgres + pgvector.
 - Connessioni database: Preview e Production usano il Transaction pooler;
   sviluppo locale e CI usano PostgreSQL isolato in Docker. Drizzle Kit e
-  manutenzione remota usano un URL Session separato.
+  manutenzione remota usano un URL Session separato. Il pool applicativo limita
+  ogni statement a 15 secondi con fail-safe client a 18 secondi e registra query
+  oltre un secondo o attese pool oltre 100 ms con contatori di occupazione e
+  origine applicativa, senza SQL o identificatori.
 - Parita' schema: Docker locale e CI ricostruiscono sempre il database dalla
   baseline iniziale piu' tutte le migrazioni Supabase ordinate; un gate CI
   verifica anche la superficie full-text/trigram usata dalla ricerca.
