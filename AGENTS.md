@@ -70,7 +70,9 @@ Validation:
 - Choose the narrowest relevant command from `package.json`.
 - Do not repeatedly run the entire suite when targeted evidence is sufficient.
 - Before finalizing, prefer `scripts/pd-final-check` to batch `git diff --check`, typecheck, lint, and unit tests into one compact tool round-trip; add `--build` when a production build is warranted.
-- For frontend work, verify the affected responsive/mobile flow.
+- For frontend work, verify the affected responsive/mobile flow when the local environment supports it.
+- Consult the `paperdeck_local_e2e_db` result from the initial `context.sh` output before loading browser skills or inspecting the E2E harness. If it is `blocked`, do not spend context on Docker/Playwright/browser setup unless the issue itself concerns that infrastructure or browser execution is an explicit acceptance requirement.
+- When E2E is blocked by the preflight, record the blocker once and rely on the narrowest existing targeted evidence plus `pd-final-check`; do not invent brittle fallback tests merely to compensate for an unavailable environment.
 - After the final issue commit, prefer one `scripts/pd-publish <issue> --summary-file -` call instead of separate `git push`, `gh pr create`, `gh issue comment`, status, and merge calls.
 - Feed `pd-publish` one concise Markdown summary (implementation + validation). It reuses that summary for the PR and final issue comment, adds `Closes #<issue>`, pushes the explicit issue branch, and emits a compact terminal status.
 - `PUBLISH: MERGED` and `PUBLISH: AUTO_MERGE_ENABLED` are terminal success states for the task. `PUBLISH: WAITING_*` or `PUBLISH: BLOCKED_*` must be reported precisely without CI polling.

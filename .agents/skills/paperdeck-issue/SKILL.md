@@ -107,6 +107,16 @@ Near completion:
 
 Do not rerun expensive suites when no relevant code changed after a successful run.
 
+### Frontend/E2E preflight
+
+The initial `context.sh` output already reports `paperdeck_local_e2e_db`.
+
+Before loading any browser/agent-browser skill or reading Playwright/E2E harness files:
+- if `paperdeck_local_e2e_db: available`, run only the targeted browser/E2E check justified by the issue;
+- if `paperdeck_local_e2e_db: blocked`, treat the repository's disposable-database E2E path as unavailable and do **not** load browser skills, inspect the E2E harness, or attempt Docker-based E2E unless the issue itself is about that infrastructure or browser execution is an explicit acceptance requirement;
+- record an environment blocker once rather than repeatedly probing it;
+- do not create ad-hoc static-render/browser tests solely to replace blocked E2E. Prefer existing targeted unit/component/static evidence and the normal final baseline.
+
 For the final repository-wide baseline checks, prefer:
 
 ```bash

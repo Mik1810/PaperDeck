@@ -30,6 +30,28 @@ else
 fi
 
 echo
+echo "== local validation preflight =="
+if ! command -v docker >/dev/null 2>&1; then
+  echo "docker: unavailable"
+  echo "paperdeck_local_e2e_db: blocked"
+elif command -v timeout >/dev/null 2>&1; then
+  if timeout 2s docker info >/dev/null 2>&1; then
+    echo "docker: ready"
+    echo "paperdeck_local_e2e_db: available"
+  else
+    echo "docker: daemon-unavailable"
+    echo "paperdeck_local_e2e_db: blocked"
+  fi
+elif docker info >/dev/null 2>&1; then
+  echo "docker: ready"
+  echo "paperdeck_local_e2e_db: available"
+else
+  echo "docker: daemon-unavailable"
+  echo "paperdeck_local_e2e_db: blocked"
+fi
+echo "e2e_preflight_policy: if blocked, skip browser/E2E setup unless the issue itself requires diagnosing that infrastructure"
+
+echo
 echo "== issue #$issue =="
 if command -v gh >/dev/null 2>&1; then
   gh issue view "$issue" \
