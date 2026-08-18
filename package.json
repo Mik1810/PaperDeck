@@ -23,6 +23,7 @@
     "benchmark:arxiv-ingestion": "node --import tsx scripts/benchmark-arxiv-paper-ingestion.ts",
     "benchmark:recommendation-retention": "node --conditions react-server --import tsx scripts/benchmark-recommendation-analytics-retention.ts",
     "benchmark:feed-cache": "node --conditions react-server --import tsx scripts/benchmark-feed-cache-fast-path.ts",
+    "benchmark:paper-hydration": "node --import tsx scripts/benchmark-paper-hydration.ts",
     "benchmark:latex-rendering": "node --import tsx scripts/benchmark-latex-rendering.ts",
     "discover:classics": "tsx scripts/discover-classic-papers.ts",
     "generate:summaries": "tsx scripts/generate-summaries.ts",
