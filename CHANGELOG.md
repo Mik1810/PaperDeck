@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Bounded application database statements to 15 seconds with an 18-second
+  client fail-safe, without applying those runtime limits to administrative
+  maintenance connections. Slow queries, timeout cancellations, and contended
+  pool acquisitions now emit source-attributed structured diagnostics with
+  duration and total/idle/waiting connection counts but no SQL or user data.
 - Reduced paper-list hydration latency by loading each bounded paper batch's
   independent author and topic associations concurrently. Catalog search,
   ranked feeds, recommendation-cache hits, and single-paper details now share

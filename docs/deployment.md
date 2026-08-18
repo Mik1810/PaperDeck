@@ -80,6 +80,10 @@ SUPABASE_SERVICE_ROLE_KEY=replace_me
 DATABASE_URL=postgresql://transaction-pooler-host:6543/postgres
 DATABASE_ADMIN_URL=postgresql://session-pooler-host:5432/postgres
 DATABASE_MAX_CONNECTIONS=3
+DATABASE_STATEMENT_TIMEOUT_MS=15000
+DATABASE_QUERY_TIMEOUT_MS=18000
+DATABASE_SLOW_QUERY_MS=1000
+DATABASE_SLOW_POOL_WAIT_MS=100
 LOG_LEVEL=info
 ```
 
@@ -105,8 +109,15 @@ compatibility with environments that have not yet added the administrative
 variable. Drizzle uses node-postgres without named prepared statements, and
 direct Postgres.js test clients explicitly disable prepared statements, so
 Transaction mode remains supported. The application pool retains its
-five-second idle and ten-second connection timeouts, while maintenance scripts
-explicitly close their one-connection clients. Keep the last Ready
+five-second idle and ten-second connection timeouts. Runtime statements have a
+15-second PostgreSQL deadline and an 18-second node-postgres fail-safe; the
+longer client deadline also frees a pool slot if a proxy does not propagate the
+server setting. Queries above one second and pool acquisition waits above 100ms
+emit structured diagnostics with an application source frame, duration, and
+pool total/idle/waiting counts, but no SQL, connection string, or user data.
+Maintenance scripts use their separate administrative connection policy and
+explicitly close their one-connection clients, so these runtime deadlines do
+not constrain ingestion or migrations. Keep the last Ready
 Session-pooler Production deployment recorded as the immediate rollback target.
 The Supabase role currently enforces its existing two-minute statement timeout;
 lowering that shared setting requires a separate workload audit because
