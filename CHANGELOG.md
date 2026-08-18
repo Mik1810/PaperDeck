@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made local llama.cpp summary generation fit the active context using the
+  server's chat template and tokenizer, reserve JSON output space, expose useful
+  HTTP/context diagnostics, edit invalid mathematical notation through a short
+  response-only retry, and continue batches after paper-specific request
+  rejections instead of aborting all remaining candidates.
 - Hardened client deck mutations and playlist loading against ambiguous or
   stale responses. Deck actions now require a schema-validated success payload
   for the requested action, while playlist-picker requests are canceled and

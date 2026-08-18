@@ -12,6 +12,10 @@ The local worker:
 - selects up to 20,000 characters across the opening, method, results, and
   conclusion rather than taking only the start of the paper;
 - sends PaperDeck's validated system prompt and strict JSON schema;
+- reads the active llama.cpp context size and tokenizes the fully templated
+  prompt before inference;
+- proportionally trims every selected section when needed, preserving room for
+  the JSON response;
 - validates the four summary fields before writing them;
 - writes only while `triage_summary` is still null, so it does not overwrite a
   summary produced concurrently.
@@ -54,11 +58,14 @@ Keep this terminal open. The Unsloth interface is available at
 <http://localhost:8888>.
 
 These settings were verified on an NVIDIA laptop GPU with 8 GB of VRAM. The
-8,192-token context accommodates the validated 20,000-character PDF sample;
-the previous 4,096-token setting rejected a 4,873-token prompt with HTTP 400.
-One parallel slot keeps the complete context available to each request and
-limits VRAM pressure. Reasoning is disabled because the worker requests concise
-structured JSON.
+worker adapts the default 20,000-character PDF sample to the active context. It
+reserves 1,024 tokens for output plus a 64-token safety margin, then uses
+llama.cpp's `/apply-template` and `/tokenize` endpoints to fit the representative
+excerpt precisely. This matters because PDF token density varies: observed
+20,000-character prompts ranged from 6,020 to more than 8,192 tokens. One
+parallel slot keeps the full context available to each request and limits VRAM
+pressure. Reasoning is disabled because the worker requests concise structured
+JSON.
 
 Unsloth uses `llama-server` internally for GGUF inference. Seeing that child
 process is expected; start it through the `unsloth studio run` command above,
@@ -146,7 +153,7 @@ npm run generate:summaries:local -- \
 The worker was pointed at `http://127.0.0.1:8888`, which is the authenticated
 Studio API. Recover the current internal port and use it in `LLAMA_CPP_URL`.
 
-### `HTTP Error 400: Bad Request` and context-size errors
+### Context fitting and `HTTP Error 400: Bad Request`
 
 Confirm that the Unsloth child process contains `-c 8192` and `--parallel 1`:
 
@@ -154,9 +161,15 @@ Confirm that the Unsloth child process contains `-c 8192` and `--parallel 1`:
 ps -eo args= | grep '[l]lama-server'
 ```
 
-A 4,096-token context is too small for the default 20,000-character sample. If
-the model cannot be restarted immediately, a lower-quality emergency fallback
-is available:
+Before every inference, the worker prints the active context, prompt budget, and
+actual prompt-token count. Oversized excerpts are reduced automatically while
+retaining material from every selected section. llama.cpp error messages are
+included in request failures; a paper-specific 400, 413, or 422 is recorded as a
+failed paper and does not abort the remaining batch.
+
+A 4,096-token context leaves substantially less paper evidence after reserving
+the JSON output budget. Prefer restarting with 8,192 tokens. If that is not
+possible, an explicit lower-input fallback remains available:
 
 ```bash
 npm run generate:summaries:local -- \
@@ -165,15 +178,25 @@ npm run generate:summaries:local -- \
   --max-tokens 1024
 ```
 
+### `No JSON object found` or a truncated response
+
+The worker reserves output space before inference and reports a specific error
+when llama.cpp returns `finish_reason: length`. A malformed model response is
+failed without being written. Use `--debug` to print the first 500 characters of
+the local response.
+
 ### Empty internal port
 
 Open <http://localhost:8888> and confirm that Gemma is loaded and ready. Also
 inspect the terminal running `unsloth studio run` for a model-loading error.
 
-### `fitz` deprecation warning
+### Mathematical notation rejected by validation
 
-The `fitz`/PyMuPDF warning is unrelated to inference and does not prevent
-summary generation.
+If a complete JSON response contains forbidden equations, LaTeX commands, or
+symbolic complexity expressions such as `O(...)`, the worker sends that JSON
+through one short edit-only retry. The retry preserves the existing facts and
+rewrites only the validation problem in plain English; it does not resend or
+regenerate the full paper prompt.
 
 ### Inline mathematical notation in an accepted summary
 

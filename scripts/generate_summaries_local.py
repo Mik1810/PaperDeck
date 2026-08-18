@@ -101,6 +101,8 @@ SUMMARY_JSON_SCHEMA = {
 }
 ARXIV_PDF = "https://arxiv.org/pdf/{arxiv_id}.pdf"
 SLOW_LLM_SECONDS = 60
+DEFAULT_CONTEXT_MARGIN = 64
+MIN_CONTENT_CHARS = 1000
 SECTION_GROUPS = [
     ("method", ("method", "methodology", "approach", "framework", "system design")),
     ("results", ("experiment", "experiments", "evaluation", "results", "empirical study")),
@@ -126,6 +128,18 @@ class PaperRow:
 
 class LlmServerError(RuntimeError):
     """The local llama.cpp server cannot complete requests."""
+
+
+class LlmRequestError(RuntimeError):
+    """A single inference request was rejected and the batch may continue."""
+
+
+@dataclass(frozen=True)
+class LlmResponse:
+    content: str
+    finish_reason: str | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
 
 
 class SummaryClient(SupabaseRestClient):
@@ -229,7 +243,7 @@ def select_pdf_text(text: str, max_chars: int, strategy: str) -> tuple[str, list
 
 def fetch_pdf_text(arxiv_id: str, max_chars: int, strategy: str) -> str | None:
     try:
-        import fitz
+        import pymupdf
     except ImportError:
         print("  pymupdf not installed, install with: pip install pymupdf")
         return None
@@ -241,7 +255,7 @@ def fetch_pdf_text(arxiv_id: str, max_chars: int, strategy: str) -> str | None:
     with urllib.request.urlopen(request, timeout=120) as response:
         pdf_bytes = response.read()
 
-    doc = fitz.open(stream=io.BytesIO(pdf_bytes), filetype="pdf")
+    doc = pymupdf.open(stream=io.BytesIO(pdf_bytes), filetype="pdf")
     page_count = len(doc)
     text = "\n\n".join(page.get_text() for page in doc)
     doc.close()
@@ -255,21 +269,180 @@ def fetch_pdf_text(arxiv_id: str, max_chars: int, strategy: str) -> str | None:
     return selected
 
 
-def call_llm(
+def build_messages(
     title: str,
     text: str,
-    max_tokens: int = 1024,
     correction: str | None = None,
-) -> str:
+) -> list[dict[str, str]]:
     user_content = f"Paper title: {title}\n\n{text}"
     if correction:
         user_content += f"\n\nMandatory correction: {correction}"
-    messages = [
+    return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
     ]
 
-    payload = json.dumps({
+
+def http_error_detail(error: urllib.error.HTTPError) -> str:
+    try:
+        body = json.loads(error.read().decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return str(error)
+
+    detail = body.get("error", body) if isinstance(body, dict) else body
+    if isinstance(detail, dict):
+        message = detail.get("message")
+        error_type = detail.get("type")
+        if message:
+            return f"HTTP {error.code}: {message}" + (
+                f" ({error_type})" if error_type else ""
+            )
+    return str(error)
+
+
+def request_json(
+    path: str,
+    payload: dict[str, Any] | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        f"{LLAMA_CPP_BASE}{path}",
+        data=data,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = http_error_detail(error)
+        if error.code in {400, 413, 422}:
+            raise LlmRequestError(f"Local llama.cpp rejected request: {detail}") from error
+        raise LlmServerError(f"Local llama.cpp request failed: {detail}") from error
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise LlmServerError(f"Local llama.cpp request failed: {error}") from error
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise LlmServerError("Local llama.cpp returned an invalid JSON envelope") from error
+
+    if not isinstance(body, dict):
+        raise LlmServerError("Local llama.cpp returned a non-object JSON envelope")
+    return body
+
+
+def get_context_size() -> int:
+    body = request_json("/props")
+    settings = body.get("default_generation_settings", {})
+    context_size = settings.get("n_ctx") if isinstance(settings, dict) else None
+    if not isinstance(context_size, int) or context_size <= 0:
+        raise LlmServerError("Local llama.cpp /props did not report a valid context size")
+    return context_size
+
+
+def count_prompt_tokens(messages: list[dict[str, str]]) -> int:
+    templated = request_json("/apply-template", {"messages": messages})
+    prompt = templated.get("prompt")
+    if not isinstance(prompt, str):
+        raise LlmServerError("Local llama.cpp /apply-template did not return a prompt")
+
+    tokenized = request_json(
+        "/tokenize",
+        {"content": prompt, "add_special": False, "parse_special": True},
+    )
+    tokens = tokenized.get("tokens")
+    if not isinstance(tokens, list):
+        raise LlmServerError("Local llama.cpp /tokenize did not return tokens")
+    return len(tokens)
+
+
+def shrink_excerpt(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+
+    chunks = re.findall(r"(?ms)^\[[A-Z]+\]\n.*?(?=^\[[A-Z]+\]\n|\Z)", text)
+    if len(chunks) < 2:
+        return text[:max_chars]
+
+    headings_and_bodies: list[tuple[str, str]] = []
+    for chunk in chunks:
+        heading, _, body = chunk.partition("\n")
+        headings_and_bodies.append((heading, body.rstrip()))
+
+    overhead = sum(len(heading) + 1 for heading, _ in headings_and_bodies)
+    overhead += 2 * (len(headings_and_bodies) - 1)
+    body_budget = max(0, max_chars - overhead)
+    total_body_chars = sum(len(body) for _, body in headings_and_bodies)
+    if total_body_chars == 0:
+        return text[:max_chars]
+
+    remaining = body_budget
+    shortened: list[str] = []
+    for index, (heading, body) in enumerate(headings_and_bodies):
+        if index == len(headings_and_bodies) - 1:
+            allocation = remaining
+        else:
+            allocation = body_budget * len(body) // total_body_chars
+            remaining -= allocation
+        shortened.append(f"{heading}\n{body[:allocation]}")
+    return "\n\n".join(shortened)[:max_chars]
+
+
+def fit_text_to_context(
+    title: str,
+    text: str,
+    context_size: int,
+    max_tokens: int,
+    context_margin: int,
+) -> tuple[str, int]:
+    prompt_budget = context_size - max_tokens - context_margin
+    if prompt_budget <= 0:
+        raise LlmRequestError(
+            f"Output budget ({max_tokens}) plus context margin ({context_margin}) "
+            f"does not fit the server context ({context_size})"
+        )
+
+    counts: dict[int, int] = {}
+
+    def count_for(char_limit: int) -> int:
+        if char_limit not in counts:
+            candidate = shrink_excerpt(text, char_limit)
+            counts[char_limit] = count_prompt_tokens(build_messages(title, candidate))
+        return counts[char_limit]
+
+    full_chars = len(text)
+    full_tokens = count_for(full_chars)
+    if full_tokens <= prompt_budget:
+        return text, full_tokens
+
+    minimum = min(MIN_CONTENT_CHARS, full_chars)
+    minimum_tokens = count_for(minimum)
+    if minimum_tokens > prompt_budget:
+        raise LlmRequestError(
+            f"Prompt needs {minimum_tokens} tokens even after reducing paper content "
+            f"to {minimum} characters; budget is {prompt_budget}"
+        )
+
+    low = minimum
+    high = full_chars - 1
+    best_chars = minimum
+    best_tokens = minimum_tokens
+    while low <= high:
+        midpoint = (low + high) // 2
+        tokens = count_for(midpoint)
+        if tokens <= prompt_budget:
+            best_chars = midpoint
+            best_tokens = tokens
+            low = midpoint + 1
+        else:
+            high = midpoint - 1
+
+    return shrink_excerpt(text, best_chars), best_tokens
+
+
+def completion_payload(
+    messages: list[dict[str, str]],
+    max_tokens: int,
+) -> dict[str, Any]:
+    return {
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": 0.3,
@@ -282,24 +455,65 @@ def call_llm(
                 "schema": SUMMARY_JSON_SCHEMA,
             },
         },
-    }).encode("utf-8")
+    }
 
-    request = urllib.request.Request(
-        f"{LLAMA_CPP_BASE}/v1/chat/completions",
-        data=payload,
-        headers={"Content-Type": "application/json"},
+
+def request_completion(
+    messages: list[dict[str, str]],
+    max_tokens: int,
+) -> LlmResponse:
+    body = request_json(
+        "/v1/chat/completions",
+        completion_payload(messages, max_tokens),
+        timeout=300,
+    )
+    choice = body.get("choices", [{}])[0]
+    result = choice.get("message", {}).get("content", "")
+    if not result:
+        raise RuntimeError("Empty response from LLM")
+    usage = body.get("usage", {})
+    return LlmResponse(
+        content=result,
+        finish_reason=choice.get("finish_reason"),
+        prompt_tokens=usage.get("prompt_tokens"),
+        completion_tokens=usage.get("completion_tokens"),
     )
 
-    try:
-        with urllib.request.urlopen(request, timeout=300) as response:
-            body = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as error:
-        raise LlmServerError(f"Local llama.cpp request failed: {error}") from error
 
-    result = body.get("choices", [{}])[0].get("message", {}).get("content", "")
-    if not result:
-        raise RuntimeError(f"Empty response from LLM: {json.dumps(body)}")
-    return result
+def call_llm(
+    title: str,
+    text: str,
+    max_tokens: int = 1024,
+    correction: str | None = None,
+) -> LlmResponse:
+    return request_completion(build_messages(title, text, correction), max_tokens)
+
+
+def correct_llm_response(
+    previous_json: str,
+    validation_error: str,
+    max_tokens: int,
+) -> LlmResponse:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You edit an existing research summary JSON object. Preserve its supported facts, "
+                "names, comparisons, and numbers. Fix only the stated validation problem. Do not "
+                "add facts. Keep the same four fields and output only the complete JSON object."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Validation problem: {validation_error}\n\n"
+                "Replace equations, LaTeX, backslash commands, dollar delimiters, and symbolic "
+                "complexity notation such as O(...) with plain English.\n\n"
+                f"JSON to edit:\n{previous_json}"
+            ),
+        },
+    ]
+    return request_completion(messages, max_tokens)
 
 
 def extract_json(raw: str) -> dict[str, Any]:
@@ -421,13 +635,21 @@ def main() -> None:
     parser.add_argument("--pdf-strategy", choices=("sections", "first"), default="sections",
                         help="Select representative sections or only the PDF beginning (default: sections)")
     parser.add_argument("--debug", action="store_true", help="Print raw LLM response on failure")
-    parser.add_argument("--max-tokens", type=int, default=2048,
-                        help="Max output tokens for LLM (default: 2048)")
+    parser.add_argument("--max-tokens", type=int, default=1024,
+                        help="Max output tokens for LLM (default: 1024)")
+    parser.add_argument("--context-margin", type=int, default=DEFAULT_CONTEXT_MARGIN,
+                        help=f"Unused context tokens kept as a safety margin (default: {DEFAULT_CONTEXT_MARGIN})")
     parser.add_argument("--delay", type=float, default=1.0,
                         help="Delay in seconds between LLM calls (default: 1)")
     parser.add_argument("--report", type=Path,
                         help="Atomically checkpoint a secret-free JSON run report")
     args = parser.parse_args()
+    if args.max_tokens <= 0:
+        parser.error("--max-tokens must be greater than zero")
+    if args.context_margin < 0:
+        parser.error("--context-margin must be zero or greater")
+    if args.pdf_chars < 0:
+        parser.error("--pdf-chars must be zero or greater")
 
     client = SummaryClient()
     papers = client.select_papers(
@@ -449,6 +671,18 @@ def main() -> None:
         print(json.dumps({"mode": "write", "generated": 0}))
         return
 
+    context_size = get_context_size()
+    prompt_budget = context_size - args.max_tokens - args.context_margin
+    if prompt_budget <= 0:
+        parser.error(
+            f"--max-tokens ({args.max_tokens}) plus --context-margin "
+            f"({args.context_margin}) must be smaller than the server context ({context_size})"
+        )
+    print(
+        f"Local context: {context_size} tokens; prompt budget: {prompt_budget}; "
+        f"output budget: {args.max_tokens}; margin: {args.context_margin}"
+    )
+
     model_label = os.getenv("LLAMA_CPP_MODEL_LABEL", "local-llama.cpp")
     run_started_at = utc_now()
 
@@ -468,6 +702,8 @@ def main() -> None:
             "status": status,
             "mode": "no-write" if args.no_write else "write",
             "model": model_label,
+            "context_size": context_size,
+            "prompt_budget": prompt_budget,
             "started_at": run_started_at,
             "updated_at": utc_now(),
             "selected": len(papers),
@@ -502,38 +738,58 @@ def main() -> None:
                 else:
                     print(f"  PDF too short or failed, falling back to abstract")
 
-            summary: dict[str, Any] | None = None
-            for attempt in range(2):
-                inference_started_at = time.perf_counter()
-                raw = call_llm(
-                    paper.title,
-                    content,
-                    max_tokens=args.max_tokens,
-                    correction=(
-                        "Rewrite all four fields without dollar delimiters, backslash commands, "
-                        "equations, or symbolic complexity expressions. Explain the result only "
-                        "in plain English."
-                        if attempt == 1 else None
-                    ),
+            original_chars = len(content)
+            content, prompt_tokens = fit_text_to_context(
+                paper.title,
+                content,
+                context_size,
+                args.max_tokens,
+                args.context_margin,
+            )
+            if len(content) < original_chars:
+                print(
+                    f"  Context fit: reduced input from {original_chars} to {len(content)} "
+                    f"chars; prompt uses {prompt_tokens}/{prompt_budget} tokens"
                 )
+            else:
+                print(f"  Context fit: prompt uses {prompt_tokens}/{prompt_budget} tokens")
+
+            inference_started_at = time.perf_counter()
+            response = call_llm(paper.title, content, max_tokens=args.max_tokens)
+            duration = time.perf_counter() - inference_started_at
+            durations.append(duration)
+            raw = response.content
+            if duration > SLOW_LLM_SECONDS:
+                print(
+                    f"  WARNING: local inference took {duration:.1f}s "
+                    f"(threshold {SLOW_LLM_SECONDS}s)"
+                )
+            if response.finish_reason == "length":
+                raise ValueError(
+                    "LLM response was truncated at the context/output limit "
+                    f"(prompt={response.prompt_tokens}, completion={response.completion_tokens})"
+                )
+
+            summary = extract_json(raw)
+            try:
+                validate_summary(summary)
+            except ValueError as validation_error:
+                if "forbidden mathematical" not in str(validation_error):
+                    raise
+                print("  Retrying once by editing the previous JSON to remove mathematical notation")
+                inference_started_at = time.perf_counter()
+                response = correct_llm_response(raw, str(validation_error), args.max_tokens)
                 duration = time.perf_counter() - inference_started_at
                 durations.append(duration)
-                if duration > SLOW_LLM_SECONDS:
-                    print(
-                        f"  WARNING: local inference took {duration:.1f}s "
-                        f"(threshold {SLOW_LLM_SECONDS}s)"
+                raw = response.content
+                if response.finish_reason == "length":
+                    raise ValueError(
+                        "Corrected LLM response was truncated at the context/output limit "
+                        f"(prompt={response.prompt_tokens}, completion={response.completion_tokens})"
                     )
                 summary = extract_json(raw)
-                try:
-                    validate_summary(summary)
-                    break
-                except ValueError as validation_error:
-                    if attempt == 0 and "forbidden mathematical" in str(validation_error):
-                        print("  Retrying once to remove mathematical notation")
-                        continue
-                    raise
-            if summary is None:
-                raise RuntimeError("No summary generated")
+                validate_summary(summary)
+
             if args.no_write:
                 print(f"  OK [{source}] generated in {durations[-1]:.1f}s (not written)")
                 print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -564,6 +820,8 @@ def main() -> None:
     result = {
         "mode": "no-write" if args.no_write else "write",
         "model": model_label,
+        "context_size": context_size,
+        "prompt_budget": prompt_budget,
         "generated": generated,
         "errors": errors,
         "skipped_existing": skipped_existing,
