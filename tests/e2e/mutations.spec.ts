@@ -613,6 +613,89 @@ test.describe("playlist authorization", () => {
     await expect(dialog).toHaveCount(0);
   });
 
+  test("discards stale playlist options after close and reopen", async ({
+    page,
+  }) => {
+    test.skip(!devAuthEnabled, "Requires dev auth.");
+    test.skip(!hasDb, "Requires DATABASE_URL.");
+    test.skip(!pickerPaperId, "Picker setup is required.");
+
+    const paperId = pickerPaperId!;
+    let requestCount = 0;
+    let releaseFirstRequest!: () => void;
+    let finishFirstRequest!: () => void;
+    const firstRequestRelease = new Promise<void>((resolve) => {
+      releaseFirstRequest = resolve;
+    });
+    const firstRequestFinished = new Promise<void>((resolve) => {
+      finishFirstRequest = resolve;
+    });
+
+    await page.route(`**/api/papers/${paperId}/playlists`, async (route) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        await firstRequestRelease;
+        try {
+          await route.fulfill({
+            contentType: "application/json",
+            json: {
+              items: [
+                {
+                  id: "11111111-1111-4111-8111-111111111111",
+                  isDefault: false,
+                  name: "Stale playlist",
+                  selected: false,
+                },
+              ],
+            },
+          });
+        } catch {
+          // The browser may already have canceled the request on close.
+        } finally {
+          finishFirstRequest();
+        }
+        return;
+      }
+
+      await route.fulfill({
+        contentType: "application/json",
+        json: {
+          items: [
+            {
+              id: "22222222-2222-4222-8222-222222222222",
+              isDefault: false,
+              name: "Fresh playlist",
+              selected: false,
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto(`/papers/${paperId}`);
+    const pickerButton = page.getByRole("button", {
+      name: /^(Save to playlist|Saved)$/,
+    });
+    await pickerButton.click();
+    const dialog = page.getByRole("dialog", { name: "Save to playlists" });
+    await expect(dialog).toBeVisible();
+    await expect.poll(() => requestCount).toBe(1);
+
+    await dialog
+      .getByRole("button", { name: "Close playlist picker" })
+      .click();
+    await expect(dialog).toHaveCount(0);
+    await pickerButton.click();
+    await expect(dialog.getByText("Fresh playlist", { exact: true })).toBeVisible();
+
+    releaseFirstRequest();
+    await firstRequestFinished;
+    await expect(dialog.getByText("Stale playlist", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(dialog.getByText("Fresh playlist", { exact: true })).toBeVisible();
+  });
+
   test("uses explicit playlist editing and opens the whole paper row", async ({
     page,
   }) => {

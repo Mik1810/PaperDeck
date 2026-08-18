@@ -1,13 +1,23 @@
+import { z } from "zod";
+
 export type DeckMutationAction =
   | "dismiss"
   | "favorite"
   | "open_detail"
   | "read_later";
 
-type DeckMutationPayload = {
-  error?: string;
-  ok?: boolean;
-};
+const deckMutationPayloadSchema = z.discriminatedUnion("ok", [
+  z.object({
+    action: z.enum(["dismiss", "favorite", "open_detail", "read_later"]),
+    ok: z.literal(true),
+  }),
+  z.object({
+    error: z.string().optional(),
+    ok: z.literal(false),
+  }),
+]);
+
+type DeckMutationPayload = z.infer<typeof deckMutationPayloadSchema>;
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -35,16 +45,13 @@ type RecommendationImpressionPayload = {
   recommendationImpressionId?: string;
 };
 
-function isDeckMutationPayload(value: unknown): value is DeckMutationPayload {
-  return typeof value === "object" && value !== null;
-}
-
 async function readDeckMutationPayload(
   response: Response,
 ): Promise<DeckMutationPayload | null> {
   try {
     const payload = (await response.json()) as unknown;
-    return isDeckMutationPayload(payload) ? payload : null;
+    const parsed = deckMutationPayloadSchema.safeParse(payload);
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -82,8 +89,12 @@ export async function submitDeckAction(
   });
   const payload = await readDeckMutationPayload(response);
 
-  if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.error ?? `Deck action failed: ${action}`);
+  if (!response.ok || payload?.ok !== true || payload.action !== action) {
+    throw new Error(
+      payload?.ok === false && payload.error
+        ? payload.error
+        : `Deck action failed: ${action}`,
+    );
   }
 }
 
