@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as delay } from "node:timers/promises";
+import { loadEnvConfig } from "@next/env";
 import postgres, { type Sql } from "postgres";
 import {
   pruneExpiredRecommendationAnalytics,
   type RecommendationAnalyticsBatch,
 } from "./lib/recommendation-analytics-retention";
 import { assertDisposableLocalDatabase } from "./local-database";
+
+loadEnvConfig(process.cwd());
 
 const DEFAULT_DATABASE_URL =
   "postgresql://paperdeck:paperdeck_local_only@127.0.0.1:55432/paperdeck_test";

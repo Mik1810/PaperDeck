@@ -6,8 +6,20 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Added one guarded `benchmark:scale` entry point for the main Library,
+  research-group, catalog-search, profile-input, and recommendation-retention
+  capacity paths. Profile refresh now has 10/100/1,000-saved-paper baselines
+  covering SQL/server p50/p95, query and row counts, response bytes, and pool
+  occupancy/wait evidence; the benchmark guide documents comparison policy and
+  historical baselines.
+
 ### Fixed
 
+- Made the recommendation-retention benchmark load the repository environment
+  before resolving its disposable database URL, so the complete scale suite
+  follows the current Docker-published test endpoint instead of a stale default.
 - Bounded application database statements to 15 seconds with an 18-second
   client fail-safe, without applying those runtime limits to administrative
   maintenance connections. Slow queries, timeout cancellations, and contended
