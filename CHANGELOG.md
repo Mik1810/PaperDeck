@@ -8,6 +8,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Reduced repeated LaTeX rendering work in paper cards. Plain text now bypasses
+  delimiter parsing, stable `MathContent` props skip unrelated React rerenders,
+  and a repeatable no-math/light-math/math-heavy benchmark guards the fast path.
 - Made local llama.cpp summary generation fit the active context using the
   server's chat template and tokenizer, reserve JSON output space, expose useful
   HTTP/context diagnostics, edit invalid mathematical notation through a short

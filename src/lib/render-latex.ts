@@ -14,6 +14,10 @@ const mathDelimiters: MathDelimiter[] = [
 ];
 
 export function renderLatex(text: string): string {
+  if (!hasPotentialMath(text)) {
+    return escapeHtml(text);
+  }
+
   const parts: string[] = [];
   let plainText = "";
   let cursor = 0;
@@ -69,6 +73,12 @@ export function renderLatex(text: string): string {
 
   flushPlainText();
   return parts.join("");
+}
+
+function hasPotentialMath(text: string) {
+  return (
+    text.includes("$") || text.includes("\\(") || text.includes("\\[")
+  );
 }
 
 function findUnescapedDelimiter(
