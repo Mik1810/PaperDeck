@@ -3,7 +3,7 @@ export type RevisionCursorLike = {
   last_seen_updated_at: string | null;
 };
 
-type RevisionPaperLike = {
+export type RevisionPaperLike = {
   arxivId: string;
   updatedAt: string;
 };
@@ -24,6 +24,82 @@ const transientDatabaseCodes = new Set([
   "PGRST002",
   "PGRST003",
 ]);
+
+export const MAX_REVISION_CATCH_UP_PAGES = 500;
+
+export function nextRevisionPageBudget(
+  configuredPages: number,
+  storedProgress: string | null | undefined,
+  maximumPages = MAX_REVISION_CATCH_UP_PAGES,
+) {
+  const previousPages = Number(storedProgress);
+  if (!Number.isInteger(previousPages) || previousPages < configuredPages) {
+    return configuredPages;
+  }
+
+  return Math.min(maximumPages, previousPages * 2);
+}
+
+export async function collectRevisionPages<T extends RevisionPaperLike>({
+  configuredPages,
+  cursor,
+  fetchPage,
+  maxResults,
+  storedProgress,
+}: {
+  configuredPages: number;
+  cursor: RevisionCursorLike | null;
+  fetchPage: (page: number) => Promise<T[]>;
+  maxResults: number;
+  storedProgress: string | null | undefined;
+}) {
+  const fetchedPapers: T[] = [];
+  const importablePapers: T[] = [];
+  const pageBudget = nextRevisionPageBudget(configuredPages, storedProgress);
+
+  for (let page = 0; page < pageBudget; page += 1) {
+    const pagePapers = await fetchPage(page);
+    fetchedPapers.push(...pagePapers);
+    importablePapers.push(
+      ...pagePapers.filter((paper) => isAfterRevisionCursor(paper, cursor)),
+    );
+
+    if (
+      !cursor?.last_seen_updated_at ||
+      pagePapers.length < maxResults ||
+      hasPassedRevisionCursorTimestamp(pagePapers, cursor)
+    ) {
+      return {
+        fetchedPapers,
+        importablePapers,
+        pageBudget,
+        revisionComplete: true,
+      };
+    }
+  }
+
+  return {
+    fetchedPapers,
+    importablePapers,
+    pageBudget,
+    revisionComplete: false,
+  };
+}
+
+export function revisionCatchUpCheckpoint(
+  cursor: RevisionCursorLike | null,
+  pageBudget: number,
+) {
+  if (!cursor?.last_seen_updated_at) {
+    throw new Error("A revision cursor is required to checkpoint catch-up");
+  }
+
+  return {
+    cursorValue: String(pageBudget),
+    lastSeenExternalId: cursor.last_seen_external_id,
+    lastSeenUpdatedAt: cursor.last_seen_updated_at,
+  };
+}
 
 export function parseBoundedPositiveInteger(
   value: number,

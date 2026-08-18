@@ -8,6 +8,10 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made arXiv revision catch-up resumable when a category exceeds its baseline
+  page budget. Partial sweeps now import the safe fetched prefix, preserve the
+  revision cursor, and exponentially expand the next scan instead of failing
+  every daily run and blocking new-publication ingestion.
 - Consolidated every private-playlist membership mutation behind one
   owner-scoped transaction. Quick Read later saves, the multi-playlist picker,
   Library removal, inline playlist creation, and group private saves now share

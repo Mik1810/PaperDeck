@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  collectRevisionPages,
   createRequestRateGate,
   hasPassedRevisionCursorTimestamp,
   isAfterRevisionCursor,
   mapWithConcurrency,
+  nextRevisionPageBudget,
   parseIntegerInRange,
+  revisionCatchUpCheckpoint,
   withWholePaperRetry,
 } from "../../scripts/lib/arxiv-ingestion";
 
@@ -88,6 +91,66 @@ test("revision cursor uses the updated timestamp and arXiv id tie-breaker", () =
     ),
     true,
   );
+});
+
+test("revision catch-up expands its bounded scan and resumes without cursor gaps", async () => {
+  const cursor = {
+    last_seen_external_id: "2401.00001",
+    last_seen_updated_at: "2026-08-01T00:00:00.000Z",
+  };
+  const pages = [
+    [
+      { arxivId: "2608.00004", updatedAt: "2026-08-04T00:00:00.000Z" },
+      { arxivId: "2608.00003", updatedAt: "2026-08-03T00:00:00.000Z" },
+    ],
+    [
+      { arxivId: "2608.00002", updatedAt: "2026-08-02T00:00:00.000Z" },
+      { arxivId: "2608.00001", updatedAt: "2026-08-01T12:00:00.000Z" },
+    ],
+    [
+      { arxivId: "2401.00001", updatedAt: "2026-08-01T00:00:00.000Z" },
+      { arxivId: "2312.99999", updatedAt: "2026-07-31T00:00:00.000Z" },
+    ],
+  ];
+
+  const firstRun = await collectRevisionPages({
+    configuredPages: 2,
+    cursor,
+    fetchPage: async (page) => pages[page] ?? [],
+    maxResults: 2,
+    storedProgress: null,
+  });
+  assert.equal(firstRun.revisionComplete, false);
+  assert.equal(firstRun.pageBudget, 2);
+  assert.equal(firstRun.importablePapers.length, 4);
+  assert.deepEqual(revisionCatchUpCheckpoint(cursor, firstRun.pageBudget), {
+    cursorValue: "2",
+    lastSeenExternalId: "2401.00001",
+    lastSeenUpdatedAt: "2026-08-01T00:00:00.000Z",
+  });
+
+  const fetchedPages: number[] = [];
+  const resumedRun = await collectRevisionPages({
+    configuredPages: 2,
+    cursor,
+    fetchPage: async (page) => {
+      fetchedPages.push(page);
+      return pages[page] ?? [];
+    },
+    maxResults: 2,
+    storedProgress: String(firstRun.pageBudget),
+  });
+  assert.equal(resumedRun.revisionComplete, true);
+  assert.equal(resumedRun.pageBudget, 4);
+  assert.deepEqual(fetchedPages, [0, 1, 2]);
+  assert.equal(resumedRun.importablePapers.length, 4);
+});
+
+test("revision catch-up ignores legacy cursor values and caps exponential growth", () => {
+  assert.equal(nextRevisionPageBudget(10, "2026-08-12T17:58:33Z"), 10);
+  assert.equal(nextRevisionPageBudget(10, "10"), 20);
+  assert.equal(nextRevisionPageBudget(10, "400"), 500);
+  assert.equal(nextRevisionPageBudget(10, "500"), 500);
 });
 
 test("database work is bounded while preserving result order", async () => {

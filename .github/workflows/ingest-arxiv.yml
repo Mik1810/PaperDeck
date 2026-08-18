@@ -137,6 +137,10 @@ jobs:
               return f"**{n}**" if isinstance(n, (int, float)) and n > 0 else "0"
 
           breakdown = data.get("categoryBreakdown") or []
+          incomplete_revisions = [
+              item for item in breakdown
+              if item.get("path") == "revision" and item.get("revisionComplete") is False
+          ]
           lines = [
               f"## arXiv Ingestion · {mode}",
               "",
@@ -152,6 +156,29 @@ jobs:
 
           importable = data.get("importable", data.get("imported"))
           lines += ["", f"**Total:** fetched **{data.get('fetched')}**, importable **{importable}**", ""]
+
+          if incomplete_revisions:
+              at_hard_limit = any(
+                  item.get("revisionAtHardLimit") is True
+                  for item in incomplete_revisions
+              )
+              lines += [
+                  "### ⚠️ Revision catch-up in progress",
+                  "",
+                  (
+                      "The 500-page safety limit was reached; the cursor remains safe, but operator review is required."
+                      if at_hard_limit
+                      else "The stored revision cursor was preserved; the next run will expand the scan safely."
+                  ),
+                  "",
+                  "| Category | Pages scanned |",
+                  "|----------|--------------:|",
+              ]
+              for item in incomplete_revisions:
+                  lines.append(
+                      f"| {item.get('category')} | {item.get('revisionPageBudget')} |"
+                  )
+              lines.append("")
 
           if data.get("firstPaper"):
               lines.append(f"First paper: `{data['firstPaper']}`")
