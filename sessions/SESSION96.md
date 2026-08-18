@@ -22,14 +22,17 @@
   author/topic query shapes over 50 papers for 30 measured runs.
 - The benchmark reports p50/p95 latency, row-count parity, and relative change
   under a three-connection `pg` pool.
-- The benchmark could not produce measurements in this session because the
-  Docker daemon and `127.0.0.1:55432` disposable PostgreSQL endpoint were
-  unavailable. No hosted or unrelated local database was used as a fallback.
+- The serial shape measured 0.87 ms p50 and 1.05 ms p95. The parallel shape
+  measured 0.50 ms p50 and 0.69 ms p95: improvements of 42.5% and 34.3%,
+  respectively, with identical 50-author and 50-topic row counts.
+- Windows reserved the default `55432` port, so the disposable container was
+  run on unreserved port `55532`. No hosted or unrelated local database was
+  read or mutated.
 
 ### Validation
 
 - Focused catalog hydration/search unit tests: 6 passed.
 - Focused ESLint passed.
 - TypeScript typecheck passed.
-- Benchmark launch reached the guarded local endpoint and failed with
-  `ECONNREFUSED 127.0.0.1:55432`, recording the environment blocker above.
+- `npm run benchmark:paper-hydration` passed against the disposable synthetic
+  database after all 35 ordered migrations were applied.
