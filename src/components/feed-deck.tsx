@@ -321,6 +321,7 @@ export function FeedDeck({
                   style={style}
                 >
                   <PaperCard
+                    elevated={false}
                     isFavorite={favoriteIds.has(paper.id)}
                     isSaved={readLaterIds.has(paper.id)}
                     paper={paper}

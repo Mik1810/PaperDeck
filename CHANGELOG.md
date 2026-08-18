@@ -17,6 +17,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Softened the active feed card elevation and removed the duplicate shadow from
+  stacked preview cards, preventing the deck from rendering a broad gray band
+  along the card edge on mobile.
 - Made the recommendation-retention benchmark load the repository environment
   before resolving its disposable database URL, so the complete scale suite
   follows the current Docker-published test endpoint instead of a stale default.
