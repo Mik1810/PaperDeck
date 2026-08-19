@@ -113,7 +113,7 @@ function scheduleProfileEmbeddingRefresh(ownerId: string) {
     try {
       await refreshUserProfileEmbedding(ownerId);
     } catch (error) {
-      logger.error("user_profile_embedding_refresh_failed", { ownerId, error });
+      logger.error("user_profile_embedding_refresh_failed", { error });
     }
   });
 }
@@ -1016,7 +1016,6 @@ export async function preloadInitialFeedRecommendations(ownerId: string) {
   );
 
   logger.info("initial_feed_preload", {
-    ownerId,
     totalMs: Math.round(performance.now() - startedAt),
     timings,
     rankedCount: liveFeed.rankedPapers.length,
@@ -1157,7 +1156,6 @@ export async function getFeedPageData(ownerId: string) {
         await cacheLiveRecommendationBatch(ownerId, feedData.liveBatchToCache);
       } catch (error) {
         logger.error("live_feed_recommendation_cache_failed", {
-          ownerId,
           error,
         });
       }
@@ -1165,13 +1163,11 @@ export async function getFeedPageData(ownerId: string) {
   }
 
   logger.info("feed_timing", {
-    ownerId,
     totalMs: Math.round(performance.now() - startedAt),
     source: feedData.source,
     candidateSourceCounts,
     timings,
     rankedCount: rankedPapers.length,
-    recommendationDeliveryBatchId: deliveryBatch.batchId,
     recommendationBatchItemCount: deliveryBatch.batchItemIdsByPaperId.size,
   });
 

@@ -42,9 +42,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logger.error("recommendation_impression_record_failed", {
-      ownerId,
-      paperId,
-      recommendationBatchItemId,
       error,
     });
 

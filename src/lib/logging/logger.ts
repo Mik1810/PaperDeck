@@ -1,8 +1,43 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 type LogFields = Record<string, unknown>;
+
+// New operational fields must be explicitly reviewed before they can reach logs.
+const scalarFieldNames = new Set([
+  "action",
+  "durationMs",
+  "outcome",
+  "poolIdle",
+  "poolTotal",
+  "poolWaiting",
+  "profileEmbeddingReason",
+  "profileEmbeddingStatus",
+  "profileEmbeddingVectorCount",
+  "rankedCount",
+  "recommendationBatchItemCount",
+  "recommendationStoredCount",
+  "saturatedAtStart",
+  "source",
+  "statementTimeoutMs",
+  "storedCount",
+  "totalMs",
+  "waitMs",
+]);
+
+const semanticFieldNames = new Set([
+  "candidateCount",
+  "catalogFillCount",
+  "fallbackReason",
+  "matchedCount",
+  "model",
+  "requestedCount",
+  "rpcAttempted",
+  "used",
+]);
 
 const levelWeights: Record<LogLevel, number> = {
   debug: 10,
@@ -30,16 +65,86 @@ function shouldLog(level: LogLevel) {
   return levelWeights[level] >= levelWeights[configuredLevel()];
 }
 
-function serializeError(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    };
+function safeScalar(value: unknown) {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
+function safeNumberRecord(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
   }
 
-  return { message: String(error) };
+  const entries = Object.entries(value).filter(
+    ([key, entry]) =>
+      /^[a-z][a-z0-9_]{0,63}$/i.test(key) &&
+      typeof entry === "number" &&
+      Number.isFinite(entry),
+  );
+  return Object.fromEntries(entries);
+}
+
+function safeSemanticFields(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, entry]) => {
+      const scalar = semanticFieldNames.has(key) ? safeScalar(entry) : undefined;
+      return scalar === undefined ? [] : [[key, scalar]];
+    }),
+  );
+}
+
+function sanitizeFields(fields: LogFields) {
+  const sanitized: LogFields = {};
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (scalarFieldNames.has(key)) {
+      const scalar = safeScalar(value);
+      if (scalar !== undefined) sanitized[key] = scalar;
+      continue;
+    }
+    if (key === "timings" || key === "candidateSourceCounts") {
+      const record = safeNumberRecord(value);
+      if (record !== undefined) sanitized[key] = record;
+      continue;
+    }
+    if (key === "semantic") {
+      const semantic = safeSemanticFields(value);
+      if (semantic !== undefined) sanitized[key] = semantic;
+    }
+  }
+
+  return sanitized;
+}
+
+function errorType(error: Error) {
+  if (error instanceof TypeError) return "TypeError";
+  if (error instanceof RangeError) return "RangeError";
+  if (error instanceof SyntaxError) return "SyntaxError";
+  if (error instanceof ReferenceError) return "ReferenceError";
+  return "Error";
+}
+
+function serializeError(error: unknown) {
+  if (!(error instanceof Error)) return { type: "UnknownError" };
+
+  const code = "code" in error ? error.code : undefined;
+  return {
+    type: errorType(error),
+    ...(typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)
+      ? { code }
+      : {}),
+  };
 }
 
 function writeLog(level: LogLevel, event: string, fields: LogFields = {}) {
@@ -52,7 +157,8 @@ function writeLog(level: LogLevel, event: string, fields: LogFields = {}) {
     timestamp: new Date().toISOString(),
     level,
     event,
-    ...rest,
+    eventId: randomUUID(),
+    ...sanitizeFields(rest),
     ...(error === undefined ? {} : { error: serializeError(error) }),
   };
 

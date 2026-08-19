@@ -51,6 +51,20 @@ owner identifiers, email addresses, hashes, payloads, tokens, or secrets.
 
 The live Clerk cache smoke is intentionally separate from default App CI. It uses only Clerk Development users configured through local environment variables, never logs their email addresses, stores no passwords or tokens, disables Playwright screenshots/traces/video, and performs exact server-only cleanup of its random playlist marker. Pre-existing Clerk sessions are snapshotted and excluded from cleanup.
 
+## Operational logging
+
+Structured application logs use a central allowlist. Stable owner, paper,
+recommendation-batch, invitation, email, token, hash, and equivalent identifiers
+must not be supplied as operational context. Every emitted line receives a fresh
+opaque event ID, while approved operation names, outcomes, bounded timings,
+counts, and pool diagnostics remain available for troubleshooting.
+
+Errors are reduced to a standard JavaScript error class and, when available, a
+five-character SQLSTATE code. Error messages, stacks, provider metadata, and
+unreviewed structured fields are not serialized in any environment. Adding a
+new logging field therefore requires extending the logger allowlist and its
+privacy regression tests.
+
 ## Research-Group Invitation Tokens
 
 Research-group invitations use 32 random bytes encoded as URL-safe text. The raw

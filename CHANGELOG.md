@@ -27,6 +27,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Prevented operational logs from correlating stable owner, paper, and
+  recommendation-batch identifiers with reading activity. Structured fields
+  now cross a central allowlist, errors retain only a safe class and optional
+  SQLSTATE code, and opaque event IDs preserve failure correlation without
+  serializing messages, stacks, tokens, hashes, or provider metadata.
 - Removed the paper-embedding worker's fixed oldest-first scan barrier. Missing
   vectors are now selected server-side, stale metadata is scanned in bounded
   pages without transferring vectors, progress output distinguishes a complete
