@@ -183,6 +183,8 @@ It:
 - inserts missing papers or updates matching `semantic_scholar_id`, `arxiv_id`, DOI, or normalized-title fallback rows;
 - marks imported and matched rows with `is_classic = true`;
 - links authors, curated CS topics, and external IDs;
+- commits each paper, its external IDs, ordered authors, and curated topics in one service-role-only database RPC;
+- retries transient database failures for the complete paper bundle, so a failed author or topic write leaves the prior paper state unchanged;
 - supports `--dry-run`, `--per-query=N`, `--max-new-per-query=N`, `--max-year=YYYY`, `--categories=cs.DB,cs.OS`, and `--only="query seed text"`. `--per-query` caps accepted candidates after title/citation/year guardrails.
 
 The category descriptions live with the arXiv category labels, while the classic discovery worker maps selected categories to query seeds and title guards. For example, `cs.OS` is represented by an operating-systems description plus seeds for Unix, kernels, virtual memory, and file systems. The category code remains the internal topic identifier; the description is what keeps the search profiles understandable and maintainable.

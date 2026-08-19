@@ -35,6 +35,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Made classic-paper persistence atomic per discovered paper. The monthly
+  Semantic Scholar worker now sends metadata, external IDs, ordered authors,
+  and curated topics through one service-role-only transaction; identity locks
+  prevent concurrent duplicate insertion, and transient retries repeat the
+  complete bundle instead of leaving partially updated catalog rows.
 - Ordered Clerk collaboration-identity updates by the upstream user version
   instead of webhook processing time. Stale and duplicate deliveries can no
   longer replace a newer exact-email hash, invalid identities retain their

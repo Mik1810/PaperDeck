@@ -5,6 +5,7 @@ import {
   arxivCategoryDescriptions,
   arxivCategoryLabels,
 } from "../src/lib/arxiv-categories";
+import { withWholePaperRetry } from "./lib/arxiv-ingestion";
 
 type DiscoveryQuerySeed = {
   query: string;
@@ -677,107 +678,6 @@ function plannedCandidate(
   };
 }
 
-async function writeExternalIds(
-  supabase: ReturnType<typeof createSupabaseClient>,
-  paperId: string,
-  paper: S2Paper,
-) {
-  const arxivId = normalizeArxivId(paper.externalIds?.ArXiv);
-  const doi = normalizeDoi(paper.externalIds?.DOI);
-  const rows = [
-    {
-      paper_id: paperId,
-      provider: "semantic_scholar",
-      external_id: paper.paperId,
-      url: paper.url ?? `https://www.semanticscholar.org/paper/${paper.paperId}`,
-    },
-    arxivId
-      ? {
-          paper_id: paperId,
-          provider: "arxiv",
-          external_id: arxivId,
-          url: `https://arxiv.org/abs/${arxivId}`,
-        }
-      : null,
-    doi
-      ? {
-          paper_id: paperId,
-          provider: "doi",
-          external_id: doi,
-          url: `https://doi.org/${doi}`,
-        }
-      : null,
-  ].filter((row): row is NonNullable<typeof row> => Boolean(row));
-
-  const { error } = await supabase
-    .from("paper_external_ids")
-    .upsert(rows, { onConflict: "paper_id,provider,external_id" });
-
-  if (error) {
-    throw error;
-  }
-}
-
-async function writeAuthors(
-  supabase: ReturnType<typeof createSupabaseClient>,
-  paperId: string,
-  authors: string[],
-) {
-  if (!authors.length) {
-    return;
-  }
-
-  const { error: deleteError } = await supabase
-    .from("paper_authors")
-    .delete()
-    .eq("paper_id", paperId);
-
-  if (deleteError) {
-    throw deleteError;
-  }
-
-  const { error } = await supabase.from("paper_authors").insert(
-    authors.map((name, position) => ({
-      paper_id: paperId,
-      name,
-      position,
-    })),
-  );
-
-  if (error) {
-    throw error;
-  }
-}
-
-async function writeTopics(
-  supabase: ReturnType<typeof createSupabaseClient>,
-  paperId: string,
-  profile: DiscoveryProfile,
-  topicIdsByCategory: Map<string, string>,
-) {
-  const rows = profile.topics
-    .map((category) => topicIdsByCategory.get(category))
-    .filter((topicId): topicId is string => Boolean(topicId))
-    .map((topicId) => ({
-      paper_id: paperId,
-      topic_id: topicId,
-      confidence: 0.85,
-      source: "classic_discovery",
-    }));
-
-  if (!rows.length) {
-    return;
-  }
-
-  const { error } = await supabase
-    .from("paper_topics")
-    .upsert(rows, { onConflict: "paper_id,topic_id", ignoreDuplicates: true });
-
-  if (error) {
-    throw error;
-  }
-}
-
 async function upsertPaper(
   supabase: ReturnType<typeof createSupabaseClient>,
   paper: S2Paper,
@@ -805,24 +705,30 @@ async function upsertPaper(
     access: arxivId || pdfUrl ? "open" : existing?.access ?? "unknown",
     is_classic: true,
   };
-  const { data: saved, error } = existing
-    ? await supabase
-        .from("papers")
-        .update(payload)
-        .eq("id", existing.id)
-        .select("id")
-        .single()
-    : await supabase.from("papers").insert(payload).select("id").single();
+  await withWholePaperRetry(async () => {
+    const { data, error } = await supabase.rpc("upsert_classic_paper_bundle", {
+      p_bundle: {
+        ...payload,
+        authors: paperAuthors(paper),
+        existing_paper_id: existing?.id ?? null,
+        semantic_scholar_url:
+          paper.url ?? `https://www.semanticscholar.org/paper/${paper.paperId}`,
+        title_fingerprint: titleFingerprint(paper.title),
+        topic_ids: [
+          ...new Set(
+            profile.topics
+              .map((category) => topicIdsByCategory.get(category))
+              .filter((topicId): topicId is string => Boolean(topicId)),
+          ),
+        ],
+      },
+    });
 
-  if (error) {
-    throw error;
-  }
-
-  const paperId = saved.id as string;
-
-  await writeExternalIds(supabase, paperId, paper);
-  await writeAuthors(supabase, paperId, paperAuthors(paper));
-  await writeTopics(supabase, paperId, profile, topicIdsByCategory);
+    if (error) throw error;
+    if (typeof data !== "string") {
+      throw new Error(`Missing saved paper row for ${paper.paperId}`);
+    }
+  });
 
   return existing ? "updated" : "inserted";
 }
