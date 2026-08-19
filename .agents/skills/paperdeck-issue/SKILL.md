@@ -22,7 +22,7 @@ Then read `PROJECT_STATE.md` by itself.
 Work in the current PaperDeck checkout. Do not create a separate worktree unless the user explicitly asks.
 
 If implementation requires changes:
-- use a dedicated issue branch;
+- after the planning gate is approved, use a dedicated issue branch;
 - do not use a `codex/` branch prefix;
 - if the checkout contains unrelated uncommitted changes, stop before branch-changing/stashing/discarding and report exactly what conflicts with the issue;
 - never manipulate unrelated user changes merely to continue.
@@ -31,15 +31,50 @@ Inspect only relevant `ROADMAP.md`/`docs/` sections when needed.
 Search before opening source files. Search historical sessions first; do not bulk-read them.
 Do not query `~/.codex/memories/MEMORY.md` for normal issue work; use repository-local context.
 
-## 2. Plan briefly
+## 2. Plan, present, and wait for approval
 
-State:
-- defect/goal;
-- why it matters;
-- minimal attack plan;
-- expected validation.
+Before any implementation mutation, perform only enough focused **read-only**
+discovery to understand the issue and propose a concrete plan. Read-only work may
+include issue/repository inspection, `git status`/diff inspection, focused source
+searches, existing tests/docs, and safe diagnostics justified by the issue.
 
-Keep the plan short.
+Do **not** create/switch branches, edit files, run migrations, change hosted
+configuration/data, commit, push, create/update a PR, or otherwise mutate local or
+remote project state before this gate is approved.
+
+Present one compact reviewable plan containing:
+- **Goal / root cause** — what is wrong or what must change, and why it matters;
+- **Proposed changes** — the minimal implementation approach;
+- **Affected areas** — likely files/components/schema surfaces, without bulk listing;
+- **Risks / decisions** — meaningful tradeoffs, assumptions, migrations, external writes, or scope choices;
+- **Validation** — targeted evidence plus the final repository baseline gate.
+
+End the planning response with exactly:
+
+```text
+PLAN_STATUS: AWAITING_APPROVAL
+```
+
+Then stop and wait for the user. A direct reply such as `ok`, `vai`, `fallo`,
+`procedi`, `approvato`, or an equivalent unambiguous authorization immediately
+after the plan approves implementation. A question, requested revision, partial
+approval, or scope change does not approve the plan: incorporate the feedback,
+present the revised plan, emit `PLAN_STATUS: AWAITING_APPROVAL` again, and stop.
+
+The user may explicitly waive this gate in the original request (for example,
+"implementa direttamente senza chiedermi approvazione"). Otherwise the gate is
+mandatory even when the issue itself appears straightforward.
+
+Planning approval authorizes the issue implementation only. It does **not**
+replace any separate approval required by repository policy for Production/hosted
+schema, data, configuration, destructive, or similarly consequential mutations.
+
+After approval, create/use the dedicated issue branch if implementation requires
+changes and continue with the approved plan. If implementation later reveals a
+**material** architecture/scope change, new migration, new hosted mutation, or a
+different risk profile, stop before that new work and present a revised plan for
+approval. Minor implementation details within the approved approach do not need
+another approval round.
 
 ## 3. Keep a retrieval budget
 

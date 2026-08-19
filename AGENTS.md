@@ -36,7 +36,7 @@ Do not preload large documents. Search first, then read only relevant sections/f
 - Use one coherent GitHub issue/problem per Codex task/thread.
 - Work in the main PaperDeck checkout; do not create separate worktrees unless the user explicitly asks.
 - Assume only one active PaperDeck coding session at a time.
-- Use a dedicated issue branch when implementation requires changes.
+- After the issue plan is approved, use a dedicated issue branch when implementation requires changes.
 - Do **not** use the `codex/` prefix for branches. Prefer names such as `issue-173-notification-polling`.
 - Never stash, move, commit, discard, or overwrite unrelated user changes merely to make the tree clean.
 
@@ -46,8 +46,21 @@ For a GitHub issue, prefer a fresh Codex task/thread and use the `paperdeck-issu
 
 Before implementation:
 1. Inspect the issue and relevant current code.
-2. State the problem, why it matters, and the attack plan briefly.
-3. Keep the change scoped to the requested issue.
+2. Use read-only discovery to produce a compact plan covering goal/root cause,
+   proposed changes, affected areas, meaningful risks/decisions, and validation.
+3. End that plan with `PLAN_STATUS: AWAITING_APPROVAL` and stop. Do not create or
+   switch branches, edit files, run migrations, change hosted state, commit, push,
+   or publish before the user approves the plan, unless the original request
+   explicitly waived the approval gate.
+4. Treat a direct `ok` / `vai` / `fallo` / `procedi` / `approvato` immediately
+   after the plan as approval. If the user revises scope or asks a question,
+   revise the plan and wait for approval again.
+5. Planning approval does not replace separate explicit approval required for
+   Production/hosted schema, data, configuration, destructive, or similarly
+   consequential changes.
+6. Keep the implementation scoped to the approved issue plan. If a material new
+   architecture/scope/risk decision appears during implementation, stop before
+   that new work and request approval for a revised plan.
 
 During implementation:
 - Search before opening large files.
