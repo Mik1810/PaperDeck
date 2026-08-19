@@ -8,6 +8,14 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Expanded full App CI with the complete unit suite, an explicit localhost-only
+  aggregate of deterministic PostgreSQL integration regressions, and the
+  existing Pixel 5 Playwright project. Mobile CI now includes a real touch
+  swipe beginning inside the paper card's scroll region, while hosted Clerk
+  smoke tests remain separate and docs-only changes keep their lightweight
+  path. The added mobile matrix also exposed and fixed a delayed initial
+  `pageshow` race that could consume the feed's opened-paper marker before
+  navigation.
 - Recorded the approved private-group discussion decision: implementation stays
   blocked on a successful research pilot, while a conditional one-channel,
   paper-linked plain-text scope now defines lifecycle, unread and notification
