@@ -15,22 +15,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  app-ci:
+  classify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_replace_me' }}
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_replace_me' }}
-      NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
-      NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
-      NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: /feed
-      NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: /onboarding
-      DATABASE_URL: postgresql://paperdeck:paperdeck_local_only@127.0.0.1:5432/paperdeck_test
-      PAPERDECK_TEST_DATABASE_URL: postgresql://paperdeck:paperdeck_local_only@127.0.0.1:5432/paperdeck_test
-      DATABASE_MAX_CONNECTIONS: "3"
-      NEXT_PUBLIC_PAPERDECK_DEV_AUTH: "true"
-      PAPERDECK_E2E_DEV_AUTH: "true"
-      PAPERDECK_E2E_OWNER_ID: playwright-user-${{ github.run_id }}
+    timeout-minutes: 5
+    outputs:
+      mode: ${{ steps.changes.outputs.mode }}
+      changed_count: ${{ steps.changes.outputs.changed_count }}
 
     steps:
       - name: Checkout
@@ -67,9 +57,33 @@ jobs:
           echo "changed_count=$changed_count" >> "$GITHUB_OUTPUT"
           echo "App CI mode: $mode ($changed_count changed files)"
 
+  app-ci:
+    needs: classify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_replace_me' }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_replace_me' }}
+      NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+      NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+      NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: /feed
+      NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: /onboarding
+      DATABASE_URL: postgresql://paperdeck:paperdeck_local_only@127.0.0.1:5432/paperdeck_test
+      PAPERDECK_TEST_DATABASE_URL: postgresql://paperdeck:paperdeck_local_only@127.0.0.1:5432/paperdeck_test
+      DATABASE_MAX_CONNECTIONS: "3"
+      NEXT_PUBLIC_PAPERDECK_DEV_AUTH: "true"
+      PAPERDECK_E2E_DEV_AUTH: "true"
+      PAPERDECK_E2E_OWNER_ID: playwright-user-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - name: Docs-only integrity check
         id: docs_integrity
-        if: steps.changes.outputs.mode == 'docs-only'
+        if: needs.classify.outputs.mode == 'docs-only'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -77,7 +91,7 @@ jobs:
 
       - name: Start PostgreSQL
         id: database
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         shell: bash
         run: |
           docker run --detach --name paperdeck-postgres \
@@ -103,7 +117,7 @@ jobs:
           exit 1
 
       - name: Setup Node
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         uses: actions/setup-node@v6
         with:
           node-version: "24"
@@ -111,65 +125,55 @@ jobs:
 
       - name: Install dependencies
         id: dependencies
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         run: npm ci
 
       - name: Rebuild and verify migration-complete test schema
         id: schema_parity
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         run: npm run db:test:prepare
 
       - name: Audit service-role boundaries
         id: service_role_audit
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         run: npm run audit:service-role
 
       - name: Lint
         id: lint
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         run: npm run lint
 
       - name: Unit regression tests
         id: unit
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         run: npm run test:unit
 
       - name: Deterministic database integration tests
         id: integration
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         run: npm run test:integration:ci
 
       - name: Deterministic recommendation stability gate
         id: recommendation_stability
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         run: npm run evaluate:recommendations
 
       - name: Build
         id: build
-        if: steps.changes.outputs.mode == 'full'
+        if: needs.classify.outputs.mode == 'full'
         run: npm run build
-
-      - name: Install Playwright browser
-        id: playwright_install
-        if: steps.changes.outputs.mode == 'full'
-        run: npx playwright install --with-deps --only-shell chromium
-
-      - name: Isolated Playwright smoke tests
-        id: e2e
-        if: steps.changes.outputs.mode == 'full'
-        run: npm run test:e2e
 
       - name: Summary
         if: always()
         shell: bash
         run: |
-          echo "## App CI Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "## App CI Core Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Mode: \`${{ steps.changes.outputs.mode }}\` (${{ steps.changes.outputs.changed_count }} changed files)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Mode: \`${{ needs.classify.outputs.mode }}\` (${{ needs.classify.outputs.changed_count }} changed files)." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| changed-file classifier | \`${{ steps.changes.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| changed-file classifier | \`${{ needs.classify.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| docs-only integrity | \`${{ steps.docs_integrity.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| PostgreSQL | \`${{ steps.database.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| dependency install | \`${{ steps.dependencies.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
@@ -180,6 +184,91 @@ jobs:
           echo "| deterministic database integrations | \`${{ steps.integration.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| deterministic recommendation stability | \`${{ steps.recommendation_stability.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| build | \`${{ steps.build.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Job status: \`${{ job.status }}\`.*" >> "$GITHUB_STEP_SUMMARY"
+
+  browser-e2e:
+    needs: classify
+    if: needs.classify.outputs.mode == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_replace_me' }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_replace_me' }}
+      NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+      NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+      NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: /feed
+      NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: /onboarding
+      DATABASE_URL: postgresql://paperdeck:paperdeck_local_only@127.0.0.1:5432/paperdeck_test
+      PAPERDECK_TEST_DATABASE_URL: postgresql://paperdeck:paperdeck_local_only@127.0.0.1:5432/paperdeck_test
+      DATABASE_MAX_CONNECTIONS: "3"
+      NEXT_PUBLIC_PAPERDECK_DEV_AUTH: "true"
+      PAPERDECK_E2E_DEV_AUTH: "true"
+      PAPERDECK_E2E_OWNER_ID: playwright-user-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Start PostgreSQL
+        id: database
+        shell: bash
+        run: |
+          docker run --detach --name paperdeck-postgres \
+            --env POSTGRES_DB=paperdeck_test \
+            --env POSTGRES_PASSWORD=paperdeck_local_only \
+            --env POSTGRES_USER=paperdeck \
+            --publish 5432:5432 \
+            --health-cmd "pg_isready -U paperdeck -d paperdeck_test" \
+            --health-interval 2s \
+            --health-timeout 3s \
+            --health-retries 30 \
+            pgvector/pgvector:0.8.0-pg17
+
+          for attempt in {1..30}; do
+            status="$(docker inspect --format '{{.State.Health.Status}}' paperdeck-postgres)"
+            if [[ "$status" == "healthy" ]]; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs paperdeck-postgres
+          exit 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        id: dependencies
+        run: npm ci
+
+      - name: Rebuild and verify migration-complete test schema
+        id: schema_parity
+        run: npm run db:test:prepare
+
+      - name: Install Playwright browser
+        id: playwright_install
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Isolated Playwright smoke tests
+        id: e2e
+        run: npm run test:e2e
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Browser E2E Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| PostgreSQL | \`${{ steps.database.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| dependency install | \`${{ steps.dependencies.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| migration-complete schema | \`${{ steps.schema_parity.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Playwright browser install | \`${{ steps.playwright_install.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| e2e smoke tests | \`${{ steps.e2e.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
