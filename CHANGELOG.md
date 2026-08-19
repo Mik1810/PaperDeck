@@ -41,6 +41,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Prevented bounded Semantic Scholar, OpenAlex, and Unpaywall enrichment runs
+  from repeatedly selecting the same permanent provider misses. Durable
+  per-paper outcomes now separate terminal misses/non-OA responses from
+  retryable failures, page scans continue to later first-time candidates, and
+  worker summaries report raw provider-request and lookup efficiency metrics.
 - Aligned five August migration filenames with their authoritative Supabase
   Production history versions. Their SQL payloads remain unchanged, allowing
   normal migration preflight and deployment to proceed without repairing or

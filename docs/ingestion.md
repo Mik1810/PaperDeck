@@ -273,6 +273,21 @@ References:
 
 ## Semantic Scholar Enrichment
 
+All three external-enrichment workers use `paper_enrichment_outcomes` as their
+durable work state. `found`, `not_found`, and `not_oa` are terminal; an operator
+can deliberately recheck one by deleting that provider/paper state row.
+`retryable_error` starts with a one-hour delay, doubles after each failed
+attempt, and is capped at 24 hours. Candidate scans page past terminal outcomes,
+so more than `limit` provider misses cannot starve later first-time papers. The
+scan uses the descending `(ingested_at, id)` keyset rather than an increasingly
+expensive offset.
+
+The JSON summaries expose both provider HTTP requests and paper lookups, plus
+lookups per newly terminal outcome. Cursors are updated after every persisted
+batch/paper and identify the last processed candidate; `imported_count` remains
+the cumulative positive-enrichment count. `--dry-run` reports classifications
+and request counts but intentionally persists neither outcomes nor cursors.
+
 The enrichment worker adds citation counts, venue corrections, DOIs, and external IDs from Semantic Scholar:
 
 ```bash
@@ -283,7 +298,9 @@ It:
 
 - finds arXiv papers without a `semantic_scholar_id`;
 - looks them up via the S2 batch API (`/graph/v1/paper/batch`) using `ArXiv:<id>` identifiers;
-- automatically retries unfound papers on subsequent runs;
+- records successful and not-found outcomes per paper so permanent misses do not
+  consume the bounded newest-first window again;
+- retries only provider/network failures after the shared bounded backoff;
 - enriches `citation_count`, `semantic_scholar_id`, `venue`, `year`, `doi`, and `is_open_access`;
 - stores external IDs in `paper_external_ids` (provider: `semantic_scholar`, `doi`);
 - tracks progress in `ingestion_cursors` with key `semantic_scholar_enrich`;
@@ -330,6 +347,8 @@ It:
 - reconstructs `abstract` from `abstract_inverted_index` when the paper has no existing abstract;
 - creates `taxonomy_topics` rows for OpenAlex topics and links them via `paper_topics` with confidence scores;
 - stores external IDs in `paper_external_ids` (provider: `openalex`);
+- records successful and not-found outcomes per paper and defers retryable
+  provider failures through the shared backoff;
 - tracks progress in `ingestion_cursors` with key `openalex_enrich`.
 
 No API key is required. Set `OPENALEX_EMAIL` for polite pool access with higher rate limits.
@@ -375,6 +394,8 @@ It:
 - prefers `url_for_pdf` over `url_for_landing_page` for the stored URL;
 - sets `pdf_url` on papers that don't already have one;
 - confirms and stores `is_open_access` when Unpaywall reports OA status;
+- records 404 responses as `not_found`, valid closed responses as `not_oa`,
+  successful links as `found`, and transient failures as retryable;
 - tracks progress in `ingestion_cursors` with key `unpaywall_enrich`.
 
 **Unpaywall requires a real email address** for API access. Set `UNPAYWALL_EMAIL` in your environment.

@@ -2,6 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import {
+  loadEligibleEnrichmentCandidates,
+  processEnrichmentBatch,
+  recordEnrichmentOutcome,
+  isRetryableProviderStatus,
+  olderThanEnrichmentPaperFilter,
+  RetryableProviderError,
+} from "./enrichment-outcomes";
+import {
   UPCursorSchema,
   UPPaperRowArraySchema,
   UPResponseSchema,
@@ -96,67 +104,66 @@ async function getPapersToEnrich(
   supabase: ReturnType<typeof createSupabaseClient>,
   limit: number,
 ) {
-  const allPapers: UPPaperRow[] = [];
-  let page = 0;
-  const perPage = 100;
+  return loadEligibleEnrichmentCandidates<UPPaperRow>({
+    supabase,
+    provider: "unpaywall",
+    limit,
+    paperId: (paper) => paper.id,
+    fetchPage: async (after, pageSize) => {
+      let query = supabase
+        .from("papers")
+        .select("id, arxiv_id, doi, is_open_access, pdf_url, ingested_at")
+        .eq("source", "arxiv")
+        .not("doi", "is", null)
+        .order("ingested_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(pageSize);
 
-  while (allPapers.length < limit) {
-    const from = page * perPage;
-    const { data, error } = await supabase
-      .from("papers")
-      .select("id, arxiv_id, doi, is_open_access, pdf_url, ingested_at")
-      .eq("source", "arxiv")
-      .not("doi", "is", null)
-      .order("ingested_at", { ascending: false })
-      .range(from, from + perPage - 1);
+      if (after) {
+        query = query.or(olderThanEnrichmentPaperFilter(after));
+      }
 
-    if (error) {
-      throw error;
-    }
+      const { data, error } = await query;
 
-    if (!data || !data.length) {
-      break;
-    }
+      if (error) {
+        throw error;
+      }
 
-    const paperIds = data.map((p) => p.id);
+      return UPPaperRowArraySchema.parse(data ?? []);
+    },
+    excludePaperIds: async (papers) => {
+      const { data, error } = await supabase
+        .from("paper_external_ids")
+        .select("paper_id")
+        .eq("provider", "unpaywall_oa")
+        .in("paper_id", papers.map((paper) => paper.id));
 
-    const { data: existingExtIds, error: extError } = await supabase
-      .from("paper_external_ids")
-      .select("paper_id")
-      .eq("provider", "unpaywall_oa")
-      .in("paper_id", paperIds);
+      if (error) {
+        throw error;
+      }
 
-    if (extError) {
-      throw extError;
-    }
-
-    const enrichedIds = new Set(
-      (existingExtIds ?? []).map((row) => row.paper_id),
-    );
-
-    const notEnriched = UPPaperRowArraySchema.parse(data).filter(
-      (p) => !enrichedIds.has(p.id),
-    );
-
-    allPapers.push(...notEnriched);
-
-    if (data.length < perPage) {
-      break;
-    }
-
-    page++;
-  }
-
-  return allPapers.slice(0, limit);
+      return new Set((data ?? []).map(({ paper_id }) => paper_id));
+    },
+  });
 }
 
 async function fetchUnpaywall(doi: string, email: string) {
   const params = new URLSearchParams({ email });
   const query = params.size ? `?${params}` : "";
-  const response = await fetch(`${UP_BASE}/${encodeURIComponent(doi)}${query}`);
+  let response: Response;
+
+  try {
+    response = await fetch(`${UP_BASE}/${encodeURIComponent(doi)}${query}`);
+  } catch {
+    throw new RetryableProviderError();
+  }
 
   if (response.status === 404) {
     return null;
+  }
+
+  if (isRetryableProviderStatus(response.status)) {
+    throw new RetryableProviderError();
   }
 
   if (!response.ok) {
@@ -165,7 +172,11 @@ async function fetchUnpaywall(doi: string, email: string) {
     );
   }
 
-  return UPResponseSchema.parse(await response.json());
+  try {
+    return UPResponseSchema.parse(await response.json());
+  } catch {
+    throw new RetryableProviderError();
+  }
 }
 
 function bestOaUrl(best: UPLocation | null) {
@@ -270,48 +281,87 @@ async function main() {
   );
 
   const supabase = createSupabaseClient();
-  const papers = await getPapersToEnrich(supabase, config.limit);
+  const candidates = await getPapersToEnrich(supabase, config.limit);
 
-  if (!papers.length) {
+  if (!candidates.length) {
     console.error("No papers with DOI found needing Unpaywall enrichment");
     return;
   }
 
-  console.error(`Found ${papers.length} papers with DOI to look up`);
+  console.error(`Found ${candidates.length} eligible papers with DOI to look up`);
 
   const cursor = await getCursor(supabase);
   let totalEnriched = cursor?.imported_count ?? 0;
   let totalOa = 0;
   let totalNotFound = 0;
+  let totalNotOa = 0;
+  let totalRetryableErrors = 0;
+  let providerLookups = 0;
+  let providerRequests = 0;
 
-  for (const [index, paper] of papers.entries()) {
+  for (const [index, candidate] of candidates.entries()) {
     if (index > 0) {
       await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
     }
 
-    const up = await fetchUnpaywall(paper.doi!, config.email);
+    const batchSummary = await processEnrichmentBatch<UPPaperRow, UPResponse>({
+      candidates: [candidate],
+      dryRun: config.dryRun,
+      paperId: (paper) => paper.id,
+      lookup: async ([paper]) => {
+        const up = await fetchUnpaywall(paper.doi!, config.email);
+        const decision = !up
+          ? { outcome: "not_found" as const }
+          : !up.is_oa
+            ? { outcome: "not_oa" as const }
+            : bestOaUrl(up.best_oa_location)
+              ? { outcome: "found" as const, value: up }
+              : (() => {
+                  throw new RetryableProviderError();
+                })();
+        return new Map([[paper.id, decision]]);
+      },
+      applyFound: (paper, up) => enrichPaper(supabase, paper, up),
+      persistOutcome: (eligibleCandidate, outcome) =>
+        recordEnrichmentOutcome({
+          supabase,
+          provider: "unpaywall",
+          paperId: eligibleCandidate.paper.id,
+          outcome,
+          previousAttemptCount: eligibleCandidate.previousAttemptCount,
+        }),
+    });
 
-    if (!up) {
-      totalNotFound++;
-      continue;
+    totalOa += batchSummary.found;
+    totalNotFound += batchSummary.notFound;
+    totalNotOa += batchSummary.notOa;
+    totalRetryableErrors += batchSummary.retryableErrors;
+    providerLookups += batchSummary.providerLookups;
+    providerRequests += batchSummary.providerRequests;
+
+    if (batchSummary.retryableErrors) {
+      console.error("Paper deferred after a retryable Unpaywall failure");
     }
 
-    if (up.is_oa && up.best_oa_location) {
-      totalOa++;
-
-      if (!config.dryRun) {
-        await enrichPaper(supabase, paper, up);
-        totalEnriched++;
-        await updateCursor(supabase, totalEnriched, paper.id);
-      }
+    if (!config.dryRun) {
+      totalEnriched += batchSummary.found;
+      await updateCursor(supabase, totalEnriched, candidate.paper.id);
     }
   }
 
   const summary = {
     mode: config.dryRun ? "dry-run" : "write",
-    papersChecked: papers.length,
+    papersChecked: candidates.length,
     oaFound: totalOa,
     notFound: totalNotFound,
+    notOa: totalNotOa,
+    retryableErrors: totalRetryableErrors,
+    providerLookups,
+    providerRequests,
+    lookupsPerTerminalOutcome:
+      totalOa + totalNotFound + totalNotOa > 0
+        ? providerLookups / (totalOa + totalNotFound + totalNotOa)
+        : null,
     totalEnriched,
   };
 

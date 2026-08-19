@@ -266,12 +266,19 @@ its separate approved dry run.
 
 - `ingestion_runs`
 - `ingestion_cursors`
+- `paper_enrichment_outcomes`
 
 This tracks batch imports from arXiv, Semantic Scholar, OpenAlex, and later sources.
 
 Current arXiv ingestion writes one `ingestion_runs` row per non-dry-run execution and stores `status`, `finished_at`, `imported_count`, and `error_message`.
 
 `ingestion_cursors` stores source/category cursor state. Current arXiv cursor keys use the format `arxiv:<category>`, for example `arxiv:cs.CC`, and keep the newest `publishedAt` timestamp seen by a successful run.
+
+`paper_enrichment_outcomes` is the service-role-only queue state for Semantic
+Scholar, OpenAlex, and Unpaywall. It stores one terminal or retryable outcome per
+provider/paper, the attempt count, the last check time, and the next eligible
+retry time. RLS is enabled with no end-user policy or grant. Existing positive
+provider identifiers are backfilled as `found` when the table is introduced.
 
 ## Embeddings
 

@@ -485,6 +485,9 @@ export const papers = pgTable("papers", {
 	index("papers_embedding_cosine_idx").using("ivfflat", table.embedding.asc().nullsLast().op("vector_cosine_ops")).with({lists: "100"}),
 	uniqueIndex("papers_openalex_unique_idx").using("btree", table.openalexId.asc().nullsLast().op("text_ops")).where(sql`(openalex_id IS NOT NULL)`),
 	index("papers_published_at_idx").using("btree", table.publishedAt.desc().nullsFirst().op("timestamptz_ops")),
+	index("papers_semantic_scholar_enrichment_scan_idx").on(table.ingestedAt.desc(), table.id.desc()).where(sql`${table.source} = 'arxiv' and ${table.semanticScholarId} is null and ${table.arxivId} is not null`),
+	index("papers_openalex_enrichment_scan_idx").on(table.ingestedAt.desc(), table.id.desc()).where(sql`${table.source} = 'arxiv' and ${table.openalexId} is null and ${table.doi} is not null`),
+	index("papers_unpaywall_enrichment_scan_idx").on(table.ingestedAt.desc(), table.id.desc()).where(sql`${table.source} = 'arxiv' and ${table.doi} is not null`),
 	uniqueIndex("papers_semantic_scholar_unique_idx").using("btree", table.semanticScholarId.asc().nullsLast().op("text_ops")).where(sql`(semantic_scholar_id IS NOT NULL)`),
 	index("papers_source_idx").using("btree", table.source.asc().nullsLast().op("enum_ops")),
 	index("papers_year_idx").using("btree", table.year.desc().nullsFirst().op("int4_ops")),
@@ -719,6 +722,24 @@ export const paperExternalIds = pgTable("paper_external_ids", {
 		}).onDelete("cascade"),
 	primaryKey({ columns: [table.paperId, table.provider, table.externalId], name: "paper_external_ids_pkey"}),
 	pgPolicy("paper_external_ids_read_authenticated", { as: "permissive", for: "select", to: ["public"], using: sql`((auth.jwt() ->> 'sub'::text) IS NOT NULL)` }),
+]);
+
+export const paperEnrichmentOutcomes = pgTable("paper_enrichment_outcomes", {
+	provider: text().notNull(),
+	paperId: uuid("paper_id").notNull(),
+	outcome: text().notNull(),
+	attemptCount: integer("attempt_count").notNull(),
+	lastCheckedAt: timestamp("last_checked_at", { withTimezone: true, mode: 'string' }).notNull(),
+	nextEligibleAt: timestamp("next_eligible_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	foreignKey({ columns: [table.paperId], foreignColumns: [papers.id], name: "paper_enrichment_outcomes_paper_id_fkey" }).onDelete("cascade"),
+	primaryKey({ columns: [table.provider, table.paperId], name: "paper_enrichment_outcomes_pkey"}),
+	index("paper_enrichment_outcomes_retry_idx").on(table.provider, table.nextEligibleAt, table.paperId).where(sql`${table.outcome} = 'retryable_error'`),
+	index("paper_enrichment_outcomes_paper_idx").on(table.paperId),
+	check("paper_enrichment_outcomes_provider_check", sql`${table.provider} in ('semantic_scholar', 'openalex', 'unpaywall')`),
+	check("paper_enrichment_outcomes_outcome_check", sql`${table.outcome} in ('found', 'not_found', 'not_oa', 'retryable_error')`),
+	check("paper_enrichment_outcomes_attempt_count_check", sql`${table.attemptCount} > 0`),
+	check("paper_enrichment_outcomes_retry_check", sql`(${table.outcome} = 'retryable_error' and ${table.nextEligibleAt} is not null and ${table.nextEligibleAt} > ${table.lastCheckedAt}) or (${table.outcome} <> 'retryable_error' and ${table.nextEligibleAt} is null)`),
 ]);
 
 export const topicEmbeddings = pgTable("topic_embeddings", {

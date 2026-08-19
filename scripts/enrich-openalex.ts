@@ -2,6 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import {
+  loadEligibleEnrichmentCandidates,
+  processEnrichmentBatch,
+  recordEnrichmentOutcome,
+  isRetryableProviderStatus,
+  olderThanEnrichmentPaperFilter,
+  RetryableProviderError,
+} from "./enrichment-outcomes";
+import {
   OACursorSchema,
   OAPaperRowArraySchema,
   OAResponseSchema,
@@ -103,20 +111,35 @@ async function getPapersToEnrich(
   supabase: ReturnType<typeof createSupabaseClient>,
   limit: number,
 ) {
-  const { data, error } = await supabase
-    .from("papers")
-    .select("id, arxiv_id, doi, venue, abstract, is_open_access, access, ingested_at")
-    .eq("source", "arxiv")
-    .is("openalex_id", null)
-    .not("doi", "is", null)
-    .order("ingested_at", { ascending: false })
-    .limit(limit);
+  return loadEligibleEnrichmentCandidates<OAPaperRow>({
+    supabase,
+    provider: "openalex",
+    limit,
+    paperId: (paper) => paper.id,
+    fetchPage: async (after, pageSize) => {
+      let query = supabase
+        .from("papers")
+        .select("id, arxiv_id, doi, venue, abstract, is_open_access, access, ingested_at")
+        .eq("source", "arxiv")
+        .is("openalex_id", null)
+        .not("doi", "is", null)
+        .order("ingested_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(pageSize);
 
-  if (error) {
-    throw error;
-  }
+      if (after) {
+        query = query.or(olderThanEnrichmentPaperFilter(after));
+      }
 
-  return OAPaperRowArraySchema.parse(data ?? []);
+      const { data, error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      return OAPaperRowArraySchema.parse(data ?? []);
+    },
+  });
 }
 
 function reconstructAbstract(
@@ -167,7 +190,17 @@ async function fetchOpenAlexBatch(
     headers["User-Agent"] = `mailto:${config.email}`;
   }
 
-  const response = await fetch(url, { headers });
+  let response: Response;
+
+  try {
+    response = await fetch(url, { headers });
+  } catch {
+    throw new RetryableProviderError();
+  }
+
+  if (isRetryableProviderStatus(response.status)) {
+    throw new RetryableProviderError();
+  }
 
   if (!response.ok) {
     throw new Error(
@@ -175,7 +208,11 @@ async function fetchOpenAlexBatch(
     );
   }
 
-  return OAResponseSchema.parse(await response.json());
+  try {
+    return OAResponseSchema.parse(await response.json());
+  } catch {
+    throw new RetryableProviderError();
+  }
 }
 
 async function ensureOpenAlexTopic(
@@ -371,27 +408,32 @@ async function main() {
   );
 
   const supabase = createSupabaseClient();
-  const papers = await getPapersToEnrich(supabase, config.limit);
+  const candidates = await getPapersToEnrich(supabase, config.limit);
 
-  if (!papers.length) {
+  if (!candidates.length) {
     console.error("No papers with DOI found needing OpenAlex enrichment");
     return;
   }
 
-  console.error(`Found ${papers.length} papers with DOI to enrich`);
+  console.error(`Found ${candidates.length} eligible papers with DOI to enrich`);
 
   const cursor = await getCursor(supabase);
   let totalEnriched = cursor?.imported_count ?? 0;
   let totalFound = 0;
   let totalNotFound = 0;
+  let totalRetryableErrors = 0;
+  let providerLookups = 0;
+  let providerRequests = 0;
 
-  for (let i = 0; i < papers.length; i += config.batchSize) {
+  for (let i = 0; i < candidates.length; i += config.batchSize) {
     if (i > 0) {
       await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
     }
 
-    const batch = papers.slice(i, i + config.batchSize);
-    const dois = batch.map((p) => p.doi).filter((d): d is string => Boolean(d));
+    const batch = candidates.slice(i, i + config.batchSize);
+    const dois = batch
+      .map(({ paper }) => paper.doi)
+      .filter((doi): doi is string => Boolean(doi));
 
     if (!dois.length) {
       continue;
@@ -401,47 +443,83 @@ async function main() {
       `Batch ${Math.floor(i / config.batchSize) + 1}: ${batch.length} papers, ${dois.length} DOIs`,
     );
 
-    const oaResponse = await fetchOpenAlexBatch(dois, config);
-    const worksByDoi = new Map<string, OAWork>();
+    const batchSummary = await processEnrichmentBatch<OAPaperRow, OAWork>({
+      candidates: batch,
+      dryRun: config.dryRun,
+      paperId: (paper) => paper.id,
+      lookup: async (papers) => {
+        const oaResponse = await fetchOpenAlexBatch(
+          papers
+            .map((paper) => paper.doi)
+            .filter((doi): doi is string => Boolean(doi)),
+          config,
+        );
+        const worksByDoi = new Map<string, OAWork>();
 
-    for (const work of oaResponse.results) {
-      const rawDoi = work.doi?.replace(/^https:\/\/doi\.org\//, "");
-      worksByDoi.set(rawDoi, work);
-    }
+        for (const work of oaResponse.results) {
+          const rawDoi = work.doi?.replace(/^https:\/\/doi\.org\//, "");
+          if (rawDoi) {
+            worksByDoi.set(rawDoi, work);
+          }
+        }
 
-    let batchFound = 0;
+        return new Map(
+          papers.map((paper) => {
+            const work = paper.doi ? worksByDoi.get(paper.doi) : undefined;
+            return [
+              paper.id,
+              work
+                ? { outcome: "found" as const, value: work }
+                : { outcome: "not_found" as const },
+            ];
+          }),
+        );
+      },
+      applyFound: (paper, work) => updatePaper(supabase, paper, work),
+      persistOutcome: (candidate, outcome) =>
+        recordEnrichmentOutcome({
+          supabase,
+          provider: "openalex",
+          paperId: candidate.paper.id,
+          outcome,
+          previousAttemptCount: candidate.previousAttemptCount,
+        }),
+    });
 
-    for (const paper of batch) {
-      const work = paper.doi ? worksByDoi.get(paper.doi) : undefined;
+    totalFound += batchSummary.found;
+    totalNotFound += batchSummary.notFound;
+    totalRetryableErrors += batchSummary.retryableErrors;
+    providerLookups += batchSummary.providerLookups;
+    providerRequests += batchSummary.providerRequests;
 
-      if (!work) {
-        totalNotFound++;
-        continue;
-      }
-
-      totalFound++;
-      batchFound++;
-
-      if (!config.dryRun) {
-        await updatePaper(supabase, paper, work);
-      }
+    if (batchSummary.retryableErrors) {
+      console.error(
+        `Batch deferred after a retryable provider failure: ${batchSummary.retryableErrors} papers`,
+      );
     }
 
     if (!config.dryRun) {
-      totalEnriched += batchFound;
+      totalEnriched += batchSummary.found;
 
       if (batch.length > 0) {
         const lastPaper = batch[batch.length - 1];
-        await updateCursor(supabase, totalEnriched, lastPaper.id);
+        await updateCursor(supabase, totalEnriched, lastPaper.paper.id);
       }
     }
   }
 
   const summary = {
     mode: config.dryRun ? "dry-run" : "write",
-    papersChecked: papers.length,
+    papersChecked: candidates.length,
     enriched: totalFound,
     notFound: totalNotFound,
+    retryableErrors: totalRetryableErrors,
+    providerLookups,
+    providerRequests,
+    lookupsPerTerminalOutcome:
+      totalFound + totalNotFound > 0
+        ? providerLookups / (totalFound + totalNotFound)
+        : null,
     totalEnriched,
   };
 
