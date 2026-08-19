@@ -4,7 +4,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from embedding_common import (
@@ -29,32 +31,59 @@ class PaperCandidate:
     stale_reason: str
 
 
+@dataclass(frozen=True)
+class CandidateScan:
+    candidates: list[PaperCandidate]
+    inspected: int
+    scan_complete: bool
+
+
 class PaperEmbeddingClient(SupabaseRestClient):
-    def _select_page(self, table_limit: int, offset: int) -> list[dict[str, Any]]:
+    def _select_page(
+        self,
+        page_size: int,
+        offset: int,
+        embedding_filter: str | None,
+        classic_only: bool,
+    ) -> list[dict[str, Any]]:
+        query = {
+            "select": "id,title,abstract,embedding_model,embedding_content_hash,ingested_at",
+            "order": "ingested_at.asc,id.asc",
+            "limit": str(page_size),
+            "offset": str(offset),
+        }
+        if embedding_filter:
+            query["embedding"] = embedding_filter
+        if classic_only:
+            query["is_classic"] = "eq.true"
+
         result = self.request_json(
             "papers",
-            {
-                "select": "id,title,abstract,embedding,embedding_model,embedding_content_hash,ingested_at",
-                "order": "ingested_at.asc",
-                "limit": str(table_limit),
-                "offset": str(offset),
-            },
-            range_header=f"{offset}-{offset + table_limit - 1}",
+            query,
         )
         return result if isinstance(result, list) else []
 
-    def select_papers(self, table_limit: int) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
+    def iter_papers(
+        self,
+        page_size: int,
+        embedding_filter: str | None,
+        classic_only: bool,
+    ) -> Iterator[dict[str, Any]]:
+        page_size = min(page_size, 1000)
         offset = 0
         while True:
-            page = self._select_page(min(table_limit - len(rows), 1000), offset)
+            page = self._select_page(
+                page_size,
+                offset,
+                embedding_filter,
+                classic_only,
+            )
             if not page:
                 break
-            rows.extend(page)
+            yield from page
             offset += len(page)
-            if len(rows) >= table_limit or len(page) < 1000:
+            if len(page) < page_size:
                 break
-        return rows
 
     def update_paper_embedding(self, paper_id: str, payload: dict[str, Any]) -> None:
         self.request_json(
@@ -86,7 +115,28 @@ def parse_args() -> argparse.Namespace:
         "--table-limit",
         type=int,
         default=int(os.getenv("EMBEDDING_TABLE_LIMIT", "0")),
-        help="Maximum rows to inspect before local stale filtering. Defaults to max(limit * 4, 100).",
+        help="Rows per bounded REST scan page. Defaults to max(limit * 4, 100).",
+    )
+    parser.add_argument(
+        "--classic-only",
+        action="store_true",
+        help="Restrict candidate discovery to papers marked as classic.",
+    )
+    parser.add_argument(
+        "--until-fresh",
+        action="store_true",
+        help="Keep processing bounded batches until a fresh full scan is observed.",
+    )
+    parser.add_argument(
+        "--max-batches",
+        type=int,
+        default=100,
+        help="Safety cap for --until-fresh. Defaults to 100 batches.",
+    )
+    parser.add_argument(
+        "--log-file",
+        type=Path,
+        help="Append batch progress as JSON Lines to this .log file.",
     )
     parser.add_argument(
         "--dry-run",
@@ -112,8 +162,21 @@ def parse_args() -> argparse.Namespace:
     if args.batch_size < 1:
         parser.error("--batch-size must be >= 1")
 
+    if args.max_batches < 1:
+        parser.error("--max-batches must be >= 1")
+
+    if args.log_file and args.log_file.suffix != ".log":
+        parser.error("--log-file must use a .log suffix")
+
+    if args.force and args.until_fresh:
+        parser.error("--force cannot be combined with --until-fresh")
+
     if args.table_limit < 1:
         args.table_limit = max(args.limit * 4, 100)
+
+    if args.until_fresh and not args.log_file:
+        timestamp = utc_now().replace("-", "").replace(":", "").split(".", 1)[0]
+        args.log_file = Path(f".codex-logs/embed-papers-backfill-{timestamp}.log")
 
     return args
 
@@ -127,6 +190,7 @@ def embedding_text(row: dict[str, Any]) -> str:
 
 def stale_reason(
     row: dict[str, Any],
+    has_embedding: bool,
     model_name: str,
     text_hash: str,
     force: bool,
@@ -134,7 +198,7 @@ def stale_reason(
     if force:
         return "force"
 
-    if not row.get("embedding"):
+    if not has_embedding:
         return "missing_embedding"
 
     if row.get("embedding_model") != model_name:
@@ -152,36 +216,48 @@ def load_candidates(
     limit: int,
     table_limit: int,
     force: bool,
-) -> list[PaperCandidate]:
+    classic_only: bool = False,
+) -> CandidateScan:
     candidates: list[PaperCandidate] = []
+    inspected = 0
 
-    for row in supabase.select_papers(table_limit):
-        text = embedding_text(row)
+    scan_phases = (
+        ((None, True),) if force else (("is.null", False), ("not.is.null", True))
+    )
 
-        if not text:
-            continue
+    for embedding_filter, has_embedding in scan_phases:
+        for row in supabase.iter_papers(
+            table_limit,
+            embedding_filter,
+            classic_only,
+        ):
+            inspected += 1
+            text = embedding_text(row)
 
-        text_hash = content_hash(text)
-        reason = stale_reason(row, model_name, text_hash, force)
+            if not text:
+                continue
 
-        if not reason:
-            continue
+            text_hash = content_hash(text)
+            reason = stale_reason(row, has_embedding, model_name, text_hash, force)
 
-        candidates.append(
-            PaperCandidate(
-                id=row["id"],
-                title=row["title"],
-                abstract=row.get("abstract") or "",
-                text=text,
-                content_hash=text_hash,
-                stale_reason=reason,
-            ),
-        )
+            if not reason:
+                continue
 
-        if len(candidates) >= limit:
-            break
+            candidates.append(
+                PaperCandidate(
+                    id=row["id"],
+                    title=row["title"],
+                    abstract=row.get("abstract") or "",
+                    text=text,
+                    content_hash=text_hash,
+                    stale_reason=reason,
+                ),
+            )
 
-    return candidates
+            if len(candidates) >= limit:
+                return CandidateScan(candidates, inspected, False)
+
+    return CandidateScan(candidates, inspected, True)
 
 
 def write_embeddings(
@@ -210,17 +286,75 @@ def write_embeddings(
         )
 
 
-def main() -> None:
-    load_local_env()
-    args = parse_args()
+def scan_progress(scan: CandidateScan) -> dict[str, Any]:
+    return {
+        "inspected": scan.inspected,
+        "scanComplete": scan.scan_complete,
+        "status": (
+            "catalog_fully_fresh"
+            if scan.scan_complete and not scan.candidates
+            else "scan_complete_with_candidates"
+            if scan.scan_complete
+            else "candidate_limit_reached"
+        ),
+    }
+
+
+def append_log(log_file: Path | None, event: dict[str, Any]) -> None:
+    if not log_file:
+        return
+
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    with log_file.open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {"loggedAt": utc_now(), **event},
+                separators=(",", ":"),
+            )
+            + "\n",
+        )
+
+
+def encode_candidates(
+    model: Any,
+    candidates: list[PaperCandidate],
+    batch_size: int,
+    quiet: bool,
+) -> list[list[float]]:
+    encoded = model.encode(
+        [candidate.text for candidate in candidates],
+        batch_size=batch_size,
+        normalize_embeddings=True,
+        show_progress_bar=not quiet,
+    )
+    return [embedding.tolist() for embedding in encoded]
+
+
+def run(args: argparse.Namespace) -> None:
+    if args.until_fresh:
+        append_log(
+            args.log_file,
+            {
+                "event": "run_started",
+                "mode": "dry-run" if args.dry_run else "write",
+                "model": args.model,
+                "limit": args.limit,
+                "batchSize": args.batch_size,
+                "maxBatches": args.max_batches,
+                "classicOnly": args.classic_only,
+            },
+        )
     supabase = PaperEmbeddingClient()
-    candidates = load_candidates(
+    scan = load_candidates(
         supabase=supabase,
         model_name=args.model,
         limit=args.limit,
         table_limit=args.table_limit,
         force=args.force,
+        classic_only=args.classic_only,
     )
+    candidates = scan.candidates
+    progress = scan_progress(scan)
 
     if args.dry_run:
         print(
@@ -228,8 +362,9 @@ def main() -> None:
                 {
                     "mode": "dry-run",
                     "model": args.model,
-                    "inspected": args.table_limit,
+                    **progress,
                     "candidates": len(candidates),
+                    "untilFresh": args.until_fresh,
                     "papers": [
                         {
                             "id": candidate.id,
@@ -245,36 +380,119 @@ def main() -> None:
         return
 
     if not candidates:
+        result = {
+            "mode": "write",
+            "model": args.model,
+            "embedded": 0,
+            **progress,
+        }
+        if args.until_fresh:
+            result.update({"batches": 0, "logFile": str(args.log_file)})
+            append_log(args.log_file, {"event": "run_completed", **result})
         print(
-            json.dumps(
-                {
-                    "mode": "write",
-                    "model": args.model,
-                    "embedded": 0,
-                },
-            ),
+            json.dumps(result),
         )
         return
 
     model = load_model(args.model)
-    encoded = model.encode(
-        [candidate.text for candidate in candidates],
-        batch_size=args.batch_size,
-        normalize_embeddings=True,
-        show_progress_bar=not args.quiet,
-    )
-    embeddings = [embedding.tolist() for embedding in encoded]
-    write_embeddings(supabase, candidates, embeddings, args.model)
+    total_embedded = 0
+    total_inspected = 0
+    batches = 0
+
+    while candidates:
+        embeddings = encode_candidates(
+            model,
+            candidates,
+            args.batch_size,
+            args.quiet or args.until_fresh,
+        )
+        write_embeddings(supabase, candidates, embeddings, args.model)
+        batches += 1
+        total_embedded += len(candidates)
+        total_inspected += scan.inspected
+        append_log(
+            args.log_file,
+            {
+                "event": "batch_completed",
+                "batch": batches,
+                "selected": len(candidates),
+                "written": len(candidates),
+                **progress,
+            },
+        )
+
+        if not args.until_fresh:
+            break
+
+        scan = load_candidates(
+            supabase=supabase,
+            model_name=args.model,
+            limit=args.limit,
+            table_limit=args.table_limit,
+            force=args.force,
+            classic_only=args.classic_only,
+        )
+        candidates = scan.candidates
+        progress = scan_progress(scan)
+
+        if candidates and batches >= args.max_batches:
+            total_inspected += scan.inspected
+            result = {
+                "mode": "write",
+                "model": args.model,
+                "embedded": total_embedded,
+                "batches": batches,
+                "inspected": total_inspected,
+                "status": "max_batches_reached",
+                "logFile": str(args.log_file),
+            }
+            append_log(args.log_file, {"event": "run_stopped", **result})
+            print(json.dumps(result))
+            raise SystemExit(2)
+
+    if args.until_fresh:
+        total_inspected += scan.inspected
+        result = {
+            "mode": "write",
+            "model": args.model,
+            "embedded": total_embedded,
+            "batches": batches,
+            "inspected": total_inspected,
+            **progress,
+            "logFile": str(args.log_file),
+        }
+        append_log(args.log_file, {"event": "run_completed", **result})
+        print(json.dumps(result))
+        return
 
     print(
         json.dumps(
             {
                 "mode": "write",
                 "model": args.model,
-                "embedded": len(candidates),
+                "embedded": total_embedded,
+                **progress,
             },
         ),
     )
+
+
+def main() -> None:
+    load_local_env()
+    args = parse_args()
+    try:
+        run(args)
+    except Exception as error:
+        if args.until_fresh:
+            append_log(
+                args.log_file,
+                {
+                    "event": "run_failed",
+                    "errorType": type(error).__name__,
+                    "error": str(error)[:500],
+                },
+            )
+        raise
 
 
 if __name__ == "__main__":

@@ -83,6 +83,9 @@ Current status:
 - `topic_embeddings` and `user_profile_embeddings` exist with RLS enabled;
 - `scripts/embedding_common.py` shares Supabase REST access, hashing, model loading, and pgvector formatting between workers;
 - `scripts/embed_papers.py` supports real Supabase candidate selection over REST;
+- paper candidate discovery prioritizes missing vectors server-side, then scans
+  embedded metadata in bounded pages for model/content staleness; it does not
+  transfer vector payloads merely to decide whether work is needed;
 - `scripts/embed_topics.py` supports real Supabase candidate selection and upserts for `topic_embeddings`;
 - `--dry-run` lists stale/missing topic and paper embeddings without loading the model;
 - `match_papers_by_embedding` is installed in Supabase for pgvector top-K retrieval;
@@ -516,6 +519,34 @@ Local dry-run:
 python3 scripts/embed_topics.py --dry-run --limit 10 --table-limit 100
 python3 scripts/embed_papers.py --dry-run --limit 3 --table-limit 20
 ```
+
+For the paper worker, `--limit` bounds candidates per run and `--table-limit`
+sets the maximum REST page size, not a global oldest-first inspection window.
+The worker reports the actual inspected-row count, whether the eligible catalog
+scan completed, and whether it stopped because it reached the candidate limit.
+The classic-discovery workflow uses `--classic-only` so its embedding post-step
+is independent of each classic paper's position in the global catalog.
+
+For a one-off local backlog drain, the same paper worker can retain the loaded
+model and process bounded batches until a verification scan is fully fresh:
+
+```bash
+uv run --isolated --with-requirements requirements-embeddings.txt \
+  python scripts/embed_papers.py --until-fresh --limit 256 --batch-size 64 \
+  --log-file .codex-logs/embed-papers-backfill.log --quiet
+```
+
+Run metadata and batch details are appended as timestamped JSON Lines to the
+`.log` file; backfill mode suppresses model progress and stdout contains only
+the terminal JSON summary, so scheduled workflow parsing stays unchanged.
+`--max-batches` defaults to 100 as a safety bound. Dry-run mode performs one
+read-only preview and never loads the model or enters a write loop.
+
+Supabase REST calls retry transient DNS, connection, timeout, rate-limit, and
+server failures with bounded exponential backoff. Permanent HTTP failures still
+stop immediately. If all retry attempts fail, backfill mode appends a
+`run_failed` event to the `.log`; rerunning is safe because completed embedding
+metadata is the durable checkpoint.
 
 The dry-run does not import `sentence-transformers`; it only needs Supabase environment variables.
 

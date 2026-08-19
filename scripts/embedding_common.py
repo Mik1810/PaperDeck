@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import socket
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -13,6 +15,9 @@ from typing import Any
 
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIMENSION = 384
+REST_MAX_ATTEMPTS = 5
+REST_RETRY_BASE_SECONDS = 1.0
+RETRYABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
 def load_local_env(path: Path = Path(".env.local")) -> None:
@@ -83,12 +88,41 @@ class SupabaseRestClient:
             method=method,
         )
 
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                response_body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as error:
-            error_body = error.read().decode("utf-8")
-            raise RuntimeError(f"Supabase REST error {error.code}: {error_body}") from error
+        response_body = ""
+        for attempt in range(1, REST_MAX_ATTEMPTS + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    response_body = response.read().decode("utf-8")
+                break
+            except urllib.error.HTTPError as error:
+                try:
+                    error_body = error.read().decode("utf-8")
+                finally:
+                    error.close()
+                if (
+                    error.code not in RETRYABLE_HTTP_STATUS_CODES
+                    or attempt == REST_MAX_ATTEMPTS
+                ):
+                    raise RuntimeError(
+                        f"Supabase REST error {error.code}: {error_body}",
+                    ) from error
+            except urllib.error.URLError as error:
+                if not isinstance(
+                    error.reason,
+                    (socket.gaierror, TimeoutError, ConnectionError),
+                ) or attempt == REST_MAX_ATTEMPTS:
+                    raise RuntimeError(
+                        "Supabase REST network error after "
+                        f"{attempt} attempt(s): {error.reason}",
+                    ) from error
+            except TimeoutError as error:
+                if attempt == REST_MAX_ATTEMPTS:
+                    raise RuntimeError(
+                        "Supabase REST timeout after "
+                        f"{attempt} attempt(s)",
+                    ) from error
+
+            time.sleep(REST_RETRY_BASE_SECONDS * (2 ** (attempt - 1)))
 
         if not response_body:
             return None
