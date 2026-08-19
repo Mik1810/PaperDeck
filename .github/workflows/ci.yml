@@ -250,13 +250,30 @@ jobs:
         id: schema_parity
         run: npm run db:test:prepare
 
-      - name: Install Playwright browser
-        id: playwright_install
-        run: npx playwright install --with-deps --only-shell chromium
-
-      - name: Isolated Playwright smoke tests
+      - name: Isolated Playwright smoke tests in official container
         id: e2e
-        run: npm run test:e2e
+        shell: bash
+        run: |
+          playwright_version="$(node -p 'require("@playwright/test/package.json").version')"
+          docker run --rm --init --ipc=host --network host \
+            --volume "$GITHUB_WORKSPACE:/work" \
+            --workdir /work \
+            --env CI=true \
+            --env GITHUB_ACTIONS=true \
+            --env "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" \
+            --env "CLERK_SECRET_KEY=$CLERK_SECRET_KEY" \
+            --env "NEXT_PUBLIC_CLERK_SIGN_IN_URL=$NEXT_PUBLIC_CLERK_SIGN_IN_URL" \
+            --env "NEXT_PUBLIC_CLERK_SIGN_UP_URL=$NEXT_PUBLIC_CLERK_SIGN_UP_URL" \
+            --env "NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=$NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL" \
+            --env "NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=$NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL" \
+            --env "DATABASE_URL=$DATABASE_URL" \
+            --env "PAPERDECK_TEST_DATABASE_URL=$PAPERDECK_TEST_DATABASE_URL" \
+            --env "DATABASE_MAX_CONNECTIONS=$DATABASE_MAX_CONNECTIONS" \
+            --env "NEXT_PUBLIC_PAPERDECK_DEV_AUTH=$NEXT_PUBLIC_PAPERDECK_DEV_AUTH" \
+            --env "PAPERDECK_E2E_DEV_AUTH=$PAPERDECK_E2E_DEV_AUTH" \
+            --env "PAPERDECK_E2E_OWNER_ID=$PAPERDECK_E2E_OWNER_ID" \
+            "mcr.microsoft.com/playwright:v${playwright_version}-noble" \
+            npm run test:e2e
 
       - name: Summary
         if: always()
@@ -269,7 +286,6 @@ jobs:
           echo "| PostgreSQL | \`${{ steps.database.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| dependency install | \`${{ steps.dependencies.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| migration-complete schema | \`${{ steps.schema_parity.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Playwright browser install | \`${{ steps.playwright_install.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| e2e smoke tests | \`${{ steps.e2e.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Playwright container E2E | \`${{ steps.e2e.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "*Job status: \`${{ job.status }}\`.*" >> "$GITHUB_STEP_SUMMARY"
