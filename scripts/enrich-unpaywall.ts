@@ -5,14 +5,13 @@ import {
   loadEligibleEnrichmentCandidates,
   processEnrichmentBatch,
   recordEnrichmentOutcome,
-  isRetryableProviderStatus,
   olderThanEnrichmentPaperFilter,
   RetryableProviderError,
 } from "./enrichment-outcomes";
+import { fetchUnpaywall } from "./unpaywall-client";
 import {
   UPCursorSchema,
   UPPaperRowArraySchema,
-  UPResponseSchema,
   type UPLocation,
   type UPResponse,
   type UPPaperRow,
@@ -22,10 +21,10 @@ type EnrichConfig = {
   limit: number;
   dryRun: boolean;
   requestDelayMs: number;
+  requestTimeoutMs: number;
   email: string;
 };
 
-const UP_BASE = "https://api.unpaywall.org/v2";
 const CURSOR_KEY = "unpaywall_enrich";
 
 function loadLocalEnv() {
@@ -72,6 +71,11 @@ function parseArgs(): EnrichConfig {
       args.includes("--dry-run") || process.env.UNPAYWALL_DRY_RUN === "true",
     requestDelayMs: Number(
       process.env.UNPAYWALL_REQUEST_DELAY_MS ?? 500,
+    ),
+    requestTimeoutMs: Number(
+      argValue("request-timeout-ms") ??
+        process.env.UNPAYWALL_REQUEST_TIMEOUT_MS ??
+        30_000,
     ),
     email: requireEnv("UNPAYWALL_EMAIL"),
   };
@@ -145,38 +149,6 @@ async function getPapersToEnrich(
       return new Set((data ?? []).map(({ paper_id }) => paper_id));
     },
   });
-}
-
-async function fetchUnpaywall(doi: string, email: string) {
-  const params = new URLSearchParams({ email });
-  const query = params.size ? `?${params}` : "";
-  let response: Response;
-
-  try {
-    response = await fetch(`${UP_BASE}/${encodeURIComponent(doi)}${query}`);
-  } catch {
-    throw new RetryableProviderError();
-  }
-
-  if (response.status === 404) {
-    return null;
-  }
-
-  if (isRetryableProviderStatus(response.status)) {
-    throw new RetryableProviderError();
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `Unpaywall API error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  try {
-    return UPResponseSchema.parse(await response.json());
-  } catch {
-    throw new RetryableProviderError();
-  }
 }
 
 function bestOaUrl(best: UPLocation | null) {
@@ -309,7 +281,11 @@ async function main() {
       dryRun: config.dryRun,
       paperId: (paper) => paper.id,
       lookup: async ([paper]) => {
-        const up = await fetchUnpaywall(paper.doi!, config.email);
+        const up = await fetchUnpaywall({
+          doi: paper.doi!,
+          email: config.email,
+          timeoutMs: config.requestTimeoutMs,
+        });
         const decision = !up
           ? { outcome: "not_found" as const }
           : !up.is_oa

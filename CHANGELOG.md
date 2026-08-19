@@ -41,6 +41,10 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Accepted nullable Semantic Scholar open-access statuses without deferring an
+  otherwise valid mixed batch, and bounded each Unpaywall lookup with a
+  configurable abortable timeout so one stalled request becomes a retryable
+  outcome instead of blocking the enrichment backlog indefinitely.
 - Prevented bounded Semantic Scholar, OpenAlex, and Unpaywall enrichment runs
   from repeatedly selecting the same permanent provider misses. Durable
   per-paper outcomes now separate terminal misses/non-OA responses from
