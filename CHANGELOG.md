@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Recorded the approved private-group discussion decision: implementation stays
+  blocked on a successful research pilot, while a conditional one-channel,
+  paper-linked plain-text scope now defines lifecycle, unread and notification
+  semantics, moderation ownership, retention/export/delete behavior, threat
+  controls, rollout gates, and stop conditions.
 - Enabled the Production research-group write switch after a guarded Supabase
   rollout verified the deployed migrations, RLS, service-role-only mutation
   RPCs, empty collaboration tables, healthy Vercel deployment, and a clean

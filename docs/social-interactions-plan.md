@@ -173,7 +173,7 @@ Un member puo' copiare un paper nella **propria** libreria con un'azione esplici
 | Share | nessuno | tutto client-side, nessuna analytics persistita |
 | Follow privati | `topic_subscriptions` | `(owner_id, topic_id)` come chiave; non riusare `user_interests` |
 | Collaboration | `collaboration_identities`, `research_groups`, `research_group_members`, `research_group_invitations`, `notifications`, `research_group_items`, `research_group_activity` | UUID pubblico, discovery HMAC, ACL, ruoli, token hashati, notifiche recipient-owned, revision e audit minimale |
-| Discussione | `research_group_comments`, `content_reports`, `user_blocks` | plain text, limiti, stati di moderazione |
+| Discussione | `research_group_messages`, `content_reports`, `user_blocks` | canale unico plain text, contesto paper opzionale, limiti e stati di moderazione |
 | Pubblico | `public_profiles`, `public_collection_publications`, `privacy_consents` | consenso/versione, handle e pubblicazione selettiva |
 | Operativita' | `moderation_cases`, `moderation_actions`, `security_audit_events`, `export_jobs`, `deletion_jobs` | lifecycle, audit, export e delete verificabili |
 
@@ -300,17 +300,20 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 
 ### H — Discussione e attivita' nel gruppo
 
-Solo dopo un pilot sano, aggiungere discussione limitata alla collection.
+La decisione completa e' in `docs/group-discussion-decision.md`. Lo stato e'
+no-go finche' il pilot privato non supera i gate del charter. Dopo quel gate, il
+primo scope usa un solo canale cronologico per gruppo e un unico modello di
+messaggio, con riferimento opzionale a un paper; le viste paper-specifiche non
+creano un secondo modello di commenti.
 
-- `research_group_comments` separata da `paper_notes`;
-- commento plain text, lunghezza limitata, opzionalmente legato a un paper;
-- autore modifica/elimina il proprio contenuto; owner puo' nascondere o rimuovere contenuto nel proprio gruppo;
-- activity log e inbox in-app; niente email/push, mention, thread profondi, allegati o HTML nella prima iterazione;
-- rate limit, validazione server-side, escaping sicuro e stato lifecycle (`active`, `hidden`, `deleted`).
+Il primo rilascio resta plain text, senza editing, e include cancellazione
+autore, hide moderato, report/blocco, rate limit, retention, export, unread
+separato dalle notifiche e kill switch dedicati. Niente email/push, mention,
+thread profondi, allegati, rich HTML o ranking sociale.
 
-**Trust minimo gia' in beta:** blocco utente, report di contenuto, audit delle azioni owner/admin e percorso di rimozione. Il fatto che una collection sia invite-only non elimina il bisogno di interrompere abuso o accesso.
-
-**Gate di uscita:** owner e utente possono rimuovere/bloccare/reportare; i test coprono XSS, limiti, revoca e autorizzazione autore/member/admin/owner/bloccato.
+**Gate di uscita:** pilot e decision record approvati; owner e utente possono
+rimuovere/bloccare/reportare; i test coprono XSS, limiti, revoca, retention e
+autorizzazione autore/member/admin/owner/bloccato.
 
 ### I — Collection unlisted read-only
 

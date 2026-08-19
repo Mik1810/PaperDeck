@@ -181,6 +181,7 @@ Protected routes require Clerk production keys on public deployments. Developmen
 │   ├── database.md
 │   ├── deployment.md
 │   ├── embeddings.md
+│   ├── group-discussion-decision.md
 │   ├── ingestion.md
 │   ├── mobile-swipe-diagnosis.md
 │   ├── pwa.md
