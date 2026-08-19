@@ -12,8 +12,8 @@ This project follows Semantic Versioning.
   App CI job. Full changes now run core validation and isolated browser coverage
   as parallel jobs after one shared changed-file classification, while docs-only
   pull requests retain the lightweight terminal `app-ci` path. The browser job
-  caches the Chromium headless shell by exact Playwright version and downloads
-  it only on cache misses while continuing to install Linux dependencies.
+  runs the suite in the official Noble Playwright image matching the installed
+  package version, avoiding per-run APT and browser installation.
 - Expanded full App CI with the complete unit suite, an explicit localhost-only
   aggregate of deterministic PostgreSQL integration regressions, and the
   existing Pixel 5 Playwright project. Mobile CI now includes a real touch
