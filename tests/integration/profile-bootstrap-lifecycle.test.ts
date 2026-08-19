@@ -64,6 +64,7 @@ run("explicit onboarding lifecycle provisions profile and Read later", async () 
     displayName: "Lifecycle fixture",
     imageUrl: null,
     primaryEmail: null,
+    sourceUpdatedAt: 0,
   });
 
   const [state] = await sql<{ playlists: number; profiles: number }[]>`

@@ -4,13 +4,17 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { collaborationIdentities, profiles } from "@/db/schema";
 import type { AuthenticatedUserContext } from "@/lib/auth/session";
+import { syncClerkCollaborationIdentity } from "@/lib/clerk/user-identity-sync";
 import { isDevAuthEnabled } from "@/lib/auth/dev-auth";
 import { emailLookupHash } from "@/lib/collaboration/email-lookup";
 import {
   type GroupInvitePolicy,
   validatePublicDisplayName,
 } from "@/lib/collaboration/profile";
-import { createClerkAuthenticatedClient } from "@/lib/supabase/server";
+import {
+  createClerkAuthenticatedClient,
+  createServiceRoleClient,
+} from "@/lib/supabase/server";
 
 export type CollaborationSettings = {
   displayName: string;
@@ -83,38 +87,23 @@ export async function syncCollaborationIdentity(
     return;
   }
 
-  const supabase = await createClerkAuthenticatedClient();
-
-  if (!user.primaryEmail) {
-    const { error } = await supabase
-      .from("collaboration_identities")
-      .delete()
-      .eq("owner_id", user.ownerId);
-
-    if (error) {
-      throw new Error(`Could not remove collaboration identity: ${error.message}`);
-    }
-    return;
-  }
-
-  const values: Record<string, unknown> = {
-    owner_id: user.ownerId,
-    email_lookup_hash: emailLookupHash(user.primaryEmail),
-    email_hash_version: 1,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (preferences) {
-    values.discoverable_by_email = preferences.discoverableByEmail;
-    values.group_invite_policy = preferences.groupInvitePolicy;
-  }
-
-  const { error } = await supabase
-    .from("collaboration_identities")
-    .upsert(values, { onConflict: "owner_id" });
+  const supabase = createServiceRoleClient();
+  const { error } = await syncClerkCollaborationIdentity(
+    {
+      ownerId: user.ownerId,
+      sourceUpdatedAt: user.sourceUpdatedAt,
+      emailLookupHash: user.primaryEmail
+        ? emailLookupHash(user.primaryEmail)
+        : null,
+      discoverableByEmail: preferences?.discoverableByEmail,
+      groupInvitePolicy: preferences?.groupInvitePolicy,
+      allowSameSourceVersion: true,
+    },
+    supabase,
+  );
 
   if (error) {
-    throw new Error(`Could not sync collaboration identity: ${error.message}`);
+    throw new Error("Could not sync collaboration identity");
   }
 }
 

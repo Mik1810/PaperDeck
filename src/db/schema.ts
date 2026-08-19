@@ -1,4 +1,4 @@
-import { pgTable, pgPolicy, text, timestamp, foreignKey, unique, uuid, boolean, check, index, real, integer, uniqueIndex, vector, jsonb, primaryKey, pgEnum, bigint } from "drizzle-orm/pg-core"
+import { pgTable, pgPolicy, pgSchema, text, timestamp, foreignKey, unique, uuid, boolean, check, index, real, integer, uniqueIndex, vector, jsonb, primaryKey, pgEnum, bigint } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const interactionType = pgEnum("interaction_type", ['seen', 'open_detail', 'dismiss', 'favorite', 'save_to_playlist', 'read', 'not_interested', 'already_read'])
@@ -12,6 +12,17 @@ export const researchGroupInvitationStatus = pgEnum("research_group_invitation_s
 export const researchGroupPaperNotificationPreference = pgEnum("research_group_paper_notification_preference", ['all', 'important_only', 'muted'])
 export const researchGroupPaperActivityKind = pgEnum("research_group_paper_activity_kind", ['papers_added', 'paper_removed'])
 export const notificationType = pgEnum("notification_type", ['friend_request_received', 'friendship_accepted', 'group_invitation_received', 'group_invitation_accepted', 'group_member_joined', 'group_membership_ended', 'group_role_changed', 'group_ownership_transferred', 'group_papers_added', 'group_paper_removed'])
+
+export const privateSchema = pgSchema("private")
+
+export const clerkUserIdentitySyncState = privateSchema.table("clerk_user_identity_sync_state", {
+	ownerId: text("owner_id").primaryKey().notNull(),
+	sourceUpdatedAt: bigint("source_updated_at", { mode: "number" }).default(0).notNull(),
+	accountClosed: boolean("account_closed").default(false).notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	check("clerk_user_identity_sync_state_source_updated_at_check", sql`${table.sourceUpdatedAt} >= 0`),
+]);
 
 
 export const profiles = pgTable("profiles", {
