@@ -115,6 +115,9 @@ Aggiornato al 2026-08-19:
   - Discovery classici organizzata per aree CS descritte, con query seed mirate e filtro opzionale per categoria.
   - 447 paper arXiv nel database, 0 duplicati `arxiv_id`.
 - Enrichment esterno: completato.
+  - Gli esiti per paper/provider sono persistiti separatamente dagli ID
+    positivi: miss permanenti e risposte non-OA non bloccano la finestra
+    bounded, mentre gli errori transitori rientrano con backoff 1h-24h.
   - Semantic Scholar: 277 paper con citation count, venue corretta, DOI, S2 ID.
   - OpenAlex: 11 paper con venue publisher, open access status, topic, abstract.
   - Unpaywall: 24 URL open access legali per paper con DOI.

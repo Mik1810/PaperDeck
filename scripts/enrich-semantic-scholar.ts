@@ -2,6 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import {
+  loadEligibleEnrichmentCandidates,
+  processEnrichmentBatch,
+  recordEnrichmentOutcome,
+  isRetryableProviderStatus,
+  olderThanEnrichmentPaperFilter,
+  RetryableProviderError,
+} from "./enrichment-outcomes";
+import {
   S2BatchResponseSchema,
   S2CursorSchema,
   S2PaperRowArraySchema,
@@ -101,20 +109,35 @@ async function getPapersToEnrich(
   supabase: ReturnType<typeof createSupabaseClient>,
   limit: number,
 ) {
-  const { data, error } = await supabase
-    .from("papers")
-    .select("id, arxiv_id, doi, venue, year, ingested_at")
-    .eq("source", "arxiv")
-    .is("semantic_scholar_id", null)
-    .not("arxiv_id", "is", null)
-    .order("ingested_at", { ascending: false })
-    .limit(limit);
+  return loadEligibleEnrichmentCandidates<S2PaperRow>({
+    supabase,
+    provider: "semantic_scholar",
+    limit,
+    paperId: (paper) => paper.id,
+    fetchPage: async (after, pageSize) => {
+      let query = supabase
+        .from("papers")
+        .select("id, arxiv_id, doi, venue, year, ingested_at")
+        .eq("source", "arxiv")
+        .is("semantic_scholar_id", null)
+        .not("arxiv_id", "is", null)
+        .order("ingested_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(pageSize);
 
-  if (error) {
-    throw error;
-  }
+      if (after) {
+        query = query.or(olderThanEnrichmentPaperFilter(after));
+      }
 
-  return S2PaperRowArraySchema.parse(data ?? []);
+      const { data, error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      return S2PaperRowArraySchema.parse(data ?? []);
+    },
+  });
 }
 
 async function fetchS2Batch(
@@ -129,16 +152,26 @@ async function fetchS2Batch(
     headers["x-api-key"] = apiKey;
   }
 
-  const response = await fetch(
-    `${S2_BASE}/paper/batch?fields=${S2_FIELDS}`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        ids: arxivIds.map((id) => `ArXiv:${id}`),
-      }),
-    },
-  );
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `${S2_BASE}/paper/batch?fields=${S2_FIELDS}`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ids: arxivIds.map((id) => `ArXiv:${id}`),
+        }),
+      },
+    );
+  } catch {
+    throw new RetryableProviderError();
+  }
+
+  if (isRetryableProviderStatus(response.status)) {
+    throw new RetryableProviderError();
+  }
 
   if (!response.ok) {
     throw new Error(
@@ -146,7 +179,11 @@ async function fetchS2Batch(
     );
   }
 
-  return S2BatchResponseSchema.parse(await response.json());
+  try {
+    return S2BatchResponseSchema.parse(await response.json());
+  } catch {
+    throw new RetryableProviderError();
+  }
 }
 
 async function updatePaper(
@@ -266,69 +303,98 @@ async function main() {
   );
 
   const supabase = createSupabaseClient();
-  const papers = await getPapersToEnrich(supabase, config.limit);
+  const candidates = await getPapersToEnrich(supabase, config.limit);
 
-  if (!papers.length) {
+  if (!candidates.length) {
     console.error("No papers found needing enrichment");
     return;
   }
 
-  console.error(`Found ${papers.length} papers to enrich`);
+  console.error(`Found ${candidates.length} eligible papers to enrich`);
 
   const cursor = await getCursor(supabase);
   let totalEnriched = cursor?.imported_count ?? 0;
   let totalFound = 0;
   let totalNotFound = 0;
+  let totalRetryableErrors = 0;
+  let providerLookups = 0;
+  let providerRequests = 0;
 
-  for (let i = 0; i < papers.length; i += config.batchSize) {
+  for (let i = 0; i < candidates.length; i += config.batchSize) {
     if (i > 0) {
       await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
     }
 
-    const batch = papers.slice(i, i + config.batchSize);
-    const arxivIds = batch.map((p) => p.arxiv_id);
+    const batch = candidates.slice(i, i + config.batchSize);
 
     console.error(
       `Batch ${Math.floor(i / config.batchSize) + 1}: ${batch.length} papers`,
     );
 
-    const s2Results = await fetchS2Batch(arxivIds, config.apiKey);
+    const batchSummary = await processEnrichmentBatch<S2PaperRow, S2Paper>({
+      candidates: batch,
+      dryRun: config.dryRun,
+      paperId: (paper) => paper.id,
+      lookup: async (papers) => {
+        const results = await fetchS2Batch(
+          papers.map((paper) => paper.arxiv_id),
+          config.apiKey,
+        );
+        return new Map(
+          papers.map((paper, index) => [
+            paper.id,
+            results[index]
+              ? { outcome: "found" as const, value: results[index]! }
+              : { outcome: "not_found" as const },
+          ]),
+        );
+      },
+      applyFound: (paper, s2) => updatePaper(supabase, paper, s2),
+      persistOutcome: (candidate, outcome) =>
+        recordEnrichmentOutcome({
+          supabase,
+          provider: "semantic_scholar",
+          paperId: candidate.paper.id,
+          outcome,
+          previousAttemptCount: candidate.previousAttemptCount,
+        }),
+    });
 
-    let batchFound = 0;
+    totalFound += batchSummary.found;
+    totalNotFound += batchSummary.notFound;
+    totalRetryableErrors += batchSummary.retryableErrors;
+    providerLookups += batchSummary.providerLookups;
+    providerRequests += batchSummary.providerRequests;
 
-    for (let j = 0; j < batch.length; j++) {
-      const paper = batch[j];
-      const s2 = s2Results[j];
-
-      if (!s2) {
-        totalNotFound++;
-        continue;
-      }
-
-      totalFound++;
-      batchFound++;
-
-      if (!config.dryRun) {
-        await updatePaper(supabase, paper, s2);
-      }
+    if (batchSummary.retryableErrors) {
+      console.error(
+        `Batch deferred after a retryable provider failure: ${batchSummary.retryableErrors} papers`,
+      );
     }
 
     if (!config.dryRun) {
-      totalEnriched += batchFound;
+      totalEnriched += batchSummary.found;
 
       if (batch.length > 0) {
         const lastPaper = batch[batch.length - 1];
-        await updateCursor(supabase, totalEnriched, lastPaper.id);
+        await updateCursor(supabase, totalEnriched, lastPaper.paper.id);
       }
     }
   }
 
   const summary = {
     mode: config.dryRun ? "dry-run" : "write",
-    papersChecked: papers.length,
+    papersChecked: candidates.length,
     enriched: totalFound,
     notFound: totalNotFound,
-    totalEnriched: config.dryRun ? totalEnriched : totalEnriched,
+    retryableErrors: totalRetryableErrors,
+    providerLookups,
+    providerRequests,
+    lookupsPerTerminalOutcome:
+      totalFound + totalNotFound > 0
+        ? providerLookups / (totalFound + totalNotFound)
+        : null,
+    totalEnriched,
   };
 
   console.log(JSON.stringify(summary));
