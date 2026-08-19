@@ -25,6 +25,12 @@
 - Added bounded exponential retry for transient REST DNS, connection, timeout,
   rate-limit, and server errors, plus terminal `run_failed` logging. Permanent
   HTTP errors still fail immediately.
+- The resumed Production backfill wrote the remaining 2,976 vectors in 12
+  batches and ended with a complete `catalog_fully_fresh` scan. A separate
+  read-only SQL audit verified 4,793/4,793 papers embedded, with zero missing
+  vectors, wrong models, non-384 dimensions, missing timestamps, or mismatched
+  content hashes; a newly embedded sample was returned by current-model
+  `match_papers_by_embedding` retrieval.
 
 ## Environment boundary
 
