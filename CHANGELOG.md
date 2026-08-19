@@ -201,6 +201,12 @@ This project follows Semantic Versioning.
 
 ### Changed
 
+- Added a docs-only fast path to the required App CI job. Pull requests limited
+  to documentation and session-history files now run only native changed-file
+  classification and diff integrity, while all other changes retain the full
+  database, audit, lint, recommendation, build, and E2E gates. Full CI now
+  installs only Playwright's Chromium headless shell while preserving Linux
+  dependency installation.
 - Added a secret-safe hosted database configuration gate: Vercel Preview and
   Production builds now fail before deployment unless the runtime uses the
   Supabase shared Transaction pooler on port 6543 with a three-connection

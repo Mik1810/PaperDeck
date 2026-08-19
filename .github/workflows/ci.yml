@@ -18,20 +18,6 @@ jobs:
   app-ci:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    services:
-      postgres:
-        image: pgvector/pgvector:0.8.0-pg17
-        env:
-          POSTGRES_DB: paperdeck_test
-          POSTGRES_PASSWORD: paperdeck_local_only
-          POSTGRES_USER: paperdeck
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U paperdeck -d paperdeck_test"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 30
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_replace_me' }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_replace_me' }}
@@ -49,37 +35,118 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed files
+        id: changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mode=full
+          changed_count=0
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            mode=docs-only
+            while IFS= read -r -d '' path; do
+              changed_count=$((changed_count + 1))
+              case "$path" in
+                docs/*|sessions/*|README.md|ROADMAP.md|CHANGELOG.md) ;;
+                *) mode=full ;;
+              esac
+            done < <(git diff --name-only --no-renames -z "$BASE_SHA" "$HEAD_SHA")
+
+            if (( changed_count == 0 )); then
+              mode=full
+            fi
+          fi
+
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "changed_count=$changed_count" >> "$GITHUB_OUTPUT"
+          echo "App CI mode: $mode ($changed_count changed files)"
+
+      - name: Docs-only integrity check
+        id: docs_integrity
+        if: steps.changes.outputs.mode == 'docs-only'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git diff --check "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Start PostgreSQL
+        id: database
+        if: steps.changes.outputs.mode == 'full'
+        shell: bash
+        run: |
+          docker run --detach --name paperdeck-postgres \
+            --env POSTGRES_DB=paperdeck_test \
+            --env POSTGRES_PASSWORD=paperdeck_local_only \
+            --env POSTGRES_USER=paperdeck \
+            --publish 5432:5432 \
+            --health-cmd "pg_isready -U paperdeck -d paperdeck_test" \
+            --health-interval 2s \
+            --health-timeout 3s \
+            --health-retries 30 \
+            pgvector/pgvector:0.8.0-pg17
+
+          for attempt in {1..30}; do
+            status="$(docker inspect --format '{{.State.Health.Status}}' paperdeck-postgres)"
+            if [[ "$status" == "healthy" ]]; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs paperdeck-postgres
+          exit 1
 
       - name: Setup Node
+        if: steps.changes.outputs.mode == 'full'
         uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: npm
 
       - name: Install dependencies
+        id: dependencies
+        if: steps.changes.outputs.mode == 'full'
         run: npm ci
 
       - name: Rebuild and verify migration-complete test schema
         id: schema_parity
+        if: steps.changes.outputs.mode == 'full'
         run: npm run db:test:prepare
 
       - name: Audit service-role boundaries
+        id: service_role_audit
+        if: steps.changes.outputs.mode == 'full'
         run: npm run audit:service-role
 
       - name: Lint
+        id: lint
+        if: steps.changes.outputs.mode == 'full'
         run: npm run lint
 
       - name: Deterministic recommendation stability gate
         id: recommendation_stability
+        if: steps.changes.outputs.mode == 'full'
         run: npm run evaluate:recommendations
 
       - name: Build
+        id: build
+        if: steps.changes.outputs.mode == 'full'
         run: npm run build
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        id: playwright_install
+        if: steps.changes.outputs.mode == 'full'
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Isolated Playwright smoke tests
+        id: e2e
+        if: steps.changes.outputs.mode == 'full'
         run: npm run test:e2e
 
       - name: Summary
@@ -88,13 +155,20 @@ jobs:
         run: |
           echo "## App CI Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Mode: \`${{ steps.changes.outputs.mode }}\` (${{ steps.changes.outputs.changed_count }} changed files)." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| changed-file classifier | \`${{ steps.changes.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| docs-only integrity | \`${{ steps.docs_integrity.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| PostgreSQL | \`${{ steps.database.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| dependency install | \`${{ steps.dependencies.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| migration-complete schema | \`${{ steps.schema_parity.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| service-role audit | ✅ |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| lint | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| service-role audit | \`${{ steps.service_role_audit.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| lint | \`${{ steps.lint.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| deterministic recommendation stability | \`${{ steps.recommendation_stability.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| build | ✅ |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| e2e smoke tests | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| build | \`${{ steps.build.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Playwright browser install | \`${{ steps.playwright_install.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| e2e smoke tests | \`${{ steps.e2e.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "*Job status: \`${{ job.status }}\`.*" >> "$GITHUB_STEP_SUMMARY"
