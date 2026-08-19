@@ -23,6 +23,7 @@ DATABASE_URL="$database_url" node -e '
 
 export DATABASE_URL="$database_url"
 export PAPERDECK_RUN_ARXIV_BUNDLE_INTEGRATION=true
+export PAPERDECK_RUN_CLASSIC_BUNDLE_INTEGRATION=true
 export PAPERDECK_RUN_CATALOG_SEARCH_INTEGRATION=true
 export PAPERDECK_RUN_GROUP_INVITES_INTEGRATION=true
 export PAPERDECK_RUN_LIBRARY_INTEGRATION=true
@@ -39,6 +40,7 @@ exec node \
   --test \
   --test-concurrency=1 \
   tests/integration/arxiv-paper-bundle.test.ts \
+  tests/integration/classic-paper-bundle.test.ts \
   tests/integration/catalog-search-pagination.test.ts \
   tests/integration/clerk-user-deletion-lifecycle.test.ts \
   tests/integration/database-runtime-pool.test.ts \
