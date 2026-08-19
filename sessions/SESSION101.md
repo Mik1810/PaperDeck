@@ -24,8 +24,13 @@
 - Classifier allowlist, source/config fallback, rename safety, and empty-diff
   fallback cases: passed.
 - Repository Playwright 1.61.1 CLI: confirmed support for `--only-shell`.
-- Remote docs-only and three-run full-CI timing evidence: pending draft-PR
-  validation.
+- Draft PR #217 full-CI attempts all passed, including the existing E2E suite:
+  total job times were 5m08s, 2m24s, and 7m07s. The browser-install steps were
+  188s, 33s, and 308s respectively: median 188s and worst 308s. The headless
+  shell reduction therefore preserves the full gate but does not justify a
+  speed-improvement claim; install variance remains high enough to evaluate an
+  exact-version Playwright image separately.
+- Remote docs-only timing evidence: pending stacked-PR validation.
 
 ## Environment boundary
 
