@@ -61,11 +61,16 @@ Prefer:
 ## 4. Keep process polling cheap
 
 For commands expected to take more than ~2 seconds:
-- invoke the command/tool with about **30 seconds** of yield/wait time;
-- if it is still running, wait/poll again with about **30 seconds**;
+- use about **30 seconds** for the initial command yield so ordinary checks can finish without an extra round-trip;
+- once a process is clearly long-running, use about **55 seconds** for subsequent waits, or the longest supported wait strictly below 60 seconds;
+- if a wait returns no actionable new output and the process is still running, immediately issue the next long wait instead of reopening analysis or status discovery;
 - never poll every 1–5 seconds unless the process is genuinely interactive.
 
-A running process does not need a new model inference every second.
+For remote CI:
+- normal issue publication still stops at `WAITING_FOR_CHECKS` / `WAITING_FOR_CI`; do not watch CI merely to merge sooner;
+- only when remote CI timing/completion is itself explicit acceptance evidence, prefer one blocking watcher for the known run (for example `gh run watch <run-id> --exit-status`) and the same ~55-second follow-up waits instead of alternating `gh run view` / `gh pr checks` polling.
+
+A running process does not need a fresh full-context inference every 30 seconds. Longer bounded waits reduce those inference cycles while preserving responsiveness.
 
 ## 5. Implement
 
@@ -213,5 +218,11 @@ At the end of meaningful work:
 
 ## 9. Stop context growth
 
-Do not continue directly into a different issue.
-For separate follow-up work, produce a compact handoff and start a fresh task/thread.
+Treat this task as scope-closed once the current issue reaches a terminal publication state (`MERGED`, `AUTO_MERGE_ENABLED`, `WAITING_*`, or `BLOCKED_*`) or is otherwise reported complete.
+
+After that:
+- do not continue directly into a different issue, unrelated bug, or "quick fix" in this task, even when it is in the same repository;
+- do not begin discovery, create/switch branches, edit files, or publish the new work here;
+- return a compact handoff (completed issue/PR state plus the new requested target) and require a fresh task/thread for the new work.
+
+A later request that is still about the same issue/PR may continue here, for example review feedback, an explicit post-CI merge, or a targeted status check. For such follow-ups, reuse the established context: do **not** reread this `SKILL.md`, rerun `context.sh`, or reread `PROJECT_STATE.md` unless the repository/branch state materially changed and the existing context is no longer trustworthy.

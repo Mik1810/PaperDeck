@@ -57,7 +57,9 @@ During implementation:
 - Run targeted checks while iterating; broader checks once near completion when justified.
 - Use `scripts/pd-run` for noisy commands.
 - Never bypass a compact `pd-run` failure by dumping the raw log; use `scripts/pd-log`.
-- For commands expected to run longer than a couple seconds, use about 30 seconds of tool yield/wait. Do not poll every 1–5 seconds.
+- For commands expected to run longer than a couple seconds, use about 30 seconds for the initial tool yield. If the process is clearly long-running, use about 55 seconds for subsequent waits (or the longest supported wait below 60 seconds) instead of repeated 30-second polls. Do not poll every 1–5 seconds.
+- When a long-running process is still active and produced no actionable new output, immediately issue the next long wait; do not reopen reasoning, status discovery, or commentary merely to decide to keep waiting.
+- If remote CI itself is explicit acceptance evidence, prefer one blocking watcher for the known run and long waits. Otherwise stop at the normal `WAITING_*` publication state rather than watching CI.
 - Do not inspect `~/.codex/memories/MEMORY.md` for normal issue work; repository state and `PROJECT_STATE.md` are the issue sources of truth.
 
 Documentation:
@@ -84,6 +86,11 @@ Validation:
 - Never treat zero observed checks as successful CI. Merge immediately only after all observed checks are terminal pass/skipping and the PR is mergeable with no blocking review.
 - Pending CI may enable auto-merge only when at least one pending check is actually required; otherwise stop rather than risk merging while optional/unprotected CI is still running.
 - Never bypass failed checks, conflicts, branch protection, blocking reviews, or the publish helper's branch/worktree guards.
+
+Task lifecycle:
+- Once an issue reaches a terminal publication state (`MERGED`, `AUTO_MERGE_ENABLED`, `WAITING_*`, or `BLOCKED_*`) or is otherwise reported complete, treat that issue task as closed for new work.
+- If the user then asks for a materially different issue, bug, or quick fix, do not start discovery, branch changes, edits, or publication in the same task. Give a compact handoff and require a fresh Codex task/thread for the new work.
+- A same-issue follow-up such as checking a finished CI run, addressing review feedback, or completing an explicitly requested merge may continue in the current task. Reuse the established issue context; do not reread `SKILL.md`, rerun `context.sh`, or reread `PROJECT_STATE.md` unless repository state changed enough to require re-establishing context.
 
 ## Next.js repository rule
 
