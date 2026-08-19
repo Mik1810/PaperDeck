@@ -11,7 +11,9 @@ This project follows Semantic Versioning.
 - Split Playwright installation and the desktop/mobile E2E suite from the core
   App CI job. Full changes now run core validation and isolated browser coverage
   as parallel jobs after one shared changed-file classification, while docs-only
-  pull requests retain the lightweight terminal `app-ci` path.
+  pull requests retain the lightweight terminal `app-ci` path. The browser job
+  caches the Chromium headless shell by exact Playwright version and downloads
+  it only on cache misses while continuing to install Linux dependencies.
 - Expanded full App CI with the complete unit suite, an explicit localhost-only
   aggregate of deterministic PostgreSQL integration regressions, and the
   existing Pixel 5 Playwright project. Mobile CI now includes a real touch

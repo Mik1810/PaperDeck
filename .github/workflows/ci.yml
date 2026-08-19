@@ -250,9 +250,25 @@ jobs:
         id: schema_parity
         run: npm run db:test:prepare
 
-      - name: Install Playwright browser
+      - name: Resolve Playwright version
+        id: playwright_version
+        run: echo "version=$(node -p \"require('@playwright/test/package.json').version\")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright browser cache
+        id: playwright_cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright_version.outputs.version }}-chromium-headless-shell
+
+      - name: Install Playwright system dependencies
+        id: playwright_dependencies
+        run: npx playwright install-deps chromium
+
+      - name: Install Playwright browser on cache miss
         id: playwright_install
-        run: npx playwright install --with-deps --only-shell chromium
+        if: steps.playwright_cache.outputs.cache-hit != 'true'
+        run: npx playwright install --only-shell chromium
 
       - name: Isolated Playwright smoke tests
         id: e2e
@@ -269,7 +285,9 @@ jobs:
           echo "| PostgreSQL | \`${{ steps.database.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| dependency install | \`${{ steps.dependencies.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| migration-complete schema | \`${{ steps.schema_parity.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Playwright browser install | \`${{ steps.playwright_install.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Playwright browser cache | \`${{ steps.playwright_cache.outcome }}\` (hit: \`${{ steps.playwright_cache.outputs.cache-hit }}\`) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Playwright system dependencies | \`${{ steps.playwright_dependencies.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Playwright browser install on cache miss | \`${{ steps.playwright_install.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| e2e smoke tests | \`${{ steps.e2e.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "*Job status: \`${{ job.status }}\`.*" >> "$GITHUB_STEP_SUMMARY"
