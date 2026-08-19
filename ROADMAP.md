@@ -79,7 +79,7 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 
 ## Stato implementazione
 
-Aggiornato al 2026-08-04:
+Aggiornato al 2026-08-19:
 
 - Repository, scaffold Next.js, UI skeleton e Clerk auth: completati.
 - Supabase schema iniziale con pgvector, RLS preparata e tabelle MVP: applicato.
@@ -145,10 +145,10 @@ Aggiornato al 2026-08-04:
   condiviso con fixture sintetiche completamente rimosse.
 - Lista paper condivisa #99: fondazione dati, RLS, operazioni atomiche,
   preferenze/aggregazione notifiche, retention e workspace responsive
-  `/groups` implementati localmente. L'accesso usa il menu account Clerk senza
-  aggiungere voci alle navbar. Nessuna migrazione e' stata applicata al
-  Supabase condiviso; entrambi i kill switch restano disattivati e la UI
-  autenticata con dati di gruppo richiede ancora il rollout separato.
+  `/groups` distribuiti in Production. L'accesso usa il menu account Clerk
+  senza aggiungere voci alle navbar. Le migrazioni sono applicate al Supabase
+  condiviso e i kill switch di lettura e scrittura sono abilitati; le
+  operazioni restano protette da autenticazione, ACL e controlli transazionali.
 - KaTeX: rendering LaTeX in abstract e summary su detail page e feed card (scelto dopo aver scartato MathJax per via della dimensione bundle e complessita' CDN).
 - Sicurezza: audit service-role completato, checklist rotazione secret documentata.
 - Test: suite Playwright smoke con 5 test dev-auth.

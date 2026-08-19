@@ -113,8 +113,8 @@ These are shared paper and topic catalog data. Authenticated users can read them
 
 - `research_groups`
 - `research_group_members`
-- `research_group_paper_items` (local #99 migration; not remotely applied)
-- `research_group_paper_activity` (local #99 migration; not remotely applied)
+- `research_group_paper_items`
+- `research_group_paper_activity`
 
 Membership is the single ownership source: each group must have exactly one
 active `owner`. A selected successor must be an active non-owner member.
@@ -173,8 +173,9 @@ recommendations, or profile embeddings. This foundation passed an isolated
 PostgreSQL 17 migration suite and is applied to the shared Supabase project.
 Post-deploy checks confirmed RLS, grants, function privileges, a validated
 notification-source constraint, and zero shared-paper/activity rows. The read
-switch is enabled; the write switch remains disabled, so mutation functions
-still fail closed.
+switch was enabled first; the write switch was enabled through a separately
+approved guarded rollout after the deployed runtime and database invariants
+were reverified.
 
 The matching deployed workspace reads directly in Server Components and
 performs mutations through authenticated Server Actions. Client-side catalog
@@ -194,7 +195,7 @@ message, or free-form payload. Source rows remain authoritative.
 
 The deployed event set covers received and accepted friend requests, received and
 accepted group invitations, member joins, membership endings, role changes, and
-ownership transfers. The local, not-yet-deployed #99 extension adds ten-minute
+ownership transfers. The deployed #99 extension adds ten-minute
 aggregation for paper additions and individual paper-removal events. Per-group
 preferences are `all`, `important_only`, or `muted`; removals are important,
 while addition bursts are informational. Blocks, unblocks, unfriend, and
