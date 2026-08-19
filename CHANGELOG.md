@@ -27,6 +27,13 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Removed the paper-embedding worker's fixed oldest-first scan barrier. Missing
+  vectors are now selected server-side, stale metadata is scanned in bounded
+  pages without transferring vectors, progress output distinguishes a complete
+  fresh scan from a candidate-limited run, and classic discovery targets the
+  classic subset directly. The same worker now supports a bounded local
+  `--until-fresh` backfill with batch details written to a `.log` file and only
+  one terminal console summary.
 - Allowed profile avatars from Clerk's dedicated image CDN through the Next.js
   image optimizer, fixing broken member photos in the research-group workspace
   while keeping remote image sources restricted to the expected host.

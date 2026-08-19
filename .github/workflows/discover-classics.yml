@@ -135,6 +135,7 @@ jobs:
             --model "$EMBEDDING_MODEL" \
             --batch-size "$EMBEDDING_BATCH_SIZE" \
             --limit "$EMBEDDING_LIMIT" \
+            --classic-only \
             --quiet
 
       - name: Summary
