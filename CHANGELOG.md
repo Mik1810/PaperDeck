@@ -35,6 +35,11 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Ordered Clerk collaboration-identity updates by the upstream user version
+  instead of webhook processing time. Stale and duplicate deliveries can no
+  longer replace a newer exact-email hash, invalid identities retain their
+  ordering boundary, and account deletion permanently rejects late recreation
+  while preserving user-selected discovery preferences during valid refreshes.
 - Prevented operational logs from correlating stable owner, paper, and
   recommendation-batch identifiers with reading activity. Structured fields
   now cross a central allowlist, errors retain only a safe class and optional

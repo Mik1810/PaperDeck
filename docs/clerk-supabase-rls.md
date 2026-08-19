@@ -175,17 +175,23 @@ verified primary email or safe public name remains. Onboarding and Settings
 also perform an authenticated lazy sync, so local development does not require
 a public webhook receiver.
 
-The #107 implementation sends `user.deleted` through one service-role-only
-RPC. PostgreSQL first performs deterministic research-group succession/removal
-and then deletes the collaboration identity in the same transaction. Duplicate
-delivery is a successful no-op; any RPC or transport error returns a generic
-`500` so Clerk retries. The route does not delete the Clerk account or revoke
-sessions because the event is emitted only after Clerk has already deleted the
-user. The migration and locally signed synthetic webhook gate passed on the
-shared PaperDeck Supabase project with exact fixture cleanup, disabled group
-switches, and service-role-only execution. The matching application handler is
-deployed in Production; an unsigned-request smoke and runtime error scan passed
-after deployment.
+Identity synchronization is ordered by Clerk's upstream user `updated_at`, not
+by local request time. A private sync-state row serializes updates for each
+owner, rejects stale or duplicate webhook payloads, and retains the latest
+source version even when an invalid email/name removes the discoverable
+identity. Authenticated lazy synchronization uses Clerk's current user and may
+reapply the same source version so local discovery preferences and a newly safe
+display name still take effect. Account deletion records a permanent closure
+boundary in the same transaction as identity removal, so a late update cannot
+recreate the row.
+
+The deletion implementation sends `user.deleted` through one service-role-only
+RPC. PostgreSQL first records and locks the closure boundary, performs
+deterministic research-group succession/removal, and then deletes the
+collaboration identity in the same transaction. Duplicate delivery is a
+successful no-op; any RPC or transport error returns a generic `500` so Clerk
+retries. The route does not delete the Clerk account or revoke sessions because
+the event is emitted only after Clerk has already deleted the user.
 
 ## Files
 

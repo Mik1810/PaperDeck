@@ -8,6 +8,7 @@ export type AuthenticatedUserContext = {
   displayName: string | null;
   imageUrl: string | null;
   primaryEmail: string | null;
+  sourceUpdatedAt: number;
 };
 
 export async function requireOwnerId() {
@@ -33,6 +34,7 @@ export async function requireUserContext(): Promise<AuthenticatedUserContext> {
       displayName: "Local dev",
       imageUrl: null,
       primaryEmail: null,
+      sourceUpdatedAt: 0,
     };
   }
 
@@ -51,6 +53,7 @@ export async function requireUserContext(): Promise<AuthenticatedUserContext> {
     ownerId,
     displayName: user?.fullName ?? null,
     imageUrl: user?.imageUrl ?? null,
+    sourceUpdatedAt: user?.updatedAt ?? 0,
     primaryEmail:
       primaryEmail?.verification?.status === "verified"
         ? primaryEmail.emailAddress

@@ -71,6 +71,53 @@ async function callDeletion(
   return result;
 }
 
+async function callIdentitySync({
+  ownerId,
+  sourceUpdatedAt,
+  hash,
+  discoverableByEmail,
+  groupInvitePolicy,
+  allowSameSourceVersion,
+}: {
+  ownerId: string;
+  sourceUpdatedAt: number;
+  hash: string | null;
+  discoverableByEmail?: boolean;
+  groupInvitePolicy?: "nobody" | "friends_only" | "anyone";
+  allowSameSourceVersion?: boolean;
+}) {
+  assert.ok(sql);
+  const [result] = await sql<{ applied: boolean }[]>`
+    select sync_clerk_collaboration_identity(
+      ${ownerId},
+      ${sourceUpdatedAt},
+      ${hash},
+      1,
+      ${discoverableByEmail ?? null},
+      ${groupInvitePolicy ?? null}::group_invite_policy,
+      ${allowSameSourceVersion ?? false}
+    ) as applied
+  `;
+  return result.applied;
+}
+
+async function findIdentity(requesterId: string, hash: string) {
+  assert.ok(sql);
+  return sql.begin(async (transaction) => {
+    await transaction`
+      select set_config(
+        'request.jwt.claims',
+        ${JSON.stringify({ sub: requesterId })},
+        true
+      )
+    `;
+    await transaction.unsafe("set local role authenticated");
+    return transaction<{ public_id: string }[]>`
+      select public_id from find_collaboration_profile(${hash})
+    `;
+  });
+}
+
 async function cleanupFixtures() {
   assert.ok(sql);
   await sql`
@@ -83,6 +130,10 @@ async function cleanupFixtures() {
   `;
   await sql`
     delete from collaboration_identities
+    where owner_id in ${sql(owners)}
+  `;
+  await sql`
+    delete from private.clerk_user_identity_sync_state
     where owner_id in ${sql(owners)}
   `;
 }
@@ -174,6 +225,171 @@ run("atomically transfers owned groups, removes other memberships, and is idempo
   assert.deepEqual([...ownerRows], [{ member_id: ownerC }]);
   assert.equal(deletedIdentity.length, 0);
   assert.equal(removedMembership.length, 0);
+});
+
+run("keeps the newest Clerk email hash and treats duplicate delivery as a no-op", async () => {
+  assert.ok(sql);
+  const oldHash = lookupHash(`${ownerA}-old`);
+  const newHash = lookupHash(`${ownerA}-new`);
+
+  await sql`
+    update collaboration_identities
+    set discoverable_by_email = true, group_invite_policy = 'anyone'
+    where owner_id = ${ownerA}
+  `;
+
+  assert.equal(
+    await callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 200,
+      hash: newHash,
+    }),
+    true,
+  );
+  assert.equal(
+    await callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 100,
+      hash: oldHash,
+    }),
+    false,
+  );
+  assert.equal(
+    await callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 200,
+      hash: newHash,
+    }),
+    false,
+  );
+
+  const [stored, foundNew, foundOld] = await Promise.all([
+    sql<{
+      email_lookup_hash: string;
+      discoverable_by_email: boolean;
+      group_invite_policy: string;
+    }[]>`
+      select email_lookup_hash, discoverable_by_email, group_invite_policy
+      from collaboration_identities
+      where owner_id = ${ownerA}
+    `,
+    findIdentity(ownerB, newHash),
+    findIdentity(ownerB, oldHash),
+  ]);
+
+  assert.deepEqual([...stored], [
+    {
+      email_lookup_hash: newHash,
+      discoverable_by_email: true,
+      group_invite_policy: "anyone",
+    },
+  ]);
+  assert.equal(foundNew.length, 1);
+  assert.equal(foundOld.length, 0);
+
+  assert.equal(
+    await callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 200,
+      hash: newHash,
+      discoverableByEmail: false,
+      groupInvitePolicy: "nobody",
+      allowSameSourceVersion: true,
+    }),
+    true,
+  );
+  const updatedPreferences = await sql<{
+    discoverable_by_email: boolean;
+    group_invite_policy: string;
+  }[]>`
+    select discoverable_by_email, group_invite_policy
+    from collaboration_identities
+    where owner_id = ${ownerA}
+  `;
+  assert.deepEqual([...updatedPreferences], [
+    { discoverable_by_email: false, group_invite_policy: "nobody" },
+  ]);
+});
+
+run("advances source state when identity becomes invalid and rejects stale recreation", async () => {
+  assert.ok(sql);
+  const staleHash = lookupHash(`${ownerA}-stale`);
+
+  assert.equal(
+    await callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 300,
+      hash: null,
+    }),
+    true,
+  );
+  assert.equal(
+    await callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 250,
+      hash: staleHash,
+    }),
+    false,
+  );
+
+  const identities = await sql`
+    select owner_id from collaboration_identities where owner_id = ${ownerA}
+  `;
+  assert.equal(identities.length, 0);
+});
+
+run("makes account deletion authoritative over late updates", async () => {
+  assert.ok(sql);
+  await callDeletion(sql, ownerA);
+
+  assert.equal(
+    await callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 400,
+      hash: lookupHash(`${ownerA}-late`),
+    }),
+    false,
+  );
+
+  const [identities, state] = await Promise.all([
+    sql`select owner_id from collaboration_identities where owner_id = ${ownerA}`,
+    sql<{ account_closed: boolean }[]>`
+      select account_closed
+      from private.clerk_user_identity_sync_state
+      where owner_id = ${ownerA}
+    `,
+  ]);
+  assert.equal(identities.length, 0);
+  assert.deepEqual([...state], [{ account_closed: true }]);
+});
+
+run("rolls source state back when an email hash belongs to another identity", async () => {
+  assert.ok(sql);
+  const ownerBHash = lookupHash(ownerB);
+
+  await assert.rejects(
+    callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 500,
+      hash: ownerBHash,
+    }),
+    /duplicate key value violates unique constraint/,
+  );
+
+  const state = await sql`
+    select source_updated_at
+    from private.clerk_user_identity_sync_state
+    where owner_id = ${ownerA}
+  `;
+  assert.equal(state.length, 0);
+  assert.equal(
+    await callIdentitySync({
+      ownerId: ownerA,
+      sourceUpdatedAt: 500,
+      hash: lookupHash(`${ownerA}-safe`),
+    }),
+    true,
+  );
 });
 
 run("deletes an owner-only group in the same identity-cleanup transaction", async () => {
@@ -310,13 +526,20 @@ run("serializes duplicate delivery and performs lifecycle work once", async () =
   assert.deepEqual([...ownersAfter], [{ member_id: ownerB }]);
 });
 
-run("exposes the lifecycle RPC only to service_role", async () => {
+run("exposes Clerk identity state and mutation RPCs only to service_role", async () => {
   assert.ok(sql);
   const [privileges] = await sql<{
     public_execute: boolean;
     anon_execute: boolean;
     authenticated_execute: boolean;
     service_role_execute: boolean;
+    sync_public_execute: boolean;
+    sync_anon_execute: boolean;
+    sync_authenticated_execute: boolean;
+    sync_service_role_execute: boolean;
+    state_anon_access: boolean;
+    state_authenticated_access: boolean;
+    state_service_role_access: boolean;
   }[]>`
     select
       exists (
@@ -347,7 +570,51 @@ run("exposes the lifecycle RPC only to service_role", async () => {
         'service_role',
         'public.handle_clerk_user_deleted(text)',
         'execute'
-      ) as service_role_execute
+      ) as service_role_execute,
+      exists (
+        select 1
+        from pg_proc as procedure
+        cross join lateral aclexplode(
+          coalesce(
+            procedure.proacl,
+            acldefault('f', procedure.proowner)
+          )
+        ) as privilege
+        where procedure.oid =
+          'public.sync_clerk_collaboration_identity(text,bigint,text,integer,boolean,group_invite_policy,boolean)'::regprocedure
+          and privilege.grantee = 0
+          and privilege.privilege_type = 'EXECUTE'
+      ) as sync_public_execute,
+      has_function_privilege(
+        'anon',
+        'public.sync_clerk_collaboration_identity(text,bigint,text,integer,boolean,group_invite_policy,boolean)',
+        'execute'
+      ) as sync_anon_execute,
+      has_function_privilege(
+        'authenticated',
+        'public.sync_clerk_collaboration_identity(text,bigint,text,integer,boolean,group_invite_policy,boolean)',
+        'execute'
+      ) as sync_authenticated_execute,
+      has_function_privilege(
+        'service_role',
+        'public.sync_clerk_collaboration_identity(text,bigint,text,integer,boolean,group_invite_policy,boolean)',
+        'execute'
+      ) as sync_service_role_execute,
+      has_table_privilege(
+        'anon',
+        'private.clerk_user_identity_sync_state',
+        'select,insert,update,delete'
+      ) as state_anon_access,
+      has_table_privilege(
+        'authenticated',
+        'private.clerk_user_identity_sync_state',
+        'select,insert,update,delete'
+      ) as state_authenticated_access,
+      has_table_privilege(
+        'service_role',
+        'private.clerk_user_identity_sync_state',
+        'select,insert,update'
+      ) as state_service_role_access
   `;
 
   assert.deepEqual(privileges, {
@@ -355,5 +622,29 @@ run("exposes the lifecycle RPC only to service_role", async () => {
     anon_execute: false,
     authenticated_execute: false,
     service_role_execute: true,
+    sync_public_execute: false,
+    sync_anon_execute: false,
+    sync_authenticated_execute: false,
+    sync_service_role_execute: true,
+    state_anon_access: false,
+    state_authenticated_access: false,
+    state_service_role_access: true,
   });
+
+  const appliedAsServiceRole = await sql.begin(async (transaction) => {
+    await transaction.unsafe("set local role service_role");
+    const [result] = await transaction<{ applied: boolean }[]>`
+      select sync_clerk_collaboration_identity(
+        ${ownerA},
+        600,
+        ${lookupHash(`${ownerA}-service-role`)},
+        1,
+        null,
+        null,
+        false
+      ) as applied
+    `;
+    return result.applied;
+  });
+  assert.equal(appliedAsServiceRole, true);
 });

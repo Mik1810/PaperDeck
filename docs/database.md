@@ -138,6 +138,17 @@ delivery performs the lifecycle work at most once and returns zero counts after
 completion. The function does not delete the Clerk user, profile, private
 playlists, notes, ranking signals, sessions, or tokens.
 
+The #223 migration adds `private.clerk_user_identity_sync_state` and the
+service-role-only `sync_clerk_collaboration_identity(...)` RPC. The private
+implementation locks one state row per Clerk owner, applies an email hash only
+when the upstream user version is newer, and advances that version when the
+identity must be removed. A current-user lazy sync may explicitly reapply the
+same source version for local display-name or preference changes; webhook
+replays may not. Unique-hash failures roll back both the identity and source
+version. `handle_clerk_user_deleted` now marks the state permanently closed in
+the same transaction as group lifecycle and identity cleanup, preventing late
+updates from recreating discovery state.
+
 The foundation is versioned in
 `supabase/migrations/20260729105307_add_private_research_groups.sql`, followed
 by the RLS optimization migration. Both were validated against an isolated
