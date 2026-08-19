@@ -2,16 +2,13 @@
 
 Status: approved on 2026-07-18 for the initial invite-only pilot.
 
-Implementation status: #95, #107, and #96 are deployed to the shared PaperDeck
-Supabase project with both database-backed switches disabled. The invitation
-and membership lifecycle passed synthetic cross-role, cleanup, privilege, and
-advisor checks; no pilot UI is enabled yet. The durable notification foundation
-for #97 is applied to the shared project with an empty initial inbox and approved
-scheduled retention. The #98 notification UI is released, and its in-app
-`respond_research_group_invitation_in_app` RPC is deployed with execution
-restricted to `service_role`. Group functionality remains guarded by both
-disabled database switches. The #99 shared-list workspace and operations are
-implemented only on a draft branch; their migrations and UI are not deployed.
+Implementation status: #95, #107, #96, #97, #98, and #99 are deployed. The
+shared-list workspace passed a guarded Production smoke and both database-backed
+group switches are enabled. The smoke fixture was removed; it does not replace
+the charter's 5–8 research trials or successful unsupported pilot journey.
+Group discussion therefore remains a no-go for implementation. Its conditional
+first scope and additional pilot gates are approved in
+`docs/group-discussion-decision.md`.
 
 ## Product boundary
 
@@ -21,8 +18,9 @@ signals, favorites, private playlists, notes, and reading history remain private
 
 The initial program has no public directory, followers, people recommendations,
 public feed, implicit sharing, contact import, anonymous content, or social
-ranking. Public profiles, public collections, and group chat require separate
-go/no-go decisions.
+ranking. Public profiles and public collections require separate go/no-go
+decisions. Private group discussion is governed by its approved decision record
+and remains blocked on the successful pilot gate.
 
 ## Identity and discovery
 

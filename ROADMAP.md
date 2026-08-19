@@ -72,7 +72,11 @@ L'obiettivo non e' sostituire Google Scholar, arXiv o Semantic Scholar. L'obiett
 - Inviti gruppi: token casuale a uso singolo con scadenza di sette giorni, solo digest nel database, accettazione esplicita e controlli transazionali su ruolo, opt-in, policy, amicizia e blocchi; #96 applicata e verificata sul Supabase condiviso, con funzionalita' ancora disabilitata dai kill switch.
 - Chiusura account Clerk: il webhook verificato usa una sola RPC service-role transazionale per completare successione/rimozione membership prima di eliminare l'identita' collaborativa; migrazione, gate sintetico e deployment Production sono verificati sul progetto Supabase condiviso.
 - Notifiche collaborative: inbox durevole in-app con badge `99+`, menu degli ultimi 20 eventi, azioni inline e futura cronologia completa; eventi realtime accelerano la UI ma non sostituiscono Postgres.
-- Discussione nei gruppi: possibile chat interattiva collegata ai paper, da progettare separatamente prima di qualsiasi implementazione.
+- Discussione nei gruppi: no-go all'implementazione finche' il pilot privato non
+  supera i gate del charter; il perimetro condizionale approvabile e' un solo
+  canale plain-text per gruppo con riferimenti opzionali ai paper, lifecycle,
+  moderazione, retention e unread definiti in
+  `docs/group-discussion-decision.md`.
 - Tassonomia interessi: derivata dalle fonti disponibili, poi curata e normalizzata dentro l'app.
 - Vincolo economico: approccio free-first, evitando servizi a pagamento finche' possibile.
 - Caching layer: resta basato su Postgres (tabella `recommendations`, TTL 5 minuti). Redis/KV esterni sono rinviati fino al superamento di threshold definiti (catalogo >100k, GET /feed p95 >2s, QPS sostenuto oltre limiti free tier). Il preferred path post-threshold e' Next.js cache built-in prima di valutare servizi esterni.
