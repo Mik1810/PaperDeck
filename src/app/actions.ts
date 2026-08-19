@@ -112,14 +112,15 @@ function scheduleOnboardingPersonalization(
       const recommendationBatch = await preloadInitialFeedRecommendations(ownerId);
 
       logger.info("onboarding_personalization_completed", {
-        ownerId,
         source,
-        profileEmbedding,
-        recommendationBatch,
+        profileEmbeddingStatus: profileEmbedding.status,
+        profileEmbeddingReason:
+          "reason" in profileEmbedding ? profileEmbedding.reason : undefined,
+        profileEmbeddingVectorCount: profileEmbedding.vectorCount,
+        recommendationStoredCount: recommendationBatch.storedCount,
       });
     } catch (error) {
       logger.error("onboarding_personalization_failed", {
-        ownerId,
         source,
         error,
       });

@@ -116,9 +116,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logger.error("deck_action_failed", {
-      ownerId,
       action,
-      paperId,
       error,
     });
 
