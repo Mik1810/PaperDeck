@@ -75,7 +75,8 @@ fi
 
 echo "e2e_preflight_policy: if blocked, skip browser/E2E setup unless the issue itself requires diagnosing that infrastructure"
 echo "db_preflight_policy: if blocked, do not probe system PostgreSQL, alternate ports/users/clusters, Podman/nerdctl, or ad-hoc databases; record the canonical local-DB blocker once"
-echo "db_target_policy: when an endpoint is reported, use that current canonical mapping rather than a stale hard-coded local port; never print a full DATABASE_URL"
+echo "db_target_policy: run DB-writing tests/benchmarks through scripts/pd-db-run; it forces the current canonical Docker paperdeck_test target and refuses hosted targets"
+echo "db_secret_policy: never print a full DATABASE_URL or database credentials into model context"
 
 echo
 echo "== issue #$issue =="

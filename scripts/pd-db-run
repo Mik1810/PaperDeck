@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: scripts/pd-db-run <command> [args...]" >&2
+  exit 2
+}
+
+[[ $# -gt 0 ]] || usage
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$root" ]]; then
+  echo "pd-db-run: not inside a git repository" >&2
+  exit 2
+fi
+cd "$root"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pd-db-run: node is required" >&2
+  exit 2
+fi
+if ! command -v docker >/dev/null 2>&1; then
+  echo "pd-db-run: canonical Docker database is unavailable" >&2
+  exit 3
+fi
+
+# Resolve the canonical container-published port at execution time. Never trust a
+# remembered/static local port: Docker may publish the test database elsewhere.
+if command -v timeout >/dev/null 2>&1; then
+  mapping="$(timeout 3s docker compose port database 5432 2>/dev/null | head -n 1 || true)"
+else
+  mapping="$(docker compose port database 5432 2>/dev/null | head -n 1 || true)"
+fi
+
+if [[ -z "$mapping" ]]; then
+  echo "pd-db-run: canonical Docker database is not running or its port is unresolved" >&2
+  exit 3
+fi
+
+case "$mapping" in
+  0.0.0.0:*) canonical_port="${mapping#0.0.0.0:}" ;;
+  127.0.0.1:*) canonical_port="${mapping#127.0.0.1:}" ;;
+  localhost:*) canonical_port="${mapping#localhost:}" ;;
+  \[::\]:*) canonical_port="${mapping#\[::\]:}" ;;
+  \[::1\]:*) canonical_port="${mapping#\[::1\]:}" ;;
+  *)
+    echo "pd-db-run: unexpected Docker database mapping (refusing to guess)" >&2
+    exit 3
+    ;;
+esac
+
+if [[ ! "$canonical_port" =~ ^[0-9]+$ ]] || (( canonical_port < 1 || canonical_port > 65535 )); then
+  echo "pd-db-run: invalid canonical Docker database port" >&2
+  exit 3
+fi
+
+# Prefer an already-exported test URL. Otherwise load repository env with Next's
+# env loader in an isolated Node process. This never sources .env.local in the
+# shell and never prints DATABASE_URL or credentials.
+test_url="${PAPERDECK_TEST_DATABASE_URL:-}"
+if [[ -z "$test_url" ]]; then
+  test_url="$({ node <<'NODE'
+try {
+  const { loadEnvConfig } = require('@next/env');
+  loadEnvConfig(process.cwd());
+  process.stdout.write(process.env.PAPERDECK_TEST_DATABASE_URL || '');
+} catch (error) {
+  process.stderr.write('pd-db-run: could not load PAPERDECK_TEST_DATABASE_URL via @next/env\n');
+  process.exit(4);
+}
+NODE
+  } )" || exit $?
+fi
+
+if [[ -z "$test_url" ]]; then
+  echo "pd-db-run: PAPERDECK_TEST_DATABASE_URL is not configured" >&2
+  exit 4
+fi
+
+# Validate the configured test URL before using any credentials from it, then
+# force its target to the currently published canonical Docker endpoint.
+safe_url="$(RAW_TEST_URL="$test_url" CANONICAL_PORT="$canonical_port" node <<'NODE'
+const raw = process.env.RAW_TEST_URL;
+const port = process.env.CANONICAL_PORT;
+let url;
+try {
+  url = new URL(raw);
+} catch {
+  process.stderr.write('pd-db-run: PAPERDECK_TEST_DATABASE_URL is not a valid URL\n');
+  process.exit(5);
+}
+
+if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+  process.stderr.write('pd-db-run: test database URL must use postgres/postgresql\n');
+  process.exit(5);
+}
+
+const host = url.hostname.toLowerCase();
+if (!['localhost', '127.0.0.1', '[::1]'].includes(host)) {
+  process.stderr.write('pd-db-run: refusing non-local PAPERDECK_TEST_DATABASE_URL\n');
+  process.exit(5);
+}
+
+const database = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
+if (database !== 'paperdeck_test') {
+  process.stderr.write('pd-db-run: refusing database other than paperdeck_test\n');
+  process.exit(5);
+}
+
+url.hostname = '127.0.0.1';
+url.port = port;
+url.pathname = '/paperdeck_test';
+url.hash = '';
+process.stdout.write(url.toString());
+NODE
+)" || exit $?
+
+# Make the canonical test target dominant for common PostgreSQL aliases and make
+# hosted Supabase REST credentials unusable inside this command. Existing env
+# loaders normally preserve already-defined variables, so .env.local cannot
+# silently replace DATABASE_URL after this point.
+echo "pd-db-run: target=127.0.0.1:${canonical_port}/paperdeck_test (guarded)"
+exec env \
+  PAPERDECK_DB_GUARD=local-test \
+  PAPERDECK_TEST_DATABASE_URL="$safe_url" \
+  DATABASE_URL="$safe_url" \
+  DIRECT_URL="$safe_url" \
+  POSTGRES_URL="$safe_url" \
+  POSTGRES_PRISMA_URL="$safe_url" \
+  POSTGRES_URL_NON_POOLING="$safe_url" \
+  SUPABASE_DB_URL="$safe_url" \
+  PGHOST=127.0.0.1 \
+  PGPORT="$canonical_port" \
+  PGDATABASE=paperdeck_test \
+  PGSERVICE= \
+  PGSERVICEFILE= \
+  SUPABASE_URL= \
+  NEXT_PUBLIC_SUPABASE_URL= \
+  SUPABASE_SERVICE_ROLE_KEY= \
+  SUPABASE_ANON_KEY= \
+  "$@"

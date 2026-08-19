@@ -65,7 +65,12 @@ Before implementation:
    product defect outside the approved goal, stop before fixing it even if the
    fix is needed to make the current issue green. New migrations, hosted
    mutations, material architecture decisions, and materially different risk
-   profiles also require re-approval.
+   profiles also require re-approval. Treat privilege-boundary and materially new
+   transaction/locking changes as material even inside an approved surface: this
+   includes `SECURITY DEFINER`/`SECURITY INVOKER`, grants/revokes, RLS/role bypass,
+   ownership/search-path privilege changes, and new transaction/locking strategy.
+   If the approved plan did not explicitly name that decision/risk, stop before
+   the change and request revised approval.
 
 During implementation:
 - Search before opening large files.
@@ -96,7 +101,9 @@ Validation:
 - Consult the `paperdeck_local_e2e_db` result from the initial `context.sh` output before loading browser skills or inspecting the E2E harness. If it is `blocked`, do not spend context on Docker/Playwright/browser setup unless the issue itself concerns that infrastructure or browser execution is an explicit acceptance requirement.
 - When E2E is blocked by the preflight, record the blocker once and rely on the narrowest existing targeted evidence plus `pd-final-check`; do not invent brittle fallback tests merely to compensate for an unavailable environment.
 - Consult `paperdeck_local_db_prereq` before database integration/performance validation that depends on the canonical disposable PaperDeck database. If it is `blocked`, do not probe system PostgreSQL, alternate ports, local users/clusters, Podman/nerdctl, or ad-hoc substitute databases unless the issue itself is about that infrastructure.
-- When `context.sh` reports `paperdeck_test_db_endpoint`, use that current Docker-published endpoint instead of assuming the documented default port. Prefer the repository-configured test database URL when executing commands, and never print the full URL or credentials merely to discover the endpoint.
+- When `context.sh` reports `paperdeck_test_db_endpoint`, use that current Docker-published endpoint instead of assuming the documented default port. Never print the full URL or credentials merely to discover the endpoint.
+- Run **every database-writing integration/test/benchmark command through `scripts/pd-db-run`**. Do not build ad-hoc `DATABASE_URL` wrappers, inherit a hosted `DATABASE_URL` from `.env.local`, `source` `.env.local`, or bypass the guard after it refuses a target. Read-only DB inspection that cannot mutate is exempt.
+- If an accidental Production/hosted mutation occurs, freeze all further hosted writes immediately. Perform only the minimum read-only impact assessment, report the affected objects and proposed remediation, end with `INCIDENT_STATUS: AWAITING_REMEDIATION_APPROVAL`, and stop. Cleanup/rollback/compensating writes require fresh explicit approval; never auto-remediate an accidental hosted mutation.
 - When the canonical local database is blocked, record the blocker once. You may still prepare deterministic benchmark/test code, but if measured database evidence is an explicit acceptance requirement, stop before publication rather than substituting unrelated local infrastructure or inventing measurements.
 - After the final issue commit, prefer one `scripts/pd-publish <issue> --summary-file -` call instead of separate `git push`, `gh pr create`, `gh issue comment`, status, and merge calls.
 - Feed `pd-publish` one concise Markdown summary (implementation + validation). It reuses that summary for the PR and final issue comment, adds `Closes #<issue>`, pushes the explicit issue branch, and emits a compact terminal status.

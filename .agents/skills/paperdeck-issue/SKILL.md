@@ -78,10 +78,16 @@ fixed but was not part of the approved goal, stop before fixing it even when the
 fix would make the current issue's tests or CI green.
 
 A revised approval is also required for a new migration, new hosted mutation,
-material architecture decision, or materially different risk profile. Ordinary
-implementation details and additional tests inside the already-approved surfaces
-and goal do not need another approval round. When in doubt about whether a new
-surface or newly discovered defect is material, prefer re-approval.
+material architecture decision, or materially different risk profile. Treat
+**privilege-boundary or transaction-semantics changes as material by default**,
+including `SECURITY DEFINER`/`SECURITY INVOKER` changes, grants/revokes, RLS or
+role-bypass behavior, ownership/search-path privilege changes, and materially new
+locking/transaction strategies. If such a decision was **not explicitly named in
+the approved plan's Risks / decisions**, stop and present a revised plan before
+making that change even when it stays inside an already-approved `supabase/` or
+`src/` surface. Ordinary implementation details and additional tests inside the
+already-approved surfaces and risk model do not need another approval round.
+When in doubt, prefer re-approval.
 
 ## 3. Keep a retrieval budget
 
@@ -171,11 +177,35 @@ The same initial `context.sh` output reports `paperdeck_local_db_prereq`. This i
 Before database integration tests or performance benchmarks that need that canonical local database:
 - if `paperdeck_local_db_prereq: available`, use the repository's documented canonical local/database setup only as justified by the issue;
 - when `paperdeck_test_db_endpoint` is reported, treat it as the current Docker-published host/port/database and do not hard-code a different local port from stale documentation or source defaults;
-- prefer the repository-configured `PAPERDECK_TEST_DATABASE_URL`/database helper for execution. Do not print a full database URL or credentials just to learn the endpoint;
+- **any test/integration/benchmark command capable of database writes must run through `scripts/pd-db-run`**. Do not construct an ad-hoc `DATABASE_URL` wrapper, inherit `DATABASE_URL` from `.env.local`, `source` `.env.local`, or directly invoke a DB-writing test command outside the guard;
+- `pd-db-run` validates that `PAPERDECK_TEST_DATABASE_URL` names the local `paperdeck_test` database, resolves the current Docker-published port, forces common PostgreSQL connection aliases to that guarded local target, and blanks hosted Supabase REST credentials for the child command. If the guard refuses to run, fix the canonical local test setup or report the blocker; do not bypass it;
+- read-only inspection commands that cannot mutate the database do not require `pd-db-run`, but never print a full database URL or credentials merely to discover the endpoint;
 - if the endpoint is `not-running-or-unresolved`, start/inspect only the canonical Docker Compose database path when the issue requires it, then resolve `docker compose port database 5432`; do not probe alternative database infrastructure;
 - if `paperdeck_local_db_prereq: blocked`, record that blocker once and do **not** probe system PostgreSQL, alternate ports, local database users/clusters, Podman/nerdctl, or ad-hoc substitute databases unless the issue itself is diagnosing that infrastructure;
 - when blocked, it is fine to add or validate deterministic benchmark/test harness code that does not require fabricated measurements;
 - if actual measured database evidence is an explicit acceptance requirement, do not publish/close the issue without it. Report the blocker and stop after preserving the issue-scoped work.
+
+### Accidental hosted-mutation incident boundary
+
+If any command unexpectedly mutates Production/hosted schema, data, or
+configuration, immediately **freeze all further hosted mutations**, including
+cleanup/remediation. Do not attempt to "put it back" automatically.
+
+You may perform the minimum **read-only** impact assessment needed to report:
+- exactly which hosted objects/rows/configuration were affected, when knowable;
+- whether dependencies or user-owned data appear involved;
+- what remediation is proposed and its risks.
+
+Then end the response with exactly:
+
+```text
+INCIDENT_STATUS: AWAITING_REMEDIATION_APPROVAL
+```
+
+and stop. Cleanup, deletion, rollback, compensating writes, hosted migrations,
+or other remediation require a fresh explicit user approval after that report.
+The original planning approval and any earlier Production approval do not cover
+an accidental mutation's remediation.
 
 ### Final baseline gate
 
