@@ -275,6 +275,31 @@ async function expectFeedReady(page: Page) {
   ).toBeVisible({ timeout: feedReadyTimeoutMs });
 }
 
+async function swipeTouchPointLeft(page: Page, x: number, y: number) {
+  const cdp = await page.context().newCDPSession(page);
+
+  try {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y }],
+    });
+
+    for (const offset of [50, 100, 150, 200]) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: x - offset, y }],
+      });
+    }
+
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  } finally {
+    await cdp.detach();
+  }
+}
+
 test.describe("dev-auth app smoke", () => {
   test.describe.configure({ mode: "serial" });
   test.setTimeout(appSmokeTimeoutMs);
@@ -350,6 +375,33 @@ test.describe("dev-auth app smoke", () => {
     expect(response?.status()).toBeLessThan(500);
     await expect(page).toHaveURL(/\/feed/);
     await expectFeedReady(page);
+  });
+
+  test("mobile touch swipe starting in the card scroll region advances the deck", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile-chrome", "Pixel 5 regression.");
+    test.skip(!hasDatabaseEnv, "Requires DATABASE_URL.");
+
+    await seedCompletedDevOwner();
+    await page.goto("/feed");
+    await expectFeedReady(page);
+
+    const activeCard = page.getByTestId("active-deck-card");
+    const scrollRegion = activeCard.locator(".overflow-y-auto");
+    const initialPaperId = await activeCard.getAttribute("data-paper-id");
+    const box = await scrollRegion.boundingBox();
+
+    expect(initialPaperId).toBeTruthy();
+    expect(box).not.toBeNull();
+
+    await swipeTouchPointLeft(
+      page,
+      box!.x + box!.width * 0.75,
+      box!.y + Math.min(box!.height / 2, 120),
+    );
+
+    await expect(activeCard).not.toHaveAttribute("data-paper-id", initialPaperId!);
   });
 
   test("search and settings renders do not write profile bootstrap rows", async ({

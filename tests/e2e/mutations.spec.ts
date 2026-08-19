@@ -1017,6 +1017,13 @@ test.describe("recommendation analytics", () => {
     expect(openedPaperHref).toMatch(/^\/papers\//);
     await openLink.click();
     await expect(page).toHaveURL(new RegExp(`${openedPaperHref}$`));
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          sessionStorage.getItem("paperdeck:opened-feed-paper"),
+        ),
+      )
+      .toBe(openedPaperHref!.split("/").at(-1));
     await page.goBack();
     await expect(page).toHaveURL(/\/feed$/);
     await expect(page.getByRole("link", { name: "Open" })).not.toHaveAttribute(

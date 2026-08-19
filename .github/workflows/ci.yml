@@ -129,6 +129,16 @@ jobs:
         if: steps.changes.outputs.mode == 'full'
         run: npm run lint
 
+      - name: Unit regression tests
+        id: unit
+        if: steps.changes.outputs.mode == 'full'
+        run: npm run test:unit
+
+      - name: Deterministic database integration tests
+        id: integration
+        if: steps.changes.outputs.mode == 'full'
+        run: npm run test:integration:ci
+
       - name: Deterministic recommendation stability gate
         id: recommendation_stability
         if: steps.changes.outputs.mode == 'full'
@@ -166,6 +176,8 @@ jobs:
           echo "| migration-complete schema | \`${{ steps.schema_parity.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| service-role audit | \`${{ steps.service_role_audit.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| lint | \`${{ steps.lint.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| unit regressions | \`${{ steps.unit.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| deterministic database integrations | \`${{ steps.integration.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| deterministic recommendation stability | \`${{ steps.recommendation_stability.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| build | \`${{ steps.build.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Playwright browser install | \`${{ steps.playwright_install.outcome }}\` |" >> "$GITHUB_STEP_SUMMARY"

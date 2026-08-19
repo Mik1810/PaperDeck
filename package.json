@@ -41,6 +41,7 @@
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:e2e",
     "test:integration": "node --conditions react-server --import tsx --test tests/integration/*.test.ts",
+    "test:integration:ci": "bash scripts/run-ci-integrations.sh",
     "test:integration:runtime-pool": "PAPERDECK_RUN_RUNTIME_POOL_INTEGRATION=true node --conditions react-server --import tsx --test tests/integration/database-runtime-pool.test.ts",
     "test:integration:clerk": "node --import tsx --test tests/integration/clerk-supabase-live.test.ts",
     "test:integration:clerk-groups": "PAPERDECK_RLS_TARGET_ENVIRONMENT=development PAPERDECK_RLS_SMOKE_SCOPE=group-lifecycle node --import tsx --test tests/integration/clerk-supabase-live.test.ts",

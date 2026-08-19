@@ -188,11 +188,17 @@ export function FeedDeck({
       setPaperDismissed(openedPaperId, true);
     }
 
+    function dismissOpenedPaperFromPageCache(event: PageTransitionEvent) {
+      if (event.persisted) {
+        dismissOpenedPaper();
+      }
+    }
+
     dismissOpenedPaper();
-    window.addEventListener("pageshow", dismissOpenedPaper);
+    window.addEventListener("pageshow", dismissOpenedPaperFromPageCache);
 
     return () => {
-      window.removeEventListener("pageshow", dismissOpenedPaper);
+      window.removeEventListener("pageshow", dismissOpenedPaperFromPageCache);
     };
   }, [setPaperDismissed]);
 
