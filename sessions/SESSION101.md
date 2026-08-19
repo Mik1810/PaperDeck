@@ -30,7 +30,12 @@
   shell reduction therefore preserves the full gate but does not justify a
   speed-improvement claim; install variance remains high enough to evaluate an
   exact-version Playwright image separately.
-- Remote docs-only timing evidence: pending stacked-PR validation.
+- Stacked draft PR #218 changed only this session note and completed `app-ci`
+  successfully in 8s, below the 45s target. GitHub reported checkout,
+  classification, docs integrity, and summary as successful; Node setup,
+  dependency installation, PostgreSQL, schema preparation, audit, lint,
+  recommendation evaluation, build, browser installation, and E2E were all
+  skipped.
 
 ## Environment boundary
 
