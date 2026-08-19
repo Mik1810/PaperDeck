@@ -252,7 +252,7 @@ jobs:
 
       - name: Resolve Playwright version
         id: playwright_version
-        run: echo "version=$(node -p \"require('@playwright/test/package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: node -p '"version=" + require("@playwright/test/package.json").version' >> "$GITHUB_OUTPUT"
 
       - name: Restore Playwright browser cache
         id: playwright_cache

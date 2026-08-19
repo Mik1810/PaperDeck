@@ -26,8 +26,10 @@ coverage.
 
 - GitHub Actions YAML parse and whitespace validation passed.
 - The cache structure assertion passed and Playwright's dry run resolved version
-  1.61.1 to Chromium headless shell revision 1228. The first remote run must
-  populate the cache; cache-hit timing evidence remains pending a later run.
+  1.61.1 to Chromium headless shell revision 1228. The first remote run exposed
+  shell-escaping in the version-output command before the cache step; the command
+  now prints the GitHub output directly from Node. Cache population and cache-hit
+  timing evidence remain pending a later run.
 - Full isolated desktop/mobile Playwright suite passed against the guarded
   disposable `paperdeck_test` database: 104 passed and 10 expected live-auth
   skips in 55 seconds.
