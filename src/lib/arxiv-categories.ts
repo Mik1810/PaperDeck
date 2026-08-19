@@ -85,6 +85,9 @@ export const arxivCategoryDescriptions: Record<string, string> = {
 };
 
 const arxivCategoryPattern = /^cs\.[A-Z]{2}$/;
+const topicDisplayLabelOverrides: Record<string, string> = {
+  "semigroups and automata theory": "Semigroups and Automata Theory",
+};
 
 export function arxivCategoryLabel(category: string | null | undefined) {
   if (!category) {
@@ -113,5 +116,7 @@ export function topicDisplayLabel({
     return categoryLabel;
   }
 
-  return trimmedLabel || categoryLabel || "Untitled topic";
+  const displayOverride = topicDisplayLabelOverrides[trimmedLabel.toLowerCase()];
+
+  return displayOverride ?? (trimmedLabel || categoryLabel || "Untitled topic");
 }

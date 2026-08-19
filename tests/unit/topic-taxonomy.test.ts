@@ -30,6 +30,14 @@ test("topicDisplayLabel hides raw arXiv category codes", () => {
   );
 });
 
+test("topicDisplayLabel corrects the lowercase OpenAlex semigroups label", () => {
+  assert.equal(
+    topicDisplayLabel({ label: "semigroups and automata theory" }),
+    "Semigroups and Automata Theory",
+  );
+  assert.equal(topicDisplayLabel({ label: "eBPF" }), "eBPF");
+});
+
 test("topicGranularity classifies hierarchy and flat enrichment topics", () => {
   assert.equal(
     topicGranularity({
