@@ -8,6 +8,11 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Enabled the Production research-group write switch after a guarded Supabase
+  rollout verified the deployed migrations, RLS, service-role-only mutation
+  RPCs, empty collaboration tables, healthy Vercel deployment, and a clean
+  anonymous `/groups` smoke. Reads remain enabled and no schema or application
+  rows were changed by the switch activation.
 - Added one guarded `benchmark:scale` entry point for the main Library,
   research-group, catalog-search, profile-input, and recommendation-retention
   capacity paths. Profile refresh now has 10/100/1,000-saved-paper baselines
@@ -17,6 +22,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Allowed profile avatars from Clerk's dedicated image CDN through the Next.js
+  image optimizer, fixing broken member photos in the research-group workspace
+  while keeping remote image sources restricted to the expected host.
 - Softened the active feed card elevation and removed the duplicate shadow from
   stacked preview cards, preventing the deck from rendering a broad gray band
   along the card edge on mobile.
