@@ -114,11 +114,15 @@ For commands expected to take more than ~2 seconds:
 - if a wait returns no actionable new output and the process is still running, immediately issue the next wait without reopening analysis, status discovery, or commentary merely to decide to keep waiting;
 - never poll every 1–5 seconds unless the process is genuinely interactive.
 
-For remote CI:
-- normal issue publication still stops at `WAITING_FOR_CHECKS` / `WAITING_FOR_CI`; do not watch CI merely to merge sooner;
-- only when remote CI timing/completion is itself explicit acceptance evidence, prefer one blocking watcher for the known run (for example `gh run watch <run-id> --exit-status`) and ~30-second waits instead of alternating `gh run view` / `gh pr checks` polling.
+Avoid creating a long-running local process when the evidence is inherently runner-specific. If reproducing a GitHub Actions acceptance condition would require a large browser/container/system-package download that is not already present locally, do the deterministic static/local checks first and let GitHub Actions provide the runner evidence. Do not spend many local wait cycles merely to predict remote CI timing unless local reproduction is itself an explicit acceptance requirement.
 
-Do not request longer tool waits merely to reduce model turns: the observed runtime can split longer waits and cause extra inference cycles. The optimization is to keep each continuation mechanically cheap: when the known process is healthy and still running, wait again immediately.
+For remote CI:
+- normal issue publication stops at `WAITING_FOR_CHECKS` / `WAITING_FOR_CI`; do not watch CI merely to merge sooner;
+- when remote CI timing/completion is itself explicit acceptance evidence, prefer a **non-blocking evidence handoff**: publish the experimental commit/PR, record the known PR/run and the evidence still required, then stop at `WAITING_FOR_CI` rather than holding the task through repeated watcher waits;
+- on a later same-issue follow-up after CI has had time to finish, take **one compact snapshot** of the known PR/run. If it is still running, report that state and stop again; do not enter a polling loop;
+- only use a blocking watcher such as `gh run watch <run-id> --exit-status` when the user explicitly asks to remain blocked in the current turn despite the token cost.
+
+Do not request longer tool waits merely to reduce model turns: the observed runtime can split longer waits and cause extra inference cycles. The optimization is to avoid unnecessary long-lived processes and, when one is genuinely required, keep each continuation mechanically cheap.
 
 ## 5. Implement
 
@@ -159,6 +163,20 @@ Near completion:
 5. broad E2E/build/full suites only when risk/scope warrants them.
 
 Do not rerun expensive suites when no relevant code changed after a successful run.
+
+### GitHub Actions workflow validation
+
+If the issue changes `.github/workflows/*.yml` or `.github/workflows/*.yaml`:
+- before the final baseline gate, run `scripts/pd-workflow-check` so changed workflow YAML receives `actionlint` validation when already available and every bash/default `run:` block is syntax-checked with `bash -n`;
+- do **not** install/download `actionlint`, browsers, containers, or large system dependencies solely to satisfy this static check. The helper reports `ACTIONLINT: SKIP` when `actionlint` is absent; `bash -n` remains mandatory for the bash/default `run:` blocks it can extract;
+- if a step explicitly uses a non-bash `shell:`, use that shell's narrow syntax check when it is already available or rely on `actionlint` plus remote CI; do not mis-validate it as bash;
+- when the workflow's actual acceptance criterion is runner-specific timing or behavior, prefer static validation plus one remote CI run over an expensive local recreation whose setup cost dominates the experiment.
+
+When GitHub Actions fails, diagnose it compactly:
+1. start with `gh pr checks <pr>` or `gh pr view <pr> --json statusCheckRollup`;
+2. identify the single failed job/check before fetching logs;
+3. retrieve only the failed step/log context (`gh run view <run-id> --log-failed`, a known job's failed steps, or a focused grep/tail); do not dump the full workflow log when a small error slice is sufficient;
+4. on the installed GitHub CLI, do **not** use `gh pr checks --json`; that flag is unsupported here and should not be rediscovered manually.
 
 ### Frontend/E2E preflight
 

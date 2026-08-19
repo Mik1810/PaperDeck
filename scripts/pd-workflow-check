@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="$(git rev-parse --show-toplevel)"
+cd "$repo"
+base="${1:-origin/main}"
+
+if ! git rev-parse --verify "$base" >/dev/null 2>&1; then
+  echo "pd-workflow-check: base ref not found: $base" >&2
+  exit 2
+fi
+
+mapfile -t files < <(
+  git diff --name-only "$base" -- \
+    '.github/workflows/*.yml' '.github/workflows/*.yaml' | sort -u
+)
+
+if ((${#files[@]} == 0)); then
+  echo "WORKFLOW_CHECK: SKIP (no changed workflows)"
+  exit 0
+fi
+
+for file in "${files[@]}"; do
+  [[ -f "$file" ]] || continue
+  if command -v actionlint >/dev/null 2>&1; then
+    actionlint "$file"
+  fi
+
+done
+
+python3 - "${files[@]}" <<'PY'
+import pathlib
+import re
+import subprocess
+import sys
+
+RUN_RE = re.compile(r'^(?P<indent>\s*)(?:-\s+)?run:\s*(?P<value>.*)$')
+SHELL_RE = re.compile(r'^\s*shell:\s*([^#]+?)\s*(?:#.*)?$')
+BLOCK_RE = re.compile(r'^[|>][+-]?(?:\d+)?\s*(?:#.*)?$')
+
+
+def indent_len(s: str) -> int:
+    return len(s) - len(s.lstrip(' '))
+
+
+def nearest_step_shell(lines, run_idx, run_indent):
+    # Search within the current step mapping. A non-bash explicit shell means
+    # bash -n would be the wrong validator, so leave it to actionlint/CI.
+    start = run_idx
+    while start > 0:
+        prev = lines[start - 1]
+        if prev.strip() and indent_len(prev) < run_indent:
+            break
+        start -= 1
+    end = run_idx + 1
+    while end < len(lines):
+        cur = lines[end]
+        if cur.strip() and indent_len(cur) < run_indent:
+            break
+        end += 1
+    for line in lines[start:end]:
+        m = SHELL_RE.match(line)
+        if m:
+            return m.group(1).strip().strip('"\'')
+    return None
+
+
+def decode_inline(value: str):
+    value = value.strip()
+    if not value:
+        return None
+    if value[0:1] == value[-1:] == "'":
+        return value[1:-1].replace("''", "'")
+    if value[0:1] == value[-1:] == '"':
+        # Preserve shell characters; decode only common YAML-style escaped quotes.
+        return value[1:-1].replace('\\"', '"').replace('\\\\', '\\')
+    return value
+
+
+def extract_runs(path: pathlib.Path):
+    lines = path.read_text(encoding='utf-8').splitlines()
+    i = 0
+    while i < len(lines):
+        m = RUN_RE.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        run_indent = len(m.group('indent'))
+        shell = nearest_step_shell(lines, i, run_indent)
+        value = m.group('value').strip()
+        line_no = i + 1
+        if shell and not (shell == 'bash' or shell.startswith('bash ')):
+            print(f"NOTE {path}:{line_no}: skip bash -n for explicit shell={shell}")
+            i += 1
+            continue
+        if BLOCK_RE.match(value):
+            block = []
+            i += 1
+            while i < len(lines):
+                line = lines[i]
+                if line.strip() and indent_len(line) <= run_indent:
+                    break
+                block.append(line)
+                i += 1
+            nonblank = [indent_len(x) for x in block if x.strip()]
+            content_indent = min(nonblank) if nonblank else run_indent + 2
+            script = '\n'.join(x[content_indent:] if len(x) >= content_indent else '' for x in block)
+            if value.startswith('>'):
+                # Folded YAML is uncommon for shell steps; replacing line breaks with
+                # spaces approximates GitHub's scalar semantics closely enough for syntax.
+                script = ' '.join(part.strip() for part in script.splitlines())
+            yield line_no, script
+            continue
+        script = decode_inline(value)
+        if script is not None:
+            yield line_no, script
+        i += 1
+
+
+failed = False
+checked = 0
+for filename in sys.argv[1:]:
+    path = pathlib.Path(filename)
+    if not path.is_file():
+        continue
+    for line_no, script in extract_runs(path):
+        checked += 1
+        proc = subprocess.run(['bash', '-n'], input=script, text=True, capture_output=True)
+        if proc.returncode:
+            failed = True
+            detail = (proc.stderr or proc.stdout).strip()
+            print(f"FAIL {path}:{line_no}: bash -n")
+            if detail:
+                print(detail)
+        else:
+            print(f"PASS {path}:{line_no}: bash -n")
+
+if checked == 0:
+    print('WORKFLOW_SHELL_CHECK: SKIP (no bash/default run blocks found)')
+elif failed:
+    print('WORKFLOW_SHELL_CHECK: FAIL')
+    raise SystemExit(1)
+else:
+    print(f'WORKFLOW_SHELL_CHECK: PASS ({checked} run blocks)')
+PY
+
+if command -v actionlint >/dev/null 2>&1; then
+  echo "ACTIONLINT: PASS"
+else
+  echo "ACTIONLINT: SKIP (not installed; do not download it solely for this check)"
+fi
+
+echo "WORKFLOW_CHECK: PASS"

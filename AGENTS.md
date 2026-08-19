@@ -82,7 +82,8 @@ During implementation:
 - Never bypass a compact `pd-run` failure by dumping the raw log; use `scripts/pd-log`.
 - For commands expected to run longer than a couple seconds, use about 30 seconds for the initial tool yield and about 30 seconds for subsequent waits. Do not request longer waits merely to reduce model turns; the observed terminal runtime can split them into extra inference cycles. Do not poll every 1–5 seconds.
 - When a long-running process is still active and produced no actionable new output, immediately issue the next wait; do not reopen reasoning, status discovery, or commentary merely to decide to keep waiting.
-- If remote CI itself is explicit acceptance evidence, prefer one blocking watcher for the known run with ~30-second waits. Otherwise stop at the normal `WAITING_*` publication state rather than watching CI.
+- If remote CI itself is explicit acceptance evidence, prefer a non-blocking handoff: publish the known commit/PR, stop at `WAITING_FOR_CI`, and inspect the known run once on a later same-issue follow-up. Only block-watch when the user explicitly asks to wait in the current turn.
+- Do not create a large local browser/container/system-package download solely to predict runner-specific CI timing. Use deterministic static/local checks first and let GitHub Actions provide runner-specific evidence unless local reproduction is itself required.
 - Do not inspect `~/.codex/memories/MEMORY.md` for normal issue work; repository state and `PROJECT_STATE.md` are the issue sources of truth.
 
 Documentation:
@@ -94,6 +95,8 @@ Documentation:
 Validation:
 - Choose the narrowest relevant command from `package.json`.
 - Do not repeatedly run the entire suite when targeted evidence is sufficient.
+- If `.github/workflows/*.yml` or `.yaml` changed, run `scripts/pd-workflow-check` before the final baseline gate. It syntax-checks bash/default `run:` blocks with `bash -n` and runs `actionlint` when already installed; do not download `actionlint` merely for this check.
+- For CI failures, use `gh pr checks` or `gh pr view --json statusCheckRollup` to identify the failed job, then fetch only failed-step/focused log context. Do not use unsupported `gh pr checks --json` and do not dump full workflow logs when a small error slice is enough.
 - Complete the issue-scoped design/risk review, final diff review, feature-specific validation, and documentation **before** `scripts/pd-final-check`.
 - Treat a passing `scripts/pd-final-check` as the final repository baseline gate. After it passes, proceed to commit/publication; do not reopen broad discovery or architecture investigation unless a concrete defect is discovered. If code changes after the gate, rerun the affected targeted check and `pd-final-check` once.
 - Before finalizing, prefer `scripts/pd-final-check` to batch `git diff --check`, typecheck, lint, and unit tests into one compact tool round-trip; add `--build` when a production build is warranted.
