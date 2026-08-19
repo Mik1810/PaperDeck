@@ -19,7 +19,7 @@ const ingestionSource = readFileSync(
 );
 const migrationSource = readFileSync(
   new URL(
-    "../../supabase/migrations/20260812220000_atomic_arxiv_paper_ingestion.sql",
+    "../../supabase/migrations/20260812202052_atomic_arxiv_paper_ingestion.sql",
     import.meta.url,
   ),
   "utf8",

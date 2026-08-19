@@ -12,7 +12,7 @@ const retentionSource = readFileSync(
 );
 const migrationSource = readFileSync(
   new URL(
-    "../../supabase/migrations/20260812210000_batch_recommendation_impression_retention.sql",
+    "../../supabase/migrations/20260812202020_batch_recommendation_impression_retention.sql",
     import.meta.url,
   ),
   "utf8",

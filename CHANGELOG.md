@@ -35,6 +35,10 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Aligned five August migration filenames with their authoritative Supabase
+  Production history versions. Their SQL payloads remain unchanged, allowing
+  normal migration preflight and deployment to proceed without repairing or
+  replaying already-applied Production migrations.
 - Made classic-paper persistence atomic per discovered paper. The monthly
   Semantic Scholar worker now sends metadata, external IDs, ordered authors,
   and curated topics through one service-role-only transaction; identity locks

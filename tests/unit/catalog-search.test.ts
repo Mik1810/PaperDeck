@@ -16,7 +16,7 @@ const repositorySource = readFileSync(
 );
 const migrationSource = readFileSync(
   new URL(
-    "../../supabase/migrations/20260812200000_complete_catalog_search_indexes.sql",
+    "../../supabase/migrations/20260812202000_complete_catalog_search_indexes.sql",
     import.meta.url,
   ),
   "utf8",
