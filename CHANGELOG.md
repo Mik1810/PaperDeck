@@ -8,6 +8,10 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Split Playwright installation and the desktop/mobile E2E suite from the core
+  App CI job. Full changes now run core validation and isolated browser coverage
+  as parallel jobs after one shared changed-file classification, while docs-only
+  pull requests retain the lightweight terminal `app-ci` path.
 - Expanded full App CI with the complete unit suite, an explicit localhost-only
   aggregate of deterministic PostgreSQL integration regressions, and the
   existing Pixel 5 Playwright project. Mobile CI now includes a real touch
