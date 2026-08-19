@@ -33,7 +33,9 @@ This project follows Semantic Versioning.
   fresh scan from a candidate-limited run, and classic discovery targets the
   classic subset directly. The same worker now supports a bounded local
   `--until-fresh` backfill with batch details written to a `.log` file and only
-  one terminal console summary.
+  one terminal console summary. Shared Supabase REST calls now retry bounded
+  transient DNS/network/server failures, and terminal backfill errors are
+  recorded in the log for safe checkpointed recovery.
 - Allowed profile avatars from Clerk's dedicated image CDN through the Next.js
   image optimizer, fixing broken member photos in the research-group workspace
   while keeping remote image sources restricted to the expected host.

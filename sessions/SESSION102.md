@@ -18,6 +18,13 @@
 - Added deterministic Python regression coverage for a missing paper beyond the
   former 1,024-row prefix, repeated bounded progress, model/hash staleness,
   vector-free REST selection, classic filtering, and quiet logged backfills.
+- A Production backfill audit found 3,462 missing embeddings among 4,793 papers
+  and no stale model/hash rows. The user-run backfill durably wrote 486 vectors,
+  then stopped with a temporary DNS resolution failure; 2,976 missing rows
+  remained in the immediate read-only audit.
+- Added bounded exponential retry for transient REST DNS, connection, timeout,
+  rate-limit, and server errors, plus terminal `run_failed` logging. Permanent
+  HTTP errors still fail immediately.
 
 ## Environment boundary
 
@@ -29,7 +36,8 @@
 
 ## Validation
 
-- `python3 -m unittest tests.python.test_embed_papers`: 6 passed.
+- `python3 -m unittest tests.python.test_embed_papers`: 7 passed.
+- `python3 -m unittest tests.python.test_embedding_common`: 3 passed.
 - Canonical disposable PostgreSQL mixed-row dry-run:
   `PAPERDECK_RUN_EMBEDDING_DB_INTEGRATION=true python3 -m unittest
   tests.python.test_embed_papers_database`: 2 passed.

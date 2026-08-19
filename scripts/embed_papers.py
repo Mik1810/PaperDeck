@@ -330,9 +330,7 @@ def encode_candidates(
     return [embedding.tolist() for embedding in encoded]
 
 
-def main() -> None:
-    load_local_env()
-    args = parse_args()
+def run(args: argparse.Namespace) -> None:
     if args.until_fresh:
         append_log(
             args.log_file,
@@ -477,6 +475,24 @@ def main() -> None:
             },
         ),
     )
+
+
+def main() -> None:
+    load_local_env()
+    args = parse_args()
+    try:
+        run(args)
+    except Exception as error:
+        if args.until_fresh:
+            append_log(
+                args.log_file,
+                {
+                    "event": "run_failed",
+                    "errorType": type(error).__name__,
+                    "error": str(error)[:500],
+                },
+            )
+        raise
 
 
 if __name__ == "__main__":

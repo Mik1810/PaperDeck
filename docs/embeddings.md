@@ -542,6 +542,12 @@ the terminal JSON summary, so scheduled workflow parsing stays unchanged.
 `--max-batches` defaults to 100 as a safety bound. Dry-run mode performs one
 read-only preview and never loads the model or enters a write loop.
 
+Supabase REST calls retry transient DNS, connection, timeout, rate-limit, and
+server failures with bounded exponential backoff. Permanent HTTP failures still
+stop immediately. If all retry attempts fail, backfill mode appends a
+`run_failed` event to the `.log`; rerunning is safe because completed embedding
+metadata is the durable checkpoint.
+
 The dry-run does not import `sentence-transformers`; it only needs Supabase environment variables.
 
 Local real smoke run used:

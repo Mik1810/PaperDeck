@@ -182,6 +182,44 @@ class PaperCandidateScanTests(unittest.TestCase):
             ["run_started", "batch_completed", "batch_completed", "run_completed"],
         )
 
+    def test_until_fresh_logs_terminal_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            log_file = Path(directory) / "backfill.log"
+            args = SimpleNamespace(
+                model=MODEL,
+                limit=1,
+                table_limit=100,
+                force=False,
+                classic_only=False,
+                dry_run=False,
+                until_fresh=True,
+                batch_size=1,
+                quiet=True,
+                max_batches=10,
+                log_file=log_file,
+            )
+
+            with (
+                patch.object(embed_papers, "load_local_env"),
+                patch.object(embed_papers, "parse_args", return_value=args),
+                patch.object(embed_papers, "PaperEmbeddingClient", return_value=object()),
+                patch.object(
+                    embed_papers,
+                    "load_candidates",
+                    side_effect=RuntimeError("network unavailable"),
+                ),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "network unavailable"):
+                    embed_papers.main()
+
+            log_events = [json.loads(line) for line in log_file.read_text().splitlines()]
+
+        self.assertEqual(
+            [event["event"] for event in log_events],
+            ["run_started", "run_failed"],
+        )
+        self.assertEqual(log_events[-1]["errorType"], "RuntimeError")
+
 
 if __name__ == "__main__":
     unittest.main()
