@@ -47,7 +47,8 @@ For a GitHub issue, prefer a fresh Codex task/thread and use the `paperdeck-issu
 Before implementation:
 1. Inspect the issue and relevant current code.
 2. Use read-only discovery to produce a compact plan covering goal/root cause,
-   proposed changes, affected areas, meaningful risks/decisions, and validation.
+   proposed changes, explicit approved mutation surfaces, meaningful
+   risks/decisions, and validation.
 3. End that plan with `PLAN_STATUS: AWAITING_APPROVAL` and stop. Do not create or
    switch branches, edit files, run migrations, change hosted state, commit, push,
    or publish before the user approves the plan, unless the original request
@@ -58,9 +59,13 @@ Before implementation:
 5. Planning approval does not replace separate explicit approval required for
    Production/hosted schema, data, configuration, destructive, or similarly
    consequential changes.
-6. Keep the implementation scoped to the approved issue plan. If a material new
-   architecture/scope/risk decision appears during implementation, stop before
-   that new work and request approval for a revised plan.
+6. Keep the implementation scoped to the approved issue plan and its explicit
+   mutation surfaces. Before the first edit outside those surfaces, stop and
+   request approval for a revised plan. If validation exposes a new runtime or
+   product defect outside the approved goal, stop before fixing it even if the
+   fix is needed to make the current issue green. New migrations, hosted
+   mutations, material architecture decisions, and materially different risk
+   profiles also require re-approval.
 
 During implementation:
 - Search before opening large files.
@@ -70,9 +75,9 @@ During implementation:
 - Run targeted checks while iterating; broader checks once near completion when justified.
 - Use `scripts/pd-run` for noisy commands.
 - Never bypass a compact `pd-run` failure by dumping the raw log; use `scripts/pd-log`.
-- For commands expected to run longer than a couple seconds, use about 30 seconds for the initial tool yield. If the process is clearly long-running, use about 55 seconds for subsequent waits (or the longest supported wait below 60 seconds) instead of repeated 30-second polls. Do not poll every 1–5 seconds.
-- When a long-running process is still active and produced no actionable new output, immediately issue the next long wait; do not reopen reasoning, status discovery, or commentary merely to decide to keep waiting.
-- If remote CI itself is explicit acceptance evidence, prefer one blocking watcher for the known run and long waits. Otherwise stop at the normal `WAITING_*` publication state rather than watching CI.
+- For commands expected to run longer than a couple seconds, use about 30 seconds for the initial tool yield and about 30 seconds for subsequent waits. Do not request longer waits merely to reduce model turns; the observed terminal runtime can split them into extra inference cycles. Do not poll every 1–5 seconds.
+- When a long-running process is still active and produced no actionable new output, immediately issue the next wait; do not reopen reasoning, status discovery, or commentary merely to decide to keep waiting.
+- If remote CI itself is explicit acceptance evidence, prefer one blocking watcher for the known run with ~30-second waits. Otherwise stop at the normal `WAITING_*` publication state rather than watching CI.
 - Do not inspect `~/.codex/memories/MEMORY.md` for normal issue work; repository state and `PROJECT_STATE.md` are the issue sources of truth.
 
 Documentation:

@@ -45,7 +45,7 @@ remote project state before this gate is approved.
 Present one compact reviewable plan containing:
 - **Goal / root cause** — what is wrong or what must change, and why it matters;
 - **Proposed changes** — the minimal implementation approach;
-- **Affected areas** — likely files/components/schema surfaces, without bulk listing;
+- **Approved mutation surfaces** — the concrete path/categories the implementation may modify (for example `src/`, `tests/`, `.github/workflows/`, `scripts/`, `supabase/`, docs/config). Keep this narrow but include routine issue documentation when expected;
 - **Risks / decisions** — meaningful tradeoffs, assumptions, migrations, external writes, or scope choices;
 - **Validation** — targeted evidence plus the final repository baseline gate.
 
@@ -70,11 +70,18 @@ replace any separate approval required by repository policy for Production/hoste
 schema, data, configuration, destructive, or similarly consequential mutations.
 
 After approval, create/use the dedicated issue branch if implementation requires
-changes and continue with the approved plan. If implementation later reveals a
-**material** architecture/scope change, new migration, new hosted mutation, or a
-different risk profile, stop before that new work and present a revised plan for
-approval. Minor implementation details within the approved approach do not need
-another approval round.
+changes and continue with the approved plan. Treat the approved mutation surfaces
+as a hard boundary, not a suggestion. Before the **first** edit outside an
+approved mutation surface, stop and present a revised plan for approval. Likewise, if
+validation or implementation discovers a new runtime/product defect that must be
+fixed but was not part of the approved goal, stop before fixing it even when the
+fix would make the current issue's tests or CI green.
+
+A revised approval is also required for a new migration, new hosted mutation,
+material architecture decision, or materially different risk profile. Ordinary
+implementation details and additional tests inside the already-approved surfaces
+and goal do not need another approval round. When in doubt about whether a new
+surface or newly discovered defect is material, prefer re-approval.
 
 ## 3. Keep a retrieval budget
 
@@ -97,15 +104,15 @@ Prefer:
 
 For commands expected to take more than ~2 seconds:
 - use about **30 seconds** for the initial command yield so ordinary checks can finish without an extra round-trip;
-- once a process is clearly long-running, use about **55 seconds** for subsequent waits, or the longest supported wait strictly below 60 seconds;
-- if a wait returns no actionable new output and the process is still running, immediately issue the next long wait instead of reopening analysis or status discovery;
+- use about **30 seconds** for subsequent waits as well; this is the stable cadence supported by the observed Codex terminal runtime;
+- if a wait returns no actionable new output and the process is still running, immediately issue the next wait without reopening analysis, status discovery, or commentary merely to decide to keep waiting;
 - never poll every 1–5 seconds unless the process is genuinely interactive.
 
 For remote CI:
 - normal issue publication still stops at `WAITING_FOR_CHECKS` / `WAITING_FOR_CI`; do not watch CI merely to merge sooner;
-- only when remote CI timing/completion is itself explicit acceptance evidence, prefer one blocking watcher for the known run (for example `gh run watch <run-id> --exit-status`) and the same ~55-second follow-up waits instead of alternating `gh run view` / `gh pr checks` polling.
+- only when remote CI timing/completion is itself explicit acceptance evidence, prefer one blocking watcher for the known run (for example `gh run watch <run-id> --exit-status`) and ~30-second waits instead of alternating `gh run view` / `gh pr checks` polling.
 
-A running process does not need a fresh full-context inference every 30 seconds. Longer bounded waits reduce those inference cycles while preserving responsiveness.
+Do not request longer tool waits merely to reduce model turns: the observed runtime can split longer waits and cause extra inference cycles. The optimization is to keep each continuation mechanically cheap: when the known process is healthy and still running, wait again immediately.
 
 ## 5. Implement
 
