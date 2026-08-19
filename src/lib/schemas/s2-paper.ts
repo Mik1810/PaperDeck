@@ -9,7 +9,7 @@ export const S2ExternalIdsSchema = z.object({
 
 export const S2OpenAccessPdfSchema = z.object({
   url: z.string(),
-  status: z.string(),
+  status: z.string().nullable(),
 });
 
 export const S2PaperSchema = z.object({

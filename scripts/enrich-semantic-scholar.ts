@@ -16,6 +16,7 @@ import {
   type S2Paper,
   type S2PaperRow,
 } from "../src/lib/schemas/s2-paper";
+import { mapS2BatchResults } from "./semantic-scholar-batch";
 
 type EnrichConfig = {
   batchSize: number;
@@ -340,14 +341,7 @@ async function main() {
           papers.map((paper) => paper.arxiv_id),
           config.apiKey,
         );
-        return new Map(
-          papers.map((paper, index) => [
-            paper.id,
-            results[index]
-              ? { outcome: "found" as const, value: results[index]! }
-              : { outcome: "not_found" as const },
-          ]),
-        );
+        return mapS2BatchResults(papers, results);
       },
       applyFound: (paper, s2) => updatePaper(supabase, paper, s2),
       persistOutcome: (candidate, outcome) =>
