@@ -2,11 +2,37 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyProviderQuota,
+  cloudflareGenerationConfig,
+  cloudflareResultToText,
   geminiGenerationConfig,
   parseSummaryJson,
   resolveGitHubModelsToken,
   summaryRunShouldFail,
 } from "../../src/lib/summary-run";
+
+test("Cloudflare requests constrain reasoning and completion output", () => {
+  const config = cloudflareGenerationConfig(4096);
+
+  assert.equal(config.max_completion_tokens, 4096);
+  assert.equal(config.reasoning_effort, "low");
+  assert.equal("max_tokens" in config, false);
+  assert.equal(config.response_format.type, "json_schema");
+});
+
+test("Cloudflare response parsing rejects reasoning-only completions", () => {
+  assert.equal(
+    cloudflareResultToText({
+      choices: [{ message: { content: '{"value":"ok"}' } }],
+    }),
+    '{"value":"ok"}',
+  );
+  assert.equal(
+    cloudflareResultToText({
+      choices: [{ message: { content: null, reasoning: "private reasoning" } }],
+    }),
+    null,
+  );
+});
 
 test("daily provider quotas stop the summary run instead of retrying", () => {
   assert.equal(

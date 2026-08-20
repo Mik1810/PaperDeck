@@ -22,6 +22,10 @@
 - Daily quota exhaustion now stops the worker immediately, reports the selected
   provider and a structured stop reason, and exits unsuccessfully. Temporary
   429 throttling and capacity errors retain bounded retries.
+- The first two-paper Cloudflare probe wrote one summary; the other HTTP 200
+  completion contained reasoning but no answer text. Cloudflare requests now
+  use low reasoning effort and a 4,096-token completion budget, and retry that
+  empty-success shape once without logging the raw model response.
 - Updated the architecture, ingestion guide, roadmap, and changelog to match
   the scheduled provider decision.
 

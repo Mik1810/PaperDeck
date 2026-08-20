@@ -54,6 +54,58 @@ export function classifyProviderQuota(
   return dailyQuota || cloudflareDailyQuota ? "terminal" : "retryable";
 }
 
+export function cloudflareGenerationConfig(maxOutputTokens: number) {
+  return {
+    max_completion_tokens: maxOutputTokens,
+    reasoning_effort: "low",
+    response_format: {
+      type: "json_schema",
+      json_schema: TRIAGE_SUMMARY_JSON_SCHEMA,
+    },
+  } as const;
+}
+
+export function cloudflareResultToText(result: unknown): string | null {
+  if (typeof result === "string") {
+    return result;
+  }
+
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const record = result as Record<string, unknown>;
+  const response = record.response;
+
+  if (typeof response === "string") {
+    return response;
+  }
+
+  if (response && typeof response === "object") {
+    return JSON.stringify(response);
+  }
+
+  const choices = record.choices;
+
+  if (!Array.isArray(choices)) {
+    return null;
+  }
+
+  const firstChoice = choices[0] as Record<string, unknown> | undefined;
+  const message = firstChoice?.message as Record<string, unknown> | undefined;
+  const content = message?.content ?? firstChoice?.text;
+
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (content && typeof content === "object") {
+    return JSON.stringify(content);
+  }
+
+  return null;
+}
+
 export function geminiGenerationConfig(maxOutputTokens: number) {
   return {
     maxOutputTokens,

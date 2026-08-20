@@ -446,7 +446,9 @@ It:
 The scheduled workflow uses Cloudflare Workers AI
 `@cf/zai-org/glm-4.7-flash`, processes one paper at a time, and selects at most
 20 papers per run so its twice-daily schedule stays within a bounded free-tier
-budget. Gemini uses native schema-constrained JSON when selected manually. A
+budget. Cloudflare generation uses low reasoning effort and a 4,096-token
+completion budget; one HTTP 200 response without text is retried once. Gemini
+uses native schema-constrained JSON when selected manually. A
 daily provider quota stops the run immediately and is reported in the
 structured result; transient throttling and capacity errors keep the bounded
 retry behavior. GitHub Models support remains in the worker only as legacy
@@ -463,7 +465,7 @@ LLM_REQUEST_DELAY_MS=3000
 LLM_RETRIES=5
 LLM_SOURCE_TEXT_CHARS=8000
 LLM_MAX_INPUT_CHARS=500000
-LLM_MAX_OUTPUT_TOKENS=2400
+LLM_MAX_OUTPUT_TOKENS=4096
 CLOUDFLARE_ACCOUNT_ID=replace_me
 CLOUDFLARE_API_TOKEN=replace_me
 JINA_API_KEY=

@@ -52,7 +52,7 @@ jobs:
       LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '3000' }}
       LLM_RETRIES: ${{ vars.LLM_RETRIES || '5' }}
       LLM_SOURCE_TEXT_CHARS: ${{ vars.LLM_SOURCE_TEXT_CHARS || '8000' }}
-      LLM_MAX_OUTPUT_TOKENS: ${{ vars.LLM_MAX_OUTPUT_TOKENS || '2400' }}
+      LLM_MAX_OUTPUT_TOKENS: ${{ vars.LLM_MAX_OUTPUT_TOKENS || '4096' }}
       LLM_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
       GITHUB_MODELS_TOKEN: ${{ secrets.GH_MODELS_TOKEN || '' }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

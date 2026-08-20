@@ -3,6 +3,8 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import {
   classifyProviderQuota,
+  cloudflareGenerationConfig,
+  cloudflareResultToText,
   geminiGenerationConfig,
   parseSummaryJson,
   resolveGitHubModelsToken,
@@ -59,6 +61,7 @@ class TerminalProviderQuotaError extends Error {
 }
 
 const CURSOR_KEY = "triage_summary_enrich";
+const EMPTY_RESPONSE_RETRIES = 1;
 const DEFAULT_CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const DEFAULT_GITHUB_MODEL = "openai/gpt-4o-mini";
@@ -512,45 +515,6 @@ function cloudflareErrorMessage(data: CloudflareAiEnvelope | null, fallback: str
   return message || fallback.slice(0, 300);
 }
 
-function cloudflareResultToText(result: unknown): string | null {
-  if (typeof result === "string") {
-    return result;
-  }
-
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const record = result as Record<string, unknown>;
-  const response = record.response;
-
-  if (typeof response === "string") {
-    return response;
-  }
-
-  if (response && typeof response === "object") {
-    return JSON.stringify(response);
-  }
-
-  const choices = record.choices;
-
-  if (Array.isArray(choices)) {
-    const firstChoice = choices[0] as Record<string, unknown> | undefined;
-    const message = firstChoice?.message as Record<string, unknown> | undefined;
-    const content = message?.content ?? firstChoice?.text;
-
-    if (typeof content === "string") {
-      return content;
-    }
-
-    if (content && typeof content === "object") {
-      return JSON.stringify(content);
-    }
-  }
-
-  return null;
-}
-
 async function callCloudflareWorkersAi(
   config: SummaryConfig,
   messages: LlmMessage[],
@@ -570,12 +534,7 @@ async function callCloudflareWorkersAi(
       body: JSON.stringify({
         messages,
         temperature: 0.2,
-        max_tokens: maxTokens,
-        max_completion_tokens: maxTokens,
-        response_format: {
-          type: "json_schema",
-          json_schema: TRIAGE_SUMMARY_JSON_SCHEMA,
-        },
+        ...cloudflareGenerationConfig(maxTokens),
       }),
     });
 
@@ -595,9 +554,16 @@ async function callCloudflareWorkersAi(
         return content;
       }
 
-      throw new Error(
-        `Cloudflare Workers AI returned no text content: ${responseText.slice(0, 300)}`,
-      );
+      if (attempt < Math.min(retries, EMPTY_RESPONSE_RETRIES)) {
+        const delay = getRetryDelayMs(response, attempt);
+        console.error(
+          `  Cloudflare Workers AI returned no text content; retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${EMPTY_RESPONSE_RETRIES})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      throw new Error("Cloudflare Workers AI returned no text content after retry");
     }
 
     if (
