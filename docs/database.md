@@ -18,11 +18,11 @@ This does not replace RLS. It gives each row an owner so server routes/actions c
 
 ## Access Strategy
 
-Initial implementation:
+Ownership contract:
 
 1. Clerk authenticates users.
 2. Next.js server routes/actions read the Clerk user ID.
-3. Server-side Supabase clients write `owner_id = auth().userId`.
+3. Server-controlled database paths write `owner_id = auth().userId`.
 4. Client components do not receive Supabase service keys.
 5. User-specific reads/writes go through server-controlled code.
 
@@ -55,15 +55,18 @@ Service-role audit:
 - It also walks runtime imports from `"use client"` files and fails if a client component reaches `server-only` code, while treating `"use server"` action files as a valid boundary.
 - Current audit result on 2026-07-02: passed.
 
-Future hardening:
+Current authorization hardening:
 
-1. Configure Clerk JWT templates for Supabase.
-2. Make `auth.jwt() ->> 'sub'` equal the Clerk user ID.
-3. Enforce RLS directly in Supabase for browser/client access where appropriate.
+1. Clerk session identity remains the server-side ownership boundary.
+2. Clerk-authenticated Supabase clients pass a JWT whose `sub` is the Clerk
+   user ID for selected RLS-protected collaboration operations.
+3. Direct runtime repositories use Drizzle with explicit server-side ownership
+   and permission checks; service-role clients are reserved for privileged
+   webhook/RPC paths and are audited as server-only.
 
 ## Schema Files
 
-- `supabase/schema.sql`: initial schema, indexes, pgvector setup, and future RLS policies.
+- `supabase/schema.sql`: initial schema, indexes, pgvector setup, and RLS policy baseline.
 
 ## Applied Schema
 
@@ -307,7 +310,12 @@ Remote verification on 2026-07-03 found 571 embedded paper rows for MiniLM, 66 M
 
 `match_papers_by_embedding(query_embedding, match_count, embedding_model_filter)` performs pgvector top-K retrieval over `papers.embedding` and returns `paper_id` plus `semantic_score`. Its 100-list IVFFlat index is queried with ten probes so the RPC can satisfy the requested candidate count with useful recall. The feed repository uses it only when a stored user profile embedding exists.
 
-`src/lib/repositories/user-profile-embeddings.ts` writes `user_profile_embeddings` from stored topic vectors during onboarding/settings updates. It does not call an embedding model; it only aggregates vectors that already exist in Supabase and clears stale stored profiles when no source vectors are available. The older interaction-aware refresh path remains available for future background refresh work.
+`src/lib/repositories/user-profile-embeddings.ts` writes `user_profile_embeddings`
+from stored topic and paper vectors. It does not call an embedding model; it
+aggregates vectors already stored in Supabase, verifies the profile input
+generation, and clears stale stored profiles when no weighted source vectors
+are available. Onboarding, settings, feedback, deck actions, and playlist
+changes schedule this refresh after a real mutation.
 
 ## MVP Feed Ranking
 
@@ -345,7 +353,9 @@ from the paper detail page; `already_read` has the same positive weight as the
 legacy `read` signal. Removing a paper from a playlist deletes only the
 membership and does not add negative feedback.
 
-Embedding similarity will replace or augment this ranking once paper embeddings and user profile embeddings are generated.
+Embedding similarity augments this ranking whenever the stored profile vector
+matches the current profile input generation; otherwise the bounded catalog
+path supplies the non-semantic fallback.
 
 Current integration already supports this path: onboarding/settings writes create the stored user vector from selected topic embeddings. `/feed` first tries a fresh `recommendations` preload batch from the wizard, then a fresh live `recommendations` batch. Cached batches below the ten-visible-paper floor are regenerated. Without a usable batch, if `user_profile_embeddings` has a vector for the user, `/feed` retrieves semantic paper IDs with pgvector and applies the existing TypeScript reranker. When fewer than 50 unseen semantic candidates remain, a bounded catalog query combines personalized-topic, recent, cited, and classic candidates with `UNION ALL`, excludes hidden paper IDs, deduplicates the result, and returns at most 300 lightweight descriptors. Topic and feedback weights guide this preselection, while the definitive score remains in the versioned TypeScript ranker. Only its final 50 paper IDs are hydrated with authors, abstracts, summaries, and display topics. Without a stored user vector, the same bounded catalog path supplies the topic/feedback ranking. Ordinary presentation queries use explicit column projections and never transfer paper embeddings or ingestion metadata.
 
@@ -356,13 +366,16 @@ New recommendation rows persist that provenance in nullable
 
 ## RLS Notes
 
-`supabase/schema.sql` includes RLS policies written for a future Clerk JWT integration:
+`supabase/schema.sql` includes RLS policies for Clerk JWT subjects:
 
 ```sql
 owner_id = auth.jwt() ->> 'sub'
 ```
 
-These policies assume that Supabase receives a JWT where `sub` is the Clerk user ID. Until this is configured, direct client-side access to user-owned tables should not be used.
+Selected server-side collaboration paths use Clerk-authenticated Supabase
+clients whose JWT `sub` is the Clerk user ID. PaperDeck does not expose a
+general direct browser database client; ordinary application access remains
+behind server actions and server-only repositories.
 
 Supabase's managed automatic-RLS event trigger remains enabled. Migration
 `20260808222536_restrict_rls_auto_enable_execution.sql` removes unnecessary

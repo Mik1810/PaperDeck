@@ -10,7 +10,13 @@ PaperDeck is a mobile-first paper triage deck for computer science researchers: 
 
 ## Project Status
 
-PaperDeck is currently at `0.1.5`: an early MVP foundation with production auth, Supabase-backed user data, multi-category arXiv ingestion with historical backfill, enrichment from Semantic Scholar/OpenAlex/Unpaywall, a first feedback-aware feed ranking, and the initial semantic retrieval path. The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See [ROADMAP.md](./ROADMAP.md) for the current product and technical plan.
+PaperDeck is currently at `0.2.0`: a deployed MVP with production auth,
+semantic and feedback-aware paper discovery, persistent feed batches, private
+library workflows, and invite-only research groups with shared paper activity.
+The app is deployed at <https://paperdeck.michaelpiccirilli.it/>. See
+[docs/architecture.md](./docs/architecture.md) for the authoritative current
+architecture and feature boundaries, and [ROADMAP.md](./ROADMAP.md) for durable
+product decisions and next steps.
 
 ## MVP Scope
 
@@ -113,7 +119,11 @@ to Supabase. Live Clerk and Supavisor checks remain explicit integration tests.
 
 The initial database plan lives in [docs/database.md](./docs/database.md). The SQL schema draft is in [supabase/schema.sql](./supabase/schema.sql).
 
-The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data through trusted server code. RLS policies are included for the future Clerk JWT integration path.
+The MVP stores Clerk user IDs in `owner_id` fields and routes user-specific data
+through trusted server code. Selected collaboration operations use
+Clerk-authenticated Supabase clients whose JWT subject is enforced by RLS;
+ordinary runtime repositories use direct Drizzle/PostgreSQL access with
+server-side ownership and permission checks.
 
 Current server-side persistence covers profiles, onboarding interests, favorites, the default `Read later` playlist, playlist items, paper interactions, and a seeded starter catalog. The feed ranking is computed server-side in `src/lib/ranking/feed-ranking.ts`. Catalog papers are ingested through arXiv and enrichment workers; see the Ingestion section below.
 

@@ -384,8 +384,13 @@ Wizard completion persists the first ranked deck to `recommendations` with model
 - loaded candidate paper count;
 - semantic and catalog-fill result counts;
 - embedding model name;
-- fallback reason, including profile-missing, refresh failure, no matches, missing paper rows, or reranker filtering all candidates;
-- profile refresh status/reason when the feed lazily tries to build a missing user profile vector.
+- fallback reason, including a missing or generation-stale profile, no matches,
+  missing paper rows, or the reranker filtering all candidates.
+
+The feed path is read-only with respect to profile embeddings. Ranking-relevant
+mutations schedule refresh work after the write; a missing or stale vector makes
+the current request use the non-semantic catalog fallback rather than creating
+or updating a profile during rendering.
 
 The final displayed score should be a hybrid score:
 
@@ -617,7 +622,8 @@ For public repositories, standard GitHub-hosted runners are free. Do not use lar
 14. Done: verify GitHub Actions dry-run and tiny write-mode batches.
 15. Done: run broader MiniLM topic and paper embedding batches through local `uv`.
 16. Done: move onboarding/settings profile embedding generation to refresh-on-write and preload the first wizard feed batch into `recommendations`.
-17. Next: evaluate background refresh for interaction-aware profile updates after more feedback data exists.
+17. Done: refresh interaction-aware profiles after ranking-relevant mutations,
+    guarded by input generations and coalesced for same-instance work.
 
 ## Non-Goals For MVP
 

@@ -2,6 +2,14 @@
 
 PaperDeck is a Next.js application backed by Clerk, Supabase Postgres, pgvector, and GitHub Actions workers. The runtime app stays lightweight: expensive ingestion, enrichment, embedding, and LLM summary work happens outside Vercel.
 
+This document is the authoritative detailed description of the currently
+deployed application architecture and feature boundaries. `PROJECT_STATE.md`
+is the compact agent entry point, while `ROADMAP.md` records durable product
+decisions and next steps. Historical session notes describe the state at the
+time they were written and are not current-state specifications.
+
+Last reconciled with deployed code: 2026-08-20.
+
 ## Stack
 
 | Layer | Technology | Role |
@@ -29,6 +37,8 @@ flowchart TB
   clerk["Clerk<br/>Google OAuth"]
   actions["Server Actions<br/>src/app/actions.ts"]
   repos["Server-only Repositories<br/>src/lib/repositories/*"]
+  runtimeDb["Drizzle + node-postgres<br/>bounded runtime pool"]
+  privileged["Privileged Supabase clients<br/>Clerk JWT / service-role RPCs"]
   ranking["Hybrid Reranker<br/>src/lib/ranking/feed-ranking.ts"]
   supabase["Supabase Postgres<br/>tables + RLS policies"]
   pgvector["pgvector RPC<br/>match_papers_by_embedding"]
@@ -46,8 +56,11 @@ flowchart TB
   vercel -->|"mutations"| actions
   vercel -->|"server reads"| repos
   actions -->|"validated owner_id writes"| repos
-  repos -->|"SQL via service-role server client"| supabase
-  repos -->|"semantic candidate RPC"| pgvector
+  repos -->|"runtime SQL"| runtimeDb
+  runtimeDb --> supabase
+  actions -->|"guarded privileged operations"| privileged
+  privileged --> supabase
+  runtimeDb -->|"semantic candidate SQL function"| pgvector
   pgvector --> supabase
   repos --> ranking
   ranking -->|"ranked paper deck"| vercel
@@ -74,6 +87,7 @@ sequenceDiagram
   participant Page as /feed page
   participant Auth as requireOwnerId()
   participant Repo as getFeedPageData()
+  participant Cache as recommendations cache
   participant Semantic as getSemanticPaperCandidates()
   participant Supabase as Supabase Postgres + pgvector
   participant Ranker as rankFeedPapers()
@@ -83,28 +97,38 @@ sequenceDiagram
   Page->>Auth: Require Clerk session or dev-auth owner
   Auth-->>Page: ownerId
   Page->>Repo: Load feed data(ownerId)
-  Repo->>Supabase: Load topics, selected interests, favorites, Read later, interactions
-  Repo->>Semantic: Try semantic candidates
-  Semantic->>Supabase: Load latest user_profile_embeddings row
-  alt profile vector exists
-    Semantic->>Supabase: RPC match_papers_by_embedding(vector, model)
-    Supabase-->>Semantic: paper_id + semantic_score rows
-    Semantic->>Supabase: Load matched paper rows
-    Semantic-->>Repo: candidates + semanticScores + diagnostics
-  else profile missing or empty
-    Semantic->>Supabase: Attempt lazy profile refresh from stored vectors
-    Semantic-->>Repo: empty candidates + fallback diagnostics
+  Repo->>Cache: Load fresh initial recommendation batch
+  alt usable initial batch exists
+    Cache-->>Repo: ranked paper IDs and scores
+  else initial batch missing or exhausted
+    Repo->>Cache: Load fresh live recommendation batch
   end
-  alt semantic candidates loaded
-    Repo->>Ranker: Rank semantic candidate set with topic and feedback signals
-    opt fewer than 50 unseen candidates remain
-      Repo->>Supabase: Load shared catalog papers
-      Repo->>Ranker: Rerank catalog while retaining matched semantic scores
+  alt usable cached batch exists
+    Repo->>Supabase: Hydrate cached paper IDs
+  else live ranking required
+    Repo->>Supabase: Load topics and ranking/presentation state
+    Repo->>Semantic: Try semantic candidates
+    Semantic->>Supabase: Load current user_profile_embeddings row
+    alt current profile vector exists
+      Semantic->>Supabase: Execute match_papers_by_embedding(vector, model)
+      Supabase-->>Semantic: paper_id + semantic_score rows
+      Semantic-->>Repo: candidates + semanticScores + diagnostics
+    else profile missing or stale
+      Semantic-->>Repo: empty candidates + fallback diagnostics
     end
-  else fallback needed
-    Repo->>Supabase: Load shared catalog papers
-    Repo->>Ranker: Rank catalog with topic and feedback signals
+    alt semantic candidates loaded
+      Repo->>Ranker: Rank semantic candidate set with topic and feedback signals
+      opt fewer than 50 unseen candidates remain
+        Repo->>Supabase: Load bounded catalog candidates
+        Repo->>Ranker: Fill while retaining matched semantic scores
+      end
+    else fallback needed
+      Repo->>Supabase: Load shared catalog papers
+      Repo->>Ranker: Rank catalog with topic and feedback signals
+    end
+    Repo-->>Cache: Store visible live batch asynchronously
   end
+  Repo->>Supabase: Record recommendation delivery and load minimal presentation state
   Repo-->>Page: activePaper, nextPapers, favoriteIds, readLaterIds
   Repo-->>Logger: structured feed_timing with semantic diagnostics
   Page->>UI: Render deck
@@ -190,19 +214,29 @@ erDiagram
 flowchart TB
   client["Client Components<br/>use client"]
   serverActions["Server Actions<br/>use server"]
-  serverOnly["server-only modules<br/>auth/session, supabase/server, repositories"]
+  repositories["Runtime repositories<br/>Drizzle / node-postgres"]
+  privileged["Privileged paths<br/>Clerk JWT + selected service-role RPCs"]
   serviceRole["SUPABASE_SERVICE_ROLE_KEY"]
   audit["npm run audit:service-role"]
   supabase["Supabase"]
 
   client -->|"forms call action references"| serverActions
-  serverActions --> serverOnly
-  serverOnly --> serviceRole
-  serviceRole --> supabase
+  serverActions --> repositories
+  repositories -->|"direct runtime SQL"| supabase
+  serverActions --> privileged
+  serviceRole --> privileged
+  privileged --> supabase
   audit -->|"fails if client graph reaches server-only"| client
-  audit -->|"requires server-only imports"| serverOnly
+  audit -->|"requires server-only imports"| repositories
   audit -->|"allows key only in src/lib/supabase/server.ts"| serviceRole
 ```
+
+Normal application repositories use the bounded direct PostgreSQL pool from
+`src/db/index.ts` and `src/db/runtime-pool.ts`, including invocation of the
+pgvector matching SQL function. Supabase clients are separate, explicit paths:
+Clerk-authenticated clients exercise RLS for selected collaboration operations,
+while the service-role client is limited to privileged webhook and guarded RPC
+work. The service-role key is never the general repository transport.
 
 ## Ranking Inputs
 
