@@ -27,6 +27,33 @@ export const TRIAGE_SUMMARY_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+export type ProviderQuotaDisposition = "none" | "retryable" | "terminal";
+
+export function classifyProviderQuota(
+  provider: string,
+  status: number,
+  responseBody: string,
+): ProviderQuotaDisposition {
+  if (status !== 429) {
+    return "none";
+  }
+
+  const normalized = responseBody.toLowerCase();
+  const dailyQuota =
+    /per[_-]?day/.test(normalized) ||
+    normalized.includes("requests per day") ||
+    normalized.includes("daily free allocation") ||
+    normalized.includes("daily quota") ||
+    /(?:quota|limit)[^\n]{0,80}(?:limit:\s*0|"limit"\s*:\s*0)/.test(
+      normalized,
+    );
+  const cloudflareDailyQuota =
+    provider === "cloudflare" &&
+    /"code"\s*:\s*"?3036"?/.test(normalized);
+
+  return dailyQuota || cloudflareDailyQuota ? "terminal" : "retryable";
+}
+
 export function geminiGenerationConfig(maxOutputTokens: number) {
   return {
     maxOutputTokens,

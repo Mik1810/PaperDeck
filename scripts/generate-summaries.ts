@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import {
+  classifyProviderQuota,
   geminiGenerationConfig,
   parseSummaryJson,
   resolveGitHubModelsToken,
@@ -46,6 +47,16 @@ type TriageSummary = {
   prerequisites: string;
   read_if_you_care_about: string;
 };
+
+class TerminalProviderQuotaError extends Error {
+  constructor(
+    readonly provider: LlmProvider,
+    readonly model: string,
+  ) {
+    super(`${provider}:${model} daily quota exhausted`);
+    this.name = "TerminalProviderQuotaError";
+  }
+}
 
 const CURSOR_KEY = "triage_summary_enrich";
 const DEFAULT_CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash";
@@ -434,12 +445,22 @@ async function callGemini(
       return text;
     }
 
+    const errorText = await response.text();
+    const quotaDisposition = classifyProviderQuota(
+      "gemini",
+      response.status,
+      errorText,
+    );
+
+    if (quotaDisposition === "terminal") {
+      throw new TerminalProviderQuotaError(config.provider, config.model);
+    }
+
     if ((response.status === 429 || response.status === 503) && attempt < retries) {
       const retryAfter = response.headers.get("Retry-After");
       const delay = retryAfter
         ? Math.min(Number(retryAfter) * 1000, 300_000)
         : (attempt + 1) * 15000;
-      const errorText = await response.text();
       console.error(
         `  ${response.status} error: ${errorText.slice(0, 300)}`,
       );
@@ -450,7 +471,6 @@ async function callGemini(
       continue;
     }
 
-    const errorText = await response.text();
     throw new Error(
       `Gemini API error (${response.status}): ${errorText.slice(0, 200)}`,
     );
@@ -578,6 +598,13 @@ async function callCloudflareWorkersAi(
       throw new Error(
         `Cloudflare Workers AI returned no text content: ${responseText.slice(0, 300)}`,
       );
+    }
+
+    if (
+      classifyProviderQuota("cloudflare", response.status, responseText) ===
+      "terminal"
+    ) {
+      throw new TerminalProviderQuotaError(config.provider, config.model);
     }
 
     if (shouldRetryLlmStatus(response.status) && attempt < retries) {
@@ -1059,8 +1086,12 @@ async function main() {
   let totalGenerated = 0;
   let totalFailed = 0;
   let totalSkippedExisting = 0;
+  let totalAttempted = 0;
+  let stoppedReason: "provider_daily_quota_exhausted" | null = null;
+  let stoppedProvider: string | null = null;
   const failedArxivIds: string[] = [];
 
+  paperBatches:
   for (let i = 0; i < papers.length; i += config.batchSize) {
     if (i > 0) {
       await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
@@ -1076,6 +1107,7 @@ async function main() {
       if (paperIndex > 0) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
+      totalAttempted++;
       try {
         const summary = await generateSummary(config, paper);
 
@@ -1104,6 +1136,16 @@ async function main() {
       } catch (error) {
         totalFailed++;
         failedArxivIds.push(paper.arxiv_id ?? paper.id);
+
+        if (error instanceof TerminalProviderQuotaError) {
+          stoppedReason = "provider_daily_quota_exhausted";
+          stoppedProvider = `${error.provider}:${error.model}`;
+          console.error(
+            `  STOP ${paper.arxiv_id ?? paper.id.slice(0, 8)}: ${error.message}`,
+          );
+          break paperBatches;
+        }
+
         console.error(
           `  FAIL ${paper.arxiv_id ?? paper.id.slice(0, 8)}: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -1120,16 +1162,22 @@ async function main() {
 
   const summary = {
     mode: "write",
-    papersChecked: papers.length,
+    papersSelected: papers.length,
+    papersAttempted: totalAttempted,
     generated: totalGenerated,
     failed: totalFailed,
     skippedExisting: totalSkippedExisting,
     failedArxivIds,
+    stoppedReason,
+    stoppedProvider,
   };
 
   console.log(JSON.stringify(summary));
 
-  if (summaryRunShouldFail(totalGenerated, totalFailed)) {
+  if (
+    stoppedReason !== null ||
+    summaryRunShouldFail(totalGenerated, totalFailed)
+  ) {
     process.exitCode = 1;
   }
 }

@@ -45,7 +45,13 @@ This project follows Semantic Versioning.
 
 - Reconciled current architecture and feature-status documentation with the
   deployed Drizzle runtime, cache-first read-only feed flow, shipped private
-  group paper/activity slice, and Gemini summary-worker default.
+  group paper/activity slice, and the then-current Gemini summary-worker
+  default.
+- Recovered scheduled triage-summary generation from Gemini daily quota
+  exhaustion by making the already-configured Cloudflare Workers AI model the
+  bounded scheduled provider. Daily provider quotas now stop immediately with
+  a structured reason instead of repeating retries for every paper until the
+  GitHub Actions timeout, while transient throttling remains retryable.
 - Accepted nullable Semantic Scholar open-access statuses without deferring an
   otherwise valid mixed batch, and bounded each Unpaywall lookup with a
   configurable abortable timeout so one stalled request becomes a retryable

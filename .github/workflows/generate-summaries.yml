@@ -6,19 +6,19 @@ on:
       provider:
         description: "LLM provider: github, cloudflare, or gemini"
         required: false
-        default: "gemini"
+        default: "cloudflare"
       model:
         description: "LLM model id"
         required: false
-        default: "gemini-3.5-flash"
+        default: "@cf/zai-org/glm-4.7-flash"
       limit:
         description: "Maximum papers to process"
         required: false
-        default: "50"
+        default: "20"
       batch_size:
         description: "Papers per API batch"
         required: false
-        default: "3"
+        default: "1"
       dry_run:
         description: "Count papers needing summaries without calling LLM"
         required: false
@@ -43,12 +43,12 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      LLM_PROVIDER: ${{ github.event.inputs.provider || vars.LLM_PROVIDER || 'gemini' }}
-      LLM_MODEL: ${{ github.event.inputs.model || vars.LLM_MODEL || 'gemini-3.5-flash' }}
+      LLM_PROVIDER: ${{ github.event.inputs.provider || vars.LLM_PROVIDER || 'cloudflare' }}
+      LLM_MODEL: ${{ github.event.inputs.model || vars.LLM_MODEL || '@cf/zai-org/glm-4.7-flash' }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY || '' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || '' }}
-      LLM_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.LLM_BATCH_SIZE || '3' }}
-      LLM_LIMIT: ${{ github.event.inputs.limit || vars.LLM_LIMIT || '50' }}
+      LLM_BATCH_SIZE: ${{ github.event.inputs.batch_size || vars.LLM_BATCH_SIZE || '1' }}
+      LLM_LIMIT: ${{ github.event.inputs.limit || vars.LLM_LIMIT || '20' }}
       LLM_REQUEST_DELAY_MS: ${{ vars.LLM_REQUEST_DELAY_MS || '3000' }}
       LLM_RETRIES: ${{ vars.LLM_RETRIES || '5' }}
       LLM_SOURCE_TEXT_CHARS: ${{ vars.LLM_SOURCE_TEXT_CHARS || '8000' }}

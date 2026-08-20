@@ -1,11 +1,84 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  classifyProviderQuota,
   geminiGenerationConfig,
   parseSummaryJson,
   resolveGitHubModelsToken,
   summaryRunShouldFail,
 } from "../../src/lib/summary-run";
+
+test("daily provider quotas stop the summary run instead of retrying", () => {
+  assert.equal(
+    classifyProviderQuota(
+      "gemini",
+      429,
+      JSON.stringify({
+        error: {
+          details: [
+            {
+              violations: [
+                {
+                  quotaId:
+                    "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ),
+    "terminal",
+  );
+  assert.equal(
+    classifyProviderQuota(
+      "cloudflare",
+      429,
+      JSON.stringify({
+        errors: [
+          {
+            code: 3036,
+            message: "You have used up your daily free allocation",
+          },
+        ],
+      }),
+    ),
+    "terminal",
+  );
+});
+
+test("temporary provider throttling remains retryable", () => {
+  assert.equal(
+    classifyProviderQuota(
+      "gemini",
+      429,
+      JSON.stringify({
+        error: {
+          details: [
+            {
+              violations: [
+                {
+                  quotaId:
+                    "GenerateRequestsPerMinutePerProjectPerModel-FreeTier",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ),
+    "retryable",
+  );
+  assert.equal(
+    classifyProviderQuota(
+      "cloudflare",
+      429,
+      JSON.stringify({ errors: [{ code: 3040, message: "Out of capacity" }] }),
+    ),
+    "retryable",
+  );
+  assert.equal(classifyProviderQuota("gemini", 503, "overloaded"), "none");
+});
 
 test("Gemini requests use native structured output with minimal thinking", () => {
   const config = geminiGenerationConfig(2400);

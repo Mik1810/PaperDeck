@@ -23,8 +23,8 @@ Last reconciled with deployed code: 2026-08-20.
 | Batch workers | GitHub Actions, local scripts | arXiv ingestion, metadata enrichment, embeddings, summaries |
 | Embedding model | `sentence-transformers/all-MiniLM-L6-v2` | 384-dimensional paper/topic vectors |
 | Historical benchmark models | `BAAI/bge-small-en-v1.5`, `intfloat/e5-small-v2` | Offline retrieval quality comparison |
-| Summary model | Gemini `gemini-3.5-flash` | Structured paper triage summaries |
-| Summary fallbacks | Cloudflare Workers AI, OpenAI | Optional fallback providers |
+| Summary model | Cloudflare Workers AI `@cf/zai-org/glm-4.7-flash` | Scheduled structured paper triage summaries |
+| Summary alternatives | Gemini, OpenAI | Manually selectable providers |
 | Full-text reader | Jina AI Reader | Optional source text extraction for summary generation |
 | Tests/guardrails | ESLint, TypeScript, Playwright, service-role audit | Static and smoke validation |
 
@@ -45,9 +45,9 @@ flowchart TB
   ghActions["GitHub Actions Workers"]
   ingestion["Ingestion + Enrichment<br/>arXiv, Semantic Scholar, OpenAlex, Unpaywall"]
   embeddings["Embedding Workers<br/>sentence-transformers/all-MiniLM-L6-v2"]
-  summaries["Summary Worker<br/>Gemini gemini-3.5-flash"]
-  geminiFlash["Gemini<br/>gemini-3.5-flash"]
-  fallbackModels["Fallback LLMs<br/>Cloudflare Workers AI / OpenAI"]
+  summaries["Summary Worker<br/>Cloudflare Workers AI"]
+  cloudflareModel["Cloudflare Workers AI<br/>@cf/zai-org/glm-4.7-flash"]
+  alternativeModels["Alternative LLMs<br/>Gemini / OpenAI"]
   jina["Jina AI Reader<br/>optional paper text"]
 
   user -->|"request /feed, /library, /papers"| vercel
@@ -72,9 +72,9 @@ flowchart TB
   embeddings -->|"paper vectors, topic vectors"| supabase
   ghActions --> summaries
   summaries --> jina
-  summaries --> geminiFlash
-  geminiFlash -->|"structured JSON"| summaries
-  fallbackModels -. optional structured JSON .-> summaries
+  summaries --> cloudflareModel
+  cloudflareModel -->|"structured JSON"| summaries
+  alternativeModels -. optional structured JSON .-> summaries
   summaries -->|"triage_summary JSON"| supabase
 ```
 
@@ -159,8 +159,8 @@ flowchart LR
 
   subgraph Models
     minilm["all-MiniLM-L6-v2<br/>384-d embeddings"]
-    geminiFlash["Gemini<br/>gemini-3.5-flash"]
-    fallbackModels["Fallbacks<br/>Cloudflare Workers AI / OpenAI"]
+    cloudflareModel["Cloudflare Workers AI<br/>@cf/zai-org/glm-4.7-flash"]
+    alternativeModels["Alternatives<br/>Gemini / OpenAI"]
   end
 
   db["Supabase Postgres + pgvector"]
@@ -175,10 +175,10 @@ flowchart LR
   embedPapers --> minilm --> db
   db --> summarize
   summarize --> jina
-  summarize --> geminiFlash
-  summarize -. optional .-> fallbackModels
-  geminiFlash --> summarize
-  fallbackModels -. optional .-> summarize
+  summarize --> cloudflareModel
+  summarize -. optional .-> alternativeModels
+  cloudflareModel --> summarize
+  alternativeModels -. optional .-> summarize
   summarize --> db
 ```
 
