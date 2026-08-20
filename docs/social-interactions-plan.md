@@ -1,8 +1,14 @@
 # Piano di sviluppo delle interazioni sociali
 
-**Stato:** fondazioni implementate (identità, amicizie, gruppi, inviti, notifiche, chiusura account); feature sociali di prodotto (chat, lista condivisa, paper-activity) proposte ma non rilasciate  
-**Ultimo aggiornamento:** 2026-08-04
+**Stato:** fondazioni e slice invite-only implementate (identità, amicizie, gruppi, inviti, notifiche, chiusura account, lista paper condivisa e activity essenziale); discussione/chat e pubblicazione restano soggette ai gate indicati sotto
+
+**Ultimo aggiornamento:** 2026-08-20
+
 **Origine:** [GitHub issue #37](https://github.com/Mik1810/PaperDeck/issues/37)
+
+Lo stato operativo corrente e' riepilogato in `docs/architecture.md`. Questo
+documento conserva il piano per fasi e distingue esplicitamente gli slice gia'
+rilasciati da quelli ancora condizionati a decisioni e pilot.
 
 Questo documento trasforma la #37 da promemoria post-MVP in un programma concreto. Non autorizza a rendere pubblici dati esistenti: feed, ranking, preferiti, playlist e note restano privati finché ogni fase non supera il proprio gate.
 
@@ -252,9 +258,10 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 - #96 aggiunge `research_group_invitations` e RPC transazionali per creazione,
   risposta, annullamento, revoca, ruoli, rimozione e uscita; migrazioni e test
   sintetici sono verificati sul database condiviso, con kill switch disattivati.
-- `research_group_items` e `research_group_activity` restano nelle issue
-  successive. I token invito raw non entrano mai nel database, nei log o nelle
-  analytics.
+- `research_group_paper_items` e `research_group_paper_activity` sono stati
+  consegnati con lo slice #99 insieme alle operazioni atomiche, alle notifiche
+  aggregate e al workspace responsive `/groups`. I token invito raw non
+  entrano mai nel database, nei log o nelle analytics.
 
 **API e autorizzazione:**
 
@@ -271,6 +278,10 @@ Prima della UI multiutente creare il dominio collaborativo e la sua ACL.
 **Gate di uscita:** ACL centrale, RLS delle nuove tabelle e test cross-user superati prima di mostrare una collection a un utente esterno all'owner.
 
 ### G — Beta di collection invite-only
+
+**Stato corrente:** lo slice lista paper condivisa #99 e' distribuito in
+Production con letture e scritture abilitate, ACL/RLS e kill switch dedicati.
+L'allargamento del pilot resta governato dai gate qualitativi di questa sezione.
 
 **Esperienza utente:**
 
@@ -305,6 +316,9 @@ no-go finche' il pilot privato non supera i gate del charter. Dopo quel gate, il
 primo scope usa un solo canale cronologico per gruppo e un unico modello di
 messaggio, con riferimento opzionale a un paper; le viste paper-specifiche non
 creano un secondo modello di commenti.
+
+L'activity essenziale gia' rilasciata per aggiunte/rimozioni della lista e
+notifiche non equivale alla discussione UGC descritta in questa fase.
 
 Il primo rilascio resta plain text, senza editing, e include cancellazione
 autore, hide moderato, report/blocco, rate limit, retention, export, unread

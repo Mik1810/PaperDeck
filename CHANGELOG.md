@@ -8,6 +8,8 @@ This project follows Semantic Versioning.
 
 ### Added
 
+- Advanced the application version from `0.1.5` to `0.2.0` to mark the
+  deployed semantic-feed, private-library, and invite-only collaboration MVP.
 - Split Playwright installation and the desktop/mobile E2E suite from the core
   App CI job. Full changes now run core validation and isolated browser coverage
   as parallel jobs after one shared changed-file classification, while docs-only
@@ -41,6 +43,9 @@ This project follows Semantic Versioning.
 
 ### Fixed
 
+- Reconciled current architecture and feature-status documentation with the
+  deployed Drizzle runtime, cache-first read-only feed flow, shipped private
+  group paper/activity slice, and Gemini summary-worker default.
 - Accepted nullable Semantic Scholar open-access statuses without deferring an
   otherwise valid mixed batch, and bounded each Unpaywall lookup with a
   configurable abortable timeout so one stalled request becomes a retryable

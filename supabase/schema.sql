@@ -5,7 +5,7 @@
 --   - Clerk handles authentication.
 --   - User-owned rows store Clerk user IDs in owner_id.
 --   - MVP server routes/actions must enforce owner_id using Clerk auth().userId.
---   - RLS policies are included for the future Clerk JWT integration path.
+--   - RLS policies match the Clerk user ID carried in the JWT subject.
 
 create extension if not exists pgcrypto;
 create extension if not exists vector;
@@ -240,9 +240,9 @@ alter table paper_topics enable row level security;
 alter table paper_external_ids enable row level security;
 alter table ingestion_runs enable row level security;
 
--- Future Clerk JWT integration policy helper:
--- Configure Clerk/Supabase so auth.jwt() ->> 'sub' equals Clerk user ID.
--- Until then, user-specific access should go through trusted server routes/actions.
+-- Clerk JWT policy contract: auth.jwt() ->> 'sub' equals the Clerk user ID.
+-- General user-specific access still goes through trusted server routes/actions;
+-- selected collaboration paths exercise these policies with Clerk JWT clients.
 
 create policy "profiles_select_own"
 on profiles for select
