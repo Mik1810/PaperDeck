@@ -26,6 +26,11 @@
   completion contained reasoning but no answer text. Cloudflare requests now
   use low reasoning effort and a 4,096-token completion budget, and retry that
   empty-success shape once without logging the raw model response.
+- The follow-up branch probe (Actions run `32367839443`) completed successfully
+  without quota or timeout errors. It wrote one of two summaries; the remaining
+  paper returned non-JSON text and remains eligible for a later run.
+- The user is concurrently running the local summary generator to fill the
+  backlog, so no further hosted probe was started after this evidence.
 - Updated the architecture, ingestion guide, roadmap, and changelog to match
   the scheduled provider decision.
 
@@ -33,5 +38,6 @@
 
 - Targeted summary-run unit tests cover terminal daily quotas, transient 429s,
   and non-quota provider errors.
-- No repository variables, provider APIs, Production data, or hosted
-  configuration were changed during implementation.
+- Two explicitly approved Cloudflare probes wrote one summary each to
+  Production. Repository variables and other hosted configuration were not yet
+  changed during implementation.
