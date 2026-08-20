@@ -72,3 +72,9 @@ prompts/
 
 # Codex compact command logs
 .codex-logs/
+
+# Codex detached local jobs
+.codex-jobs/
+
+# Codex bounded task handoffs
+.codex-handoffs/

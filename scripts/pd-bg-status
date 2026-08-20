@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: $0 <job-id> [--tail]" >&2
+  exit 2
+fi
+
+id="$1"
+show_tail=0
+if [[ ${2:-} == "--tail" ]]; then
+  show_tail=1
+elif [[ $# -eq 2 ]]; then
+  echo "unknown option: $2" >&2
+  exit 2
+fi
+
+[[ "$id" =~ ^pd-[A-Za-z0-9._-]+$ ]] || { echo "invalid job id" >&2; exit 2; }
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+job_dir="$root/.codex-jobs"
+log="$job_dir/$id.log"
+exit_file="$job_dir/$id.exit"
+start_file="$job_dir/$id.started"
+end_file="$job_dir/$id.ended"
+pid_file="$job_dir/$id.pid"
+meta_file="$job_dir/$id.meta"
+
+[[ -f "$start_file" && -f "$pid_file" && -f "$log" ]] || {
+  echo "LOCAL_JOB: $id"
+  echo "status: NOT_FOUND"
+  exit 1
+}
+
+start_epoch="$(cat "$start_file")"
+pid="$(cat "$pid_file")"
+label="unknown"
+if [[ -f "$meta_file" ]]; then
+  label="$(sed -n 's/^label=//p' "$meta_file" | head -n 1)"
+fi
+
+now="$(date +%s)"
+status="RUNNING"
+exit_code=""
+end_epoch="$now"
+
+if [[ -f "$exit_file" ]]; then
+  status="COMPLETE"
+  exit_code="$(cat "$exit_file")"
+  [[ -f "$end_file" ]] && end_epoch="$(cat "$end_file")"
+elif ! kill -0 "$pid" 2>/dev/null; then
+  status="LOST"
+fi
+
+duration=$(( end_epoch - start_epoch ))
+printf 'LOCAL_JOB: %s\n' "$id"
+printf 'status: %s\n' "$status"
+printf 'label: %s\n' "$label"
+printf 'duration_s: %s\n' "$duration"
+printf 'full_log: %s\n' "${log#$root/}"
+
+if [[ "$status" == "RUNNING" ]]; then
+  printf 'next: scripts/pd-bg-status %s\n' "$id"
+  if [[ $show_tail -eq 1 ]]; then
+    echo '--- compact tail ---'
+    tail -n 8 "$log" 2>/dev/null || true
+  fi
+  exit 0
+fi
+
+if [[ "$status" == "LOST" ]]; then
+  echo 'exit_code: unknown'
+  echo 'next: inspect the compact log; do not assume success'
+  exit 1
+fi
+
+printf 'exit_code: %s\n' "$exit_code"
+clean="$(mktemp)"
+trap 'rm -f "$clean"' EXIT
+sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$log" 2>/dev/null \
+  | awk '
+      /NO_COLOR.*FORCE_COLOR/ { next }
+      /node --trace-warnings/ { next }
+      length($0) > 1200 { printf("[omitted long line: %d chars]\\n", length($0)); next }
+      { print }
+    ' > "$clean" || cp "$log" "$clean"
+
+if [[ "$exit_code" == "0" ]]; then
+  echo '--- summary ---'
+  if command -v rg >/dev/null 2>&1; then
+    summary="$(rg -n -i -m 20 '(^|[^a-z])(pass|passed|success|complete|completed|tests?|FINAL_CHECK|PUBLISH|WORKFLOW_CHECK)([^a-z]|$)' "$clean" 2>/dev/null | tail -n 8 || true)"
+  else
+    summary=""
+  fi
+  if [[ -n "$summary" ]]; then
+    printf '%s\n' "$summary"
+  else
+    tail -n 8 "$clean"
+  fi
+else
+  echo '--- diagnostics ---'
+  if command -v rg >/dev/null 2>&1; then
+    rg -n -i -m 24 'error context:|test-failed|trace\.zip|(^|[^a-z])(error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4})([^a-z]|$)' "$clean" || true
+  else
+    grep -Ein -m 24 'error context:|test-failed|trace\.zip|error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4}' "$clean" || true
+  fi
+  echo '--- final 10 lines ---'
+  tail -n 10 "$clean"
+  printf 'next: scripts/pd-log %s [pattern]\n' "${log#$root/}"
+fi

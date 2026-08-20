@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: $0 <issue-number> <next-phase> [--pr <number>]" >&2
+  echo "Provide a compact carry-forward summary on stdin (optional)." >&2
+  exit 2
+}
+
+[[ $# -ge 2 ]] || usage
+issue="$1"
+phase="$2"
+shift 2
+[[ "$issue" =~ ^[0-9]+$ ]] || { echo "invalid issue number" >&2; exit 2; }
+
+pr=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --pr)
+      [[ $# -ge 2 && "$2" =~ ^[0-9]+$ ]] || usage
+      pr="$2"
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$root"
+mkdir -p .codex-handoffs
+
+safe_phase="$(printf '%s' "$phase" | tr -cs 'A-Za-z0-9._-' '-' | sed -E 's/^-+|-+$//g')"
+[[ -n "$safe_phase" ]] || safe_phase="next"
+out=".codex-handoffs/issue-${issue}-${safe_phase}.md"
+
+if [[ -t 0 ]]; then
+  notes=""
+else
+  notes="$(cat || true)"
+fi
+if (( ${#notes} > 12000 )); then
+  echo "handoff notes exceed 12000 characters; make them compact" >&2
+  exit 2
+fi
+
+branch="$(git branch --show-current 2>/dev/null || true)"
+head="$(git rev-parse HEAD 2>/dev/null || true)"
+dirty_count="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+issue_state="unknown"
+issue_url=""
+pr_state="unknown"
+pr_url=""
+pr_merged="unknown"
+
+if command -v gh >/dev/null 2>&1; then
+  issue_json="$(gh issue view "$issue" --json state,url 2>/dev/null || true)"
+  if [[ -n "$issue_json" ]] && command -v python3 >/dev/null 2>&1; then
+    readarray -t parsed < <(printf '%s' "$issue_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("state","unknown")); print(d.get("url",""))' 2>/dev/null || true)
+    issue_state="${parsed[0]:-unknown}"
+    issue_url="${parsed[1]:-}"
+  fi
+
+  if [[ -n "$pr" ]]; then
+    pr_json="$(gh pr view "$pr" --json state,mergedAt,url 2>/dev/null || true)"
+    if [[ -n "$pr_json" ]] && command -v python3 >/dev/null 2>&1; then
+      readarray -t parsed_pr < <(printf '%s' "$pr_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("state","unknown")); print("yes" if d.get("mergedAt") else "no"); print(d.get("url",""))' 2>/dev/null || true)
+      pr_state="${parsed_pr[0]:-unknown}"
+      pr_merged="${parsed_pr[1]:-unknown}"
+      pr_url="${parsed_pr[2]:-}"
+    fi
+  fi
+fi
+
+created="$(date -Iseconds)"
+{
+  echo '# PaperDeck task handoff'
+  echo
+  printf 'issue: %s\n' "$issue"
+  printf 'next_phase: %s\n' "$phase"
+  printf 'created_at: %s\n' "$created"
+  printf 'snapshot_branch: %s\n' "${branch:-DETACHED}"
+  printf 'snapshot_head: %s\n' "${head:-unknown}"
+  printf 'working_tree_changes: %s\n' "$dirty_count"
+  printf 'issue_state: %s\n' "$issue_state"
+  [[ -n "$issue_url" ]] && printf 'issue_url: %s\n' "$issue_url"
+  if [[ -n "$pr" ]]; then
+    printf 'pr: %s\n' "$pr"
+    printf 'pr_state: %s\n' "$pr_state"
+    printf 'pr_merged: %s\n' "$pr_merged"
+    [[ -n "$pr_url" ]] && printf 'pr_url: %s\n' "$pr_url"
+  fi
+  echo
+  echo '## Carry-forward context'
+  if [[ -n "$notes" ]]; then
+    printf '%s\n' "$notes"
+  else
+    echo '- No additional notes supplied.'
+  fi
+} > "$out"
+
+printf 'HANDOFF_STATUS: READY\n'
+printf 'issue: %s\n' "$issue"
+printf 'next_phase: %s\n' "$phase"
+printf 'handoff: %s\n' "$out"
+printf 'bytes: %s\n' "$(wc -c < "$out" | tr -d ' ')"
+printf 'resume: scripts/pd-resume %s %s\n' "$issue" "$safe_phase"

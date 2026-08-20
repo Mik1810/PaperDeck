@@ -34,24 +34,36 @@ sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$log" 2>/dev/null \
 
 printf 'status: %d\n' "$status"
 printf 'duration_s: %d\n' "$duration"
+printf 'log_lines: %s\n' "$(wc -l < "$clean" | tr -d ' ')"
+printf 'log_bytes: %s\n' "$(wc -c < "$log" | tr -d ' ')"
 printf 'full_log: %s\n' "${log#$root/}"
 
 if [[ $status -eq 0 ]]; then
-  echo "--- compact tail ---"
-  tail -n 20 "$clean"
+  echo "--- summary ---"
+  summary=""
+  if command -v rg >/dev/null 2>&1; then
+    summary="$(rg -n -i -m 30 \
+      '(^|[^a-z])(pass|passed|success|successful|complete|completed|tests?|suites?|FINAL_CHECK|PUBLISH|WORKFLOW_CHECK|BUILD)([^a-z]|$)' \
+      "$clean" 2>/dev/null | tail -n 10 || true)"
+  fi
+  if [[ -n "$summary" ]]; then
+    printf '%s\n' "$summary"
+  else
+    tail -n 8 "$clean"
+  fi
 else
   echo "--- diagnostics ---"
   if command -v rg >/dev/null 2>&1; then
-    rg -n -i -m 60 \
+    rg -n -i -m 30 \
       'error context:|test-failed|trace\.zip|(^|[^a-z])(error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4})([^a-z]|$)' \
       "$clean" || true
   else
-    grep -Ein -m 60 \
+    grep -Ein -m 30 \
       'error context:|test-failed|trace\.zip|error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4}' \
       "$clean" || true
   fi
-  echo "--- final 30 lines ---"
-  tail -n 30 "$clean"
+  echo "--- final 12 lines ---"
+  tail -n 12 "$clean"
   echo "--- next ---"
   echo "Use: scripts/pd-log ${log#$root/} [pattern]"
 fi

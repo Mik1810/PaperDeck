@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: $0 [--label <label>] -- <command> [args...]" >&2
+  echo "       $0 <command> [args...]" >&2
+  exit 2
+}
+
+label=""
+if [[ ${1:-} == "--label" ]]; then
+  [[ $# -ge 4 ]] || usage
+  label="$2"
+  shift 2
+  [[ ${1:-} == "--" ]] || usage
+  shift
+elif [[ ${1:-} == "--" ]]; then
+  shift
+fi
+
+[[ $# -gt 0 ]] || usage
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+job_dir="$root/.codex-jobs"
+mkdir -p "$job_dir"
+
+stamp="$(date +%Y%m%d-%H%M%S)"
+if command -v od >/dev/null 2>&1; then
+  suffix="$(od -An -N3 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
+else
+  suffix=""
+fi
+[[ -n "$suffix" ]] || suffix="$$"
+id="pd-${stamp}-${suffix}"
+
+log="$job_dir/$id.log"
+exit_file="$job_dir/$id.exit"
+start_file="$job_dir/$id.started"
+end_file="$job_dir/$id.ended"
+pid_file="$job_dir/$id.pid"
+meta_file="$job_dir/$id.meta"
+
+start_epoch="$(date +%s)"
+printf '%s\n' "$start_epoch" > "$start_file"
+
+if [[ -z "$label" ]]; then
+  label="$(basename -- "$1")"
+fi
+# Metadata intentionally stores no command arguments; arguments can contain secrets.
+printf 'label=%s\n' "$(printf '%s' "$label" | tr '\n\r' '  ')" > "$meta_file"
+
+nohup bash -c '
+  exit_file="$1"
+  end_file="$2"
+  shift 2
+  set +e
+  "$@"
+  rc=$?
+  printf "%s\n" "$rc" > "$exit_file"
+  date +%s > "$end_file"
+  exit "$rc"
+' _ "$exit_file" "$end_file" "$@" >"$log" 2>&1 </dev/null &
+pid=$!
+printf '%s\n' "$pid" > "$pid_file"
+
+printf 'LOCAL_JOB: %s\n' "$id"
+printf 'status: RUNNING\n'
+printf 'label: %s\n' "$label"
+printf 'pid: %s\n' "$pid"
+printf 'full_log: %s\n' "${log#$root/}"
+printf 'next: scripts/pd-bg-status %s\n' "$id"

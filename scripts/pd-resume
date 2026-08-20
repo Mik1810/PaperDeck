@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: $0 <issue-number> [phase]" >&2
+  exit 2
+fi
+
+issue="$1"
+phase="${2:-}"
+[[ "$issue" =~ ^[0-9]+$ ]] || { echo "invalid issue number" >&2; exit 2; }
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$root"
+dir=".codex-handoffs"
+[[ -d "$dir" ]] || { echo "RESUME_STATUS: NOT_FOUND"; exit 1; }
+
+if [[ -n "$phase" ]]; then
+  safe_phase="$(printf '%s' "$phase" | tr -cs 'A-Za-z0-9._-' '-' | sed -E 's/^-+|-+$//g')"
+  file="$dir/issue-${issue}-${safe_phase}.md"
+  [[ -f "$file" ]] || { echo "RESUME_STATUS: NOT_FOUND"; exit 1; }
+else
+  file="$(find "$dir" -maxdepth 1 -type f -name "issue-${issue}-*.md" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2- || true)"
+  [[ -n "$file" && -f "$file" ]] || { echo "RESUME_STATUS: NOT_FOUND"; exit 1; }
+fi
+
+bytes="$(wc -c < "$file" | tr -d ' ')"
+if (( bytes > 16000 )); then
+  echo "RESUME_STATUS: REFUSED"
+  echo "reason: handoff exceeds 16000 bytes; compact it before loading into context"
+  exit 1
+fi
+
+printf 'RESUME_STATUS: READY\n'
+printf 'handoff: %s\n' "$file"
+printf 'current_branch: %s\n' "$(git branch --show-current 2>/dev/null || echo DETACHED)"
+printf 'current_head: %s\n' "$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+printf 'working_tree_changes: %s\n' "$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+echo '--- handoff ---'
+cat "$file"

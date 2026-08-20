@@ -3,11 +3,7 @@
 Purpose: compact durable context for coding agents. Keep this file small.
 For detailed/history-sensitive decisions, consult `ROADMAP.md` or the relevant document instead.
 
-Last reviewed: 2026-08-20
-
-Detailed current runtime architecture and shipped feature boundaries are
-authoritative in `docs/architecture.md`. `ROADMAP.md` records durable decisions
-and next steps; `sessions/` remains historical evidence.
+Last reviewed: 2026-08-12
 
 ## Product
 

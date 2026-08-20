@@ -57,9 +57,19 @@ PLAN_STATUS: AWAITING_APPROVAL
 
 Then stop and wait for the user. A direct reply such as `ok`, `vai`, `fallo`,
 `procedi`, `approvato`, or an equivalent unambiguous authorization immediately
-after the plan approves implementation. A question, requested revision, partial
-approval, or scope change does not approve the plan: incorporate the feedback,
-present the revised plan, emit `PLAN_STATUS: AWAITING_APPROVAL` again, and stop.
+after the plan approves implementation.
+
+The user may combine approval with an **explicit low-risk extension** in the same
+message (for example `ok vai, inoltre aggiorna il changelog` or `vai, bumpa anche
+la versione a 0.2.0`). When the intent is unambiguous, the extension remains part
+of the same issue, and it does not introduce a new material risk category, treat
+that message as authorization for both the existing plan and the named extension;
+briefly state the added surfaces and proceed without a redundant approval round.
+A question, ambiguous/partial approval, or an extension that introduces a new
+migration, Production/hosted mutation, destructive action, privilege boundary,
+material architecture decision, or materially different transaction/locking risk
+still requires a revised plan and/or the repository's separate consequential
+approval gate before that higher-risk work begins.
 
 The user may explicitly waive this gate in the original request (for example,
 "implementa direttamente senza chiedermi approvazione"). Otherwise the gate is
@@ -71,11 +81,16 @@ schema, data, configuration, destructive, or similarly consequential mutations.
 
 After approval, create/use the dedicated issue branch if implementation requires
 changes and continue with the approved plan. Treat the approved mutation surfaces
-as a hard boundary, not a suggestion. Before the **first** edit outside an
-approved mutation surface, stop and present a revised plan for approval. Likewise, if
+as a hard boundary against **agent-initiated** scope drift. Before the first edit
+outside those surfaces, either obtain an explicit user instruction extending the
+same low-risk issue scope or stop and present a revised plan for approval. A clear
+user instruction such as `aggiorna anche README e changelog` can directly extend
+non-material surfaces; acknowledge the extension and proceed. Likewise, if
 validation or implementation discovers a new runtime/product defect that must be
 fixed but was not part of the approved goal, stop before fixing it even when the
-fix would make the current issue's tests or CI green.
+fix would make the current issue's tests or CI green unless the user explicitly
+adds that defect to the current task and doing so does not cross a material-risk
+gate.
 
 A revised approval is also required for a new migration, new hosted mutation,
 material architecture decision, or materially different risk profile. Treat
@@ -106,13 +121,37 @@ Prefer:
 - compiler/linter diagnostics;
 - `git diff --stat`, `--name-only`, or one-file diffs before a large full diff.
 
-## 4. Keep process polling cheap
+## 4. Keep long-running work out of the model loop
 
-For commands expected to take more than ~2 seconds:
-- use about **30 seconds** for the initial command yield so ordinary checks can finish without an extra round-trip;
-- use about **30 seconds** for subsequent waits as well; this is the stable cadence supported by the observed Codex terminal runtime;
+For ordinary commands expected to finish within roughly a minute:
+- use about **30 seconds** for the initial command yield so normal checks can finish without an extra round-trip;
+- use about **30 seconds** for a necessary follow-up wait;
 - if a wait returns no actionable new output and the process is still running, immediately issue the next wait without reopening analysis, status discovery, or commentary merely to decide to keep waiting;
 - never poll every 1–5 seconds unless the process is genuinely interactive.
+
+For a clearly non-interactive local command likely to run longer than roughly a
+minute (large container/browser pulls, long E2E/integration suites, scale
+benchmarks, expensive builds), prefer **detached execution** instead of repeated
+model-mediated waits:
+
+```bash
+scripts/pd-bg-run --label <short-label> -- <command> [args...]
+```
+
+Record the returned `LOCAL_JOB` id and stop at `LOCAL_JOB_STATUS: WAITING` when
+there is no other useful work that can proceed independently. On a later
+same-issue follow-up, inspect it once with:
+
+```bash
+scripts/pd-bg-status <job-id>
+```
+
+If it is still `RUNNING`, report that state and stop again. Do not repeatedly call
+`pd-bg-status`, tail the log, or reopen the full log merely to watch progress.
+Use `scripts/pd-log <full_log> [pattern]` only after completion when the compact
+status output is insufficient. Do not use detached execution for genuinely
+interactive commands or when the user explicitly asks to remain blocked in the
+current turn.
 
 Avoid creating a long-running local process when the evidence is inherently runner-specific. If reproducing a GitHub Actions acceptance condition would require a large browser/container/system-package download that is not already present locally, do the deterministic static/local checks first and let GitHub Actions provide the runner evidence. Do not spend many local wait cycles merely to predict remote CI timing unless local reproduction is itself an explicit acceptance requirement.
 
@@ -306,13 +345,43 @@ At the end of meaningful work:
 - create/update one `sessions/SESSIONi.md`;
 - reuse the single issue comment from the publication step rather than posting duplicate summaries.
 
-## 9. Stop context growth
+## 9. Stop context growth with durable handoffs
 
 Treat this task as scope-closed once the current issue reaches a terminal publication state (`MERGED`, `AUTO_MERGE_ENABLED`, `WAITING_*`, or `BLOCKED_*`) or is otherwise reported complete.
 
 After that:
 - do not continue directly into a different issue, unrelated bug, or "quick fix" in this task, even when it is in the same repository;
 - do not begin discovery, create/switch branches, edit files, or publish the new work here;
-- return a compact handoff (completed issue/PR state plus the new requested target) and require a fresh task/thread for the new work.
+- create a compact durable handoff when useful and require a fresh task/thread for the new work.
 
-A later request that is still about the same issue/PR may continue here, for example review feedback, an explicit post-CI merge, or a targeted status check. For such follow-ups, reuse the established context: do **not** reread this `SKILL.md`, rerun `context.sh`, or reread `PROJECT_STATE.md` unless the repository/branch state materially changed and the existing context is no longer trustworthy.
+For a **substantial same-issue phase after code delivery**—for example a
+Production migration/backfill, hosted configuration change, manual production
+worker run, large operational benchmark, or provider/API maintenance pass—prefer
+a fresh task even though the issue number is unchanged. Before stopping, write a
+small carry-forward record:
+
+```bash
+scripts/pd-handoff <issue> <next-phase> [--pr <pr-number>] <<'EOF'
+- completed: ...
+- validation: ...
+- pending: ...
+- production/hosted state: ...
+- approvals still required: ...
+EOF
+```
+
+The next task should begin with `scripts/pd-resume <issue> [phase]`; this loads
+only the bounded handoff plus current Git state instead of reconstructing the
+entire previous conversation. Keep handoff notes concise and never put secrets or
+raw logs in them.
+
+Do **not** force a new task for ordinary same-issue completion work such as review
+feedback, one post-CI snapshot/merge, branch cleanup, or a small documentation
+follow-up while context remains compact. If the user explicitly asks to continue
+a substantial post-merge phase in the current task despite the context cost, you
+may do so, but all Production/hosted approval gates remain unchanged.
+
+For same-issue follow-ups that stay here, reuse the established context: do **not**
+reread this `SKILL.md`, rerun `context.sh`, or reread `PROJECT_STATE.md` unless the
+repository/branch state materially changed and the existing context is no longer
+trustworthy.

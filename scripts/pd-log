@@ -25,23 +25,23 @@ sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$log" 2>/dev/null \
 
 if [[ -n "$pattern" ]]; then
   if command -v rg >/dev/null 2>&1; then
-    rg -n -i -C 4 -m 40 -- "$pattern" "$clean" || true
+    rg -n -i -C 2 -m 20 -- "$pattern" "$clean" || true
   else
-    grep -Ein -C 4 -m 40 -- "$pattern" "$clean" || true
+    grep -Ein -C 2 -m 20 -- "$pattern" "$clean" || true
   fi
   exit 0
 fi
 
 echo "--- focused diagnostics ---"
 if command -v rg >/dev/null 2>&1; then
-  rg -n -i -C 2 -m 60 \
+  rg -n -i -C 1 -m 30 \
     'error context:|test-failed|trace\.zip|(^|[^a-z])(error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4})([^a-z]|$)' \
     "$clean" || true
 else
-  grep -Ein -C 2 -m 60 \
+  grep -Ein -C 1 -m 30 \
     'error context:|test-failed|trace\.zip|error|failed|failure|exception|fatal|assert|expected|received|timeout|TS[0-9]{4}' \
     "$clean" || true
 fi
 
 echo "--- compact tail ---"
-tail -n 30 "$clean"
+tail -n 12 "$clean"
