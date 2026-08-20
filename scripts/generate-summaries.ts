@@ -2,6 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import {
+  classifyProviderQuota,
+  cloudflareGenerationConfig,
+  cloudflareResultToText,
   geminiGenerationConfig,
   parseSummaryJson,
   resolveGitHubModelsToken,
@@ -47,7 +50,18 @@ type TriageSummary = {
   read_if_you_care_about: string;
 };
 
+class TerminalProviderQuotaError extends Error {
+  constructor(
+    readonly provider: LlmProvider,
+    readonly model: string,
+  ) {
+    super(`${provider}:${model} daily quota exhausted`);
+    this.name = "TerminalProviderQuotaError";
+  }
+}
+
 const CURSOR_KEY = "triage_summary_enrich";
+const EMPTY_RESPONSE_RETRIES = 1;
 const DEFAULT_CLOUDFLARE_MODEL = "@cf/zai-org/glm-4.7-flash";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const DEFAULT_GITHUB_MODEL = "openai/gpt-4o-mini";
@@ -434,12 +448,22 @@ async function callGemini(
       return text;
     }
 
+    const errorText = await response.text();
+    const quotaDisposition = classifyProviderQuota(
+      "gemini",
+      response.status,
+      errorText,
+    );
+
+    if (quotaDisposition === "terminal") {
+      throw new TerminalProviderQuotaError(config.provider, config.model);
+    }
+
     if ((response.status === 429 || response.status === 503) && attempt < retries) {
       const retryAfter = response.headers.get("Retry-After");
       const delay = retryAfter
         ? Math.min(Number(retryAfter) * 1000, 300_000)
         : (attempt + 1) * 15000;
-      const errorText = await response.text();
       console.error(
         `  ${response.status} error: ${errorText.slice(0, 300)}`,
       );
@@ -450,7 +474,6 @@ async function callGemini(
       continue;
     }
 
-    const errorText = await response.text();
     throw new Error(
       `Gemini API error (${response.status}): ${errorText.slice(0, 200)}`,
     );
@@ -492,45 +515,6 @@ function cloudflareErrorMessage(data: CloudflareAiEnvelope | null, fallback: str
   return message || fallback.slice(0, 300);
 }
 
-function cloudflareResultToText(result: unknown): string | null {
-  if (typeof result === "string") {
-    return result;
-  }
-
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const record = result as Record<string, unknown>;
-  const response = record.response;
-
-  if (typeof response === "string") {
-    return response;
-  }
-
-  if (response && typeof response === "object") {
-    return JSON.stringify(response);
-  }
-
-  const choices = record.choices;
-
-  if (Array.isArray(choices)) {
-    const firstChoice = choices[0] as Record<string, unknown> | undefined;
-    const message = firstChoice?.message as Record<string, unknown> | undefined;
-    const content = message?.content ?? firstChoice?.text;
-
-    if (typeof content === "string") {
-      return content;
-    }
-
-    if (content && typeof content === "object") {
-      return JSON.stringify(content);
-    }
-  }
-
-  return null;
-}
-
 async function callCloudflareWorkersAi(
   config: SummaryConfig,
   messages: LlmMessage[],
@@ -550,12 +534,7 @@ async function callCloudflareWorkersAi(
       body: JSON.stringify({
         messages,
         temperature: 0.2,
-        max_tokens: maxTokens,
-        max_completion_tokens: maxTokens,
-        response_format: {
-          type: "json_schema",
-          json_schema: TRIAGE_SUMMARY_JSON_SCHEMA,
-        },
+        ...cloudflareGenerationConfig(maxTokens),
       }),
     });
 
@@ -575,9 +554,23 @@ async function callCloudflareWorkersAi(
         return content;
       }
 
-      throw new Error(
-        `Cloudflare Workers AI returned no text content: ${responseText.slice(0, 300)}`,
-      );
+      if (attempt < Math.min(retries, EMPTY_RESPONSE_RETRIES)) {
+        const delay = getRetryDelayMs(response, attempt);
+        console.error(
+          `  Cloudflare Workers AI returned no text content; retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${EMPTY_RESPONSE_RETRIES})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      throw new Error("Cloudflare Workers AI returned no text content after retry");
+    }
+
+    if (
+      classifyProviderQuota("cloudflare", response.status, responseText) ===
+      "terminal"
+    ) {
+      throw new TerminalProviderQuotaError(config.provider, config.model);
     }
 
     if (shouldRetryLlmStatus(response.status) && attempt < retries) {
@@ -1059,8 +1052,12 @@ async function main() {
   let totalGenerated = 0;
   let totalFailed = 0;
   let totalSkippedExisting = 0;
+  let totalAttempted = 0;
+  let stoppedReason: "provider_daily_quota_exhausted" | null = null;
+  let stoppedProvider: string | null = null;
   const failedArxivIds: string[] = [];
 
+  paperBatches:
   for (let i = 0; i < papers.length; i += config.batchSize) {
     if (i > 0) {
       await new Promise((resolve) => setTimeout(resolve, config.requestDelayMs));
@@ -1076,6 +1073,7 @@ async function main() {
       if (paperIndex > 0) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
+      totalAttempted++;
       try {
         const summary = await generateSummary(config, paper);
 
@@ -1104,6 +1102,16 @@ async function main() {
       } catch (error) {
         totalFailed++;
         failedArxivIds.push(paper.arxiv_id ?? paper.id);
+
+        if (error instanceof TerminalProviderQuotaError) {
+          stoppedReason = "provider_daily_quota_exhausted";
+          stoppedProvider = `${error.provider}:${error.model}`;
+          console.error(
+            `  STOP ${paper.arxiv_id ?? paper.id.slice(0, 8)}: ${error.message}`,
+          );
+          break paperBatches;
+        }
+
         console.error(
           `  FAIL ${paper.arxiv_id ?? paper.id.slice(0, 8)}: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -1120,16 +1128,22 @@ async function main() {
 
   const summary = {
     mode: "write",
-    papersChecked: papers.length,
+    papersSelected: papers.length,
+    papersAttempted: totalAttempted,
     generated: totalGenerated,
     failed: totalFailed,
     skippedExisting: totalSkippedExisting,
     failedArxivIds,
+    stoppedReason,
+    stoppedProvider,
   };
 
   console.log(JSON.stringify(summary));
 
-  if (summaryRunShouldFail(totalGenerated, totalFailed)) {
+  if (
+    stoppedReason !== null ||
+    summaryRunShouldFail(totalGenerated, totalFailed)
+  ) {
     process.exitCode = 1;
   }
 }

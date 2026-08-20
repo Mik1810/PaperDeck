@@ -27,6 +27,85 @@ export const TRIAGE_SUMMARY_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+export type ProviderQuotaDisposition = "none" | "retryable" | "terminal";
+
+export function classifyProviderQuota(
+  provider: string,
+  status: number,
+  responseBody: string,
+): ProviderQuotaDisposition {
+  if (status !== 429) {
+    return "none";
+  }
+
+  const normalized = responseBody.toLowerCase();
+  const dailyQuota =
+    /per[_-]?day/.test(normalized) ||
+    normalized.includes("requests per day") ||
+    normalized.includes("daily free allocation") ||
+    normalized.includes("daily quota") ||
+    /(?:quota|limit)[^\n]{0,80}(?:limit:\s*0|"limit"\s*:\s*0)/.test(
+      normalized,
+    );
+  const cloudflareDailyQuota =
+    provider === "cloudflare" &&
+    /"code"\s*:\s*"?3036"?/.test(normalized);
+
+  return dailyQuota || cloudflareDailyQuota ? "terminal" : "retryable";
+}
+
+export function cloudflareGenerationConfig(maxOutputTokens: number) {
+  return {
+    max_completion_tokens: maxOutputTokens,
+    reasoning_effort: "low",
+    response_format: {
+      type: "json_schema",
+      json_schema: TRIAGE_SUMMARY_JSON_SCHEMA,
+    },
+  } as const;
+}
+
+export function cloudflareResultToText(result: unknown): string | null {
+  if (typeof result === "string") {
+    return result;
+  }
+
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const record = result as Record<string, unknown>;
+  const response = record.response;
+
+  if (typeof response === "string") {
+    return response;
+  }
+
+  if (response && typeof response === "object") {
+    return JSON.stringify(response);
+  }
+
+  const choices = record.choices;
+
+  if (!Array.isArray(choices)) {
+    return null;
+  }
+
+  const firstChoice = choices[0] as Record<string, unknown> | undefined;
+  const message = firstChoice?.message as Record<string, unknown> | undefined;
+  const content = message?.content ?? firstChoice?.text;
+
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (content && typeof content === "object") {
+    return JSON.stringify(content);
+  }
+
+  return null;
+}
+
 export function geminiGenerationConfig(maxOutputTokens: number) {
   return {
     maxOutputTokens,

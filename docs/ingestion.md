@@ -426,8 +426,8 @@ OA URLs stored in paper_external_ids (provider: unpaywall_oa)
 ## LLM Triage Summaries
 
 The summary worker generates structured triage summaries for papers using a
-configured LLM provider. Gemini is the default provider for GitHub Actions;
-Cloudflare Workers AI and OpenAI remain available as fallbacks:
+configured LLM provider. Cloudflare Workers AI is the scheduled provider,
+while Gemini and OpenAI remain available as manually selected alternatives:
 
 ```bash
 npm run generate:summaries
@@ -443,14 +443,35 @@ It:
 - the paper detail page reads pre-stored summaries — no LLM call on page load;
 - tracks progress in `ingestion_cursors` with key `triage_summary_enrich`.
 
-Gemini uses native JSON structured output with a schema for the four triage
-fields. The scheduled workflow defaults to the stable `gemini-3.5-flash`
-model, minimal thinking, and a 2,400-token output budget. The workflow fails
-when every attempted summary fails, while still preserving its structured
-result in the job summary. GitHub Models support remains in the worker only as
-legacy code; the service was retired on July 30, 2026 and must not be selected.
+The scheduled workflow uses Cloudflare Workers AI
+`@cf/zai-org/glm-4.7-flash`, processes one paper at a time, and selects at most
+20 papers per run so its twice-daily schedule stays within a bounded free-tier
+budget. Cloudflare generation uses low reasoning effort and a 4,096-token
+completion budget; one HTTP 200 response without text is retried once. Gemini
+uses native schema-constrained JSON when selected manually. A
+daily provider quota stops the run immediately and is reported in the
+structured result; transient throttling and capacity errors keep the bounded
+retry behavior. GitHub Models support remains in the worker only as legacy
+code; the service was retired on July 30, 2026 and must not be selected.
 
 Configuration:
+
+```env
+LLM_PROVIDER=cloudflare
+LLM_MODEL=@cf/zai-org/glm-4.7-flash
+LLM_BATCH_SIZE=1
+LLM_LIMIT=20
+LLM_REQUEST_DELAY_MS=3000
+LLM_RETRIES=5
+LLM_SOURCE_TEXT_CHARS=8000
+LLM_MAX_INPUT_CHARS=500000
+LLM_MAX_OUTPUT_TOKENS=4096
+CLOUDFLARE_ACCOUNT_ID=replace_me
+CLOUDFLARE_API_TOKEN=replace_me
+JINA_API_KEY=
+```
+
+For manually selected Gemini generation:
 
 ```env
 LLM_PROVIDER=gemini
@@ -466,16 +487,7 @@ LLM_MAX_OUTPUT_TOKENS=2400
 JINA_API_KEY=
 ```
 
-For Cloudflare Workers AI fallback:
-
-```env
-LLM_PROVIDER=cloudflare
-LLM_MODEL=@cf/zai-org/glm-4.7-flash
-CLOUDFLARE_ACCOUNT_ID=replace_me
-CLOUDFLARE_API_TOKEN=replace_me
-```
-
-For OpenAI fallback:
+For manually selected OpenAI generation:
 
 ```env
 LLM_PROVIDER=openai
@@ -491,10 +503,10 @@ npm run generate:summaries -- --dry-run --limit=5
 
 Dry-runs report the number of papers needing summaries without calling the LLM API.
 
-For a small Gemini write test:
+For a small Cloudflare write test:
 
 ```bash
-npm run generate:summaries -- --provider=gemini --limit=2 --batch-size=1
+npm run generate:summaries -- --provider=cloudflare --limit=2 --batch-size=1
 ```
 
 Required GitHub repository secrets/permissions for the scheduled summary workflow:
@@ -502,12 +514,6 @@ Required GitHub repository secrets/permissions for the scheduled summary workflo
 ```text
 NEXT_PUBLIC_SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
-LLM_API_KEY
-```
-
-Optional Cloudflare fallback secrets/variables:
-
-```text
 CLOUDFLARE_ACCOUNT_ID
 CLOUDFLARE_API_TOKEN
 ```
@@ -516,7 +522,7 @@ Optional secrets:
 
 ```text
 JINA_API_KEY
-LLM_API_KEY        # only for Gemini fallback
+LLM_API_KEY        # only for the Gemini alternative
 ```
 
 ## Next Ingestion Work
